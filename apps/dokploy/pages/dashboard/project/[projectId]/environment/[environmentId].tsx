@@ -102,25 +102,7 @@ import { cn } from "@/lib/utils";
 import { appRouter } from "@/server/api/root";
 import { api } from "@/utils/api";
 
-export type Services = {
-	appName: string;
-	serverId?: string | null;
-	serverName?: string | null;
-	name: string;
-	type:
-		| "mariadb"
-		| "application"
-		| "postgres"
-		| "mysql"
-		| "mongo"
-		| "redis"
-		| "compose";
-	description?: string | null;
-	id: string;
-	createdAt: string;
-	status?: "idle" | "running" | "done" | "error";
-	lastDeployDate?: Date | null;
-};
+export type { Services } from "@/lib/types/services";
 
 type Environment = Awaited<ReturnType<typeof findEnvironmentById>>;
 
@@ -1509,8 +1491,7 @@ const EnvironmentPage = (
 																	onClick={(e) => e.stopPropagation()}
 																>
 																	<DropdownMenuItem
-																		onSelect={(e) => {
-																			e.preventDefault();
+																		onSelect={() => {
 																			setServiceToMove(service);
 																			setMoveServiceOpen(true);
 																		}}

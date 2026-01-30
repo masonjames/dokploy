@@ -20,7 +20,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/utils/api";
-import type { Services } from "@/pages/dashboard/project/[projectId]/environment/[environmentId]";
+import type { Services } from "@/lib/types/services";
 
 interface MoveServiceDialogProps {
 	open: boolean;
@@ -98,7 +98,6 @@ export const MoveServiceDialog = ({
 			const result = await createProject.mutateAsync({
 				name: newProjectName.trim(),
 				description: "",
-				projectId: "",
 			});
 			await utils.project.all.invalidate();
 
