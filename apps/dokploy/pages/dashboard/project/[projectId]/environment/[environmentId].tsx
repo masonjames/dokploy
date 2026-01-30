@@ -10,7 +10,7 @@ import {
 	FolderInput,
 	GlobeIcon,
 	Loader2,
-	MoreVertical,
+	MoreHorizontalIcon,
 	Play,
 	PlusIcon,
 	Search,
@@ -1474,33 +1474,7 @@ const EnvironmentPage = (
 																<ServerIcon className="size-4 text-muted-foreground" />
 															</div>
 														)}
-														<div className="absolute -right-1 -top-2 flex items-center gap-1">
-															<DropdownMenu>
-																<DropdownMenuTrigger asChild>
-																	<Button
-																		variant="ghost"
-																		size="icon"
-																		className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-																		onClick={(e) => e.stopPropagation()}
-																	>
-																		<MoreVertical className="h-3.5 w-3.5" />
-																	</Button>
-																</DropdownMenuTrigger>
-																<DropdownMenuContent
-																	align="end"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<DropdownMenuItem
-																		onSelect={() => {
-																			setServiceToMove(service);
-																			setMoveServiceOpen(true);
-																		}}
-																	>
-																		<FolderInput className="mr-2 h-4 w-4" />
-																		Move
-																	</DropdownMenuItem>
-																</DropdownMenuContent>
-															</DropdownMenu>
+														<div className="absolute -right-1 -top-2">
 															<StatusTooltip status={service.status} />
 														</div>
 
@@ -1526,42 +1500,69 @@ const EnvironmentPage = (
 														</div>
 
 														<CardHeader>
-															<CardTitle className="flex items-center justify-between">
-																<div className="flex flex-row items-center gap-2 justify-between w-full">
-																	<div className="flex flex-col gap-2">
-																		<span className="text-base flex items-center gap-2 font-medium leading-none flex-wrap">
+															<CardTitle className="flex items-center justify-between gap-2">
+																<span className="flex flex-col gap-1.5">
+																	<div className="flex items-center gap-2">
+																		<span className="text-muted-foreground">
+																			{service.type === "postgres" && (
+																				<PostgresqlIcon className="size-4" />
+																			)}
+																			{service.type === "redis" && (
+																				<RedisIcon className="size-4" />
+																			)}
+																			{service.type === "mariadb" && (
+																				<MariadbIcon className="size-4" />
+																			)}
+																			{service.type === "mongo" && (
+																				<MongodbIcon className="size-4" />
+																			)}
+																			{service.type === "mysql" && (
+																				<MysqlIcon className="size-4" />
+																			)}
+																			{service.type === "application" && (
+																				<GlobeIcon className="size-4" />
+																			)}
+																			{service.type === "compose" && (
+																				<CircuitBoard className="size-4" />
+																			)}
+																		</span>
+																		<span className="text-base font-medium leading-none">
 																			{service.name}
 																		</span>
-																		{service.description && (
-																			<span className="text-sm font-medium text-muted-foreground">
-																				{service.description}
-																			</span>
-																		)}
 																	</div>
-
-																	<span className="text-sm font-medium text-muted-foreground self-start">
-																		{service.type === "postgres" && (
-																			<PostgresqlIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "redis" && (
-																			<RedisIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mariadb" && (
-																			<MariadbIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mongo" && (
-																			<MongodbIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mysql" && (
-																			<MysqlIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "application" && (
-																			<GlobeIcon className="h-6 w-6" />
-																		)}
-																		{service.type === "compose" && (
-																			<CircuitBoard className="h-6 w-6" />
-																		)}
-																	</span>
+																	{service.description && (
+																		<span className="text-sm font-medium text-muted-foreground">
+																			{service.description}
+																		</span>
+																	)}
+																</span>
+																<div className="flex self-start space-x-1">
+																	<DropdownMenu>
+																		<DropdownMenuTrigger asChild>
+																			<Button
+																				variant="ghost"
+																				size="icon"
+																				className="px-2"
+																				onClick={(e) => e.stopPropagation()}
+																			>
+																				<MoreHorizontalIcon className="size-5" />
+																			</Button>
+																		</DropdownMenuTrigger>
+																		<DropdownMenuContent
+																			align="end"
+																			onClick={(e) => e.stopPropagation()}
+																		>
+																			<DropdownMenuItem
+																				onSelect={() => {
+																					setServiceToMove(service);
+																					setMoveServiceOpen(true);
+																				}}
+																			>
+																				<FolderInput className="mr-2 h-4 w-4" />
+																				Move
+																			</DropdownMenuItem>
+																		</DropdownMenuContent>
+																	</DropdownMenu>
 																</div>
 															</CardTitle>
 														</CardHeader>
