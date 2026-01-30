@@ -10,6 +10,7 @@ import {
 	FolderInput,
 	GlobeIcon,
 	Loader2,
+	MoreVertical,
 	Play,
 	PlusIcon,
 	Search,
@@ -34,6 +35,7 @@ import { AddDatabase } from "@/components/dashboard/project/add-database";
 import { AddTemplate } from "@/components/dashboard/project/add-template";
 import { AdvancedEnvironmentSelector } from "@/components/dashboard/project/advanced-environment-selector";
 import { DuplicateProject } from "@/components/dashboard/project/duplicate-project";
+import { MoveServiceDialog } from "@/components/dashboard/project/move-service-dialog";
 import { EnvironmentVariables } from "@/components/dashboard/project/environment-variables";
 import { ProjectEnvironment } from "@/components/dashboard/projects/project-environment";
 import {
@@ -79,6 +81,7 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
@@ -373,6 +376,10 @@ const EnvironmentPage = (
 		useState<string>("");
 	const [selectedTargetEnvironment, setSelectedTargetEnvironment] =
 		useState<string>("");
+
+	// Per-card move dialog state
+	const [moveServiceOpen, setMoveServiceOpen] = useState(false);
+	const [serviceToMove, setServiceToMove] = useState<Services | null>(null);
 
 	const { data: selectedProjectEnvironments } =
 		api.environment.byProjectId.useQuery(
@@ -1485,7 +1492,34 @@ const EnvironmentPage = (
 																<ServerIcon className="size-4 text-muted-foreground" />
 															</div>
 														)}
-														<div className="absolute -right-1 -top-2">
+														<div className="absolute -right-1 -top-2 flex items-center gap-1">
+															<DropdownMenu>
+																<DropdownMenuTrigger asChild>
+																	<Button
+																		variant="ghost"
+																		size="icon"
+																		className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+																		onClick={(e) => e.stopPropagation()}
+																	>
+																		<MoreVertical className="h-3.5 w-3.5" />
+																	</Button>
+																</DropdownMenuTrigger>
+																<DropdownMenuContent
+																	align="end"
+																	onClick={(e) => e.stopPropagation()}
+																>
+																	<DropdownMenuItem
+																		onSelect={(e) => {
+																			e.preventDefault();
+																			setServiceToMove(service);
+																			setMoveServiceOpen(true);
+																		}}
+																	>
+																		<FolderInput className="mr-2 h-4 w-4" />
+																		Move
+																	</DropdownMenuItem>
+																</DropdownMenuContent>
+															</DropdownMenu>
 															<StatusTooltip status={service.status} />
 														</div>
 
@@ -1576,6 +1610,20 @@ const EnvironmentPage = (
 					</div>
 				</Card>
 			</div>
+
+			<MoveServiceDialog
+				open={moveServiceOpen}
+				onOpenChange={(isOpen) => {
+					setMoveServiceOpen(isOpen);
+					if (!isOpen) setServiceToMove(null);
+				}}
+				service={serviceToMove}
+				sourceProjectId={projectId}
+				sourceEnvironmentId={environmentId}
+				onMoved={() => {
+					refetch();
+				}}
+			/>
 		</div>
 	);
 };
