@@ -171,7 +171,9 @@ const isPathWithin = (targetPath: string, basePath: string) => {
 const isCaddyMigrationBackupPath = (filePath: string, serverId?: string) => {
 	const caddyPaths = paths(!!serverId);
 	const normalizedPath = normalizeWebServerPath(filePath);
-	const migrationsPath = normalizeWebServerPath(caddyPaths.CADDY_MIGRATIONS_PATH);
+	const migrationsPath = normalizeWebServerPath(
+		caddyPaths.CADDY_MIGRATIONS_PATH,
+	);
 	if (!isPathWithin(normalizedPath, migrationsPath)) {
 		return false;
 	}

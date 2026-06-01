@@ -47,10 +47,11 @@ export const updateWebServerSettings = async (
 	return updated;
 };
 
-export const getLocalWebServerProvider = async (): Promise<WebServerProvider> => {
-	const settings = await getWebServerSettings();
-	return normalizeWebServerProvider(settings?.webServerProvider);
-};
+export const getLocalWebServerProvider =
+	async (): Promise<WebServerProvider> => {
+		const settings = await getWebServerSettings();
+		return normalizeWebServerProvider(settings?.webServerProvider);
+	};
 
 export const updateLocalWebServerProvider = async (
 	provider: WebServerProvider,

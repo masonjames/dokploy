@@ -875,7 +875,9 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 															<X
 																className="ml-1 size-3 cursor-pointer"
 																onClick={() => {
-																	const newMiddlewares = [...(field.value || [])];
+																	const newMiddlewares = [
+																		...(field.value || []),
+																	];
 																	newMiddlewares.splice(index, 1);
 																	form.setValue("middlewares", newMiddlewares);
 																}}

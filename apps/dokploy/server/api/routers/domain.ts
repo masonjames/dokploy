@@ -13,11 +13,11 @@ import {
 	getWebServerSettings,
 	manageWebServerDomain,
 	removeDomainById,
-	writeCaddyComposeRoutesForTargets,
 	removeWebServerDomain,
 	resolveWebServerProvider,
 	updateDomainById,
 	validateDomain,
+	writeCaddyComposeRoutesForTargets,
 } from "@dokploy/server";
 import { checkServicePermissionAndAccess } from "@dokploy/server/services/permission";
 import { TRPCError } from "@trpc/server";
@@ -36,7 +36,9 @@ import {
 	apiUpdateDomain,
 } from "@/server/db/schema";
 
-const toDomainUpdateFields = (domain: Awaited<ReturnType<typeof findDomainById>>) => ({
+const toDomainUpdateFields = (
+	domain: Awaited<ReturnType<typeof findDomainById>>,
+) => ({
 	host: domain.host,
 	https: domain.https,
 	port: domain.port,
@@ -166,8 +168,12 @@ export const domainRouter = createTRPCRouter({
 
 			const nextDomain = { ...currentDomain, ...input };
 			if (currentDomain.applicationId) {
-				const application = await findApplicationById(currentDomain.applicationId);
-				if ((await resolveWebServerProvider(application.serverId)) === "caddy") {
+				const application = await findApplicationById(
+					currentDomain.applicationId,
+				);
+				if (
+					(await resolveWebServerProvider(application.serverId)) === "caddy"
+				) {
 					assertCaddyDomainSupported(nextDomain);
 					await manageWebServerDomain(application, nextDomain);
 					try {
@@ -195,7 +201,9 @@ export const domainRouter = createTRPCRouter({
 					previewDeployment.applicationId,
 				);
 				application.appName = previewDeployment.appName;
-				if ((await resolveWebServerProvider(application.serverId)) === "caddy") {
+				if (
+					(await resolveWebServerProvider(application.serverId)) === "caddy"
+				) {
 					assertCaddyDomainSupported(nextDomain);
 					await manageWebServerDomain(application, nextDomain);
 					try {
@@ -303,7 +311,9 @@ export const domainRouter = createTRPCRouter({
 
 			if (domain.applicationId) {
 				const application = await findApplicationById(domain.applicationId);
-				if ((await resolveWebServerProvider(application.serverId)) === "caddy") {
+				if (
+					(await resolveWebServerProvider(application.serverId)) === "caddy"
+				) {
 					await removeWebServerDomain(application, domain.uniqueConfigKey);
 					try {
 						const result = await removeDomainById(input.domainId);
@@ -327,7 +337,9 @@ export const domainRouter = createTRPCRouter({
 					previewDeployment.applicationId,
 				);
 				application.appName = previewDeployment.appName;
-				if ((await resolveWebServerProvider(application.serverId)) === "caddy") {
+				if (
+					(await resolveWebServerProvider(application.serverId)) === "caddy"
+				) {
 					await removeWebServerDomain(application, domain.uniqueConfigKey);
 					try {
 						const result = await removeDomainById(input.domainId);

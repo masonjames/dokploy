@@ -350,7 +350,9 @@ const asStringRecord = (value: unknown): Record<string, string> | undefined => {
 	);
 };
 
-const asRecordArray = (value: unknown): Array<Record<string, unknown>> | undefined =>
+const asRecordArray = (
+	value: unknown,
+): Array<Record<string, unknown>> | undefined =>
 	Array.isArray(value)
 		? value.filter(
 				(item): item is Record<string, unknown> =>
@@ -845,9 +847,9 @@ export const reconnectServicesToWebServer = async (
 		const quotedResourceName = quote([resourceName]);
 		commands += `if docker service inspect ${quotedResourceName} >/dev/null 2>&1; then\n`;
 		commands += `  docker service inspect ${quotedResourceName} --format '{{range .Spec.TaskTemplate.Networks}}{{println .Target}}{{end}}' | grep -qx ${networkName} || docker service update --network-add ${networkName} ${quotedResourceName} >/dev/null\n`;
-		commands += `else\n`;
+		commands += "else\n";
 		commands += `  docker network connect ${networkName} $(docker ps --filter "name=${resourceName}" -q) >/dev/null 2>&1 || true\n`;
-		commands += `fi\n`;
+		commands += "fi\n";
 	}
 
 	if (serverId) {
