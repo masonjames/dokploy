@@ -23,6 +23,7 @@ import { postgres } from "./postgres";
 import { redis } from "./redis";
 import { schedules } from "./schedule";
 import { sshKeys } from "./ssh-key";
+import { webServerProvider } from "./shared";
 import { generateAppName } from "./utils";
 export const serverStatus = pgEnum("serverStatus", ["active", "inactive"]);
 export const serverType = pgEnum("serverType", ["deploy", "build"]);
@@ -41,6 +42,9 @@ export const server = pgTable("server", {
 		.notNull()
 		.$defaultFn(() => generateAppName("server")),
 	enableDockerCleanup: boolean("enableDockerCleanup").notNull().default(false),
+	webServerProvider: webServerProvider("webServerProvider")
+		.notNull()
+		.default("traefik"),
 	createdAt: text("createdAt").notNull(),
 	organizationId: text("organizationId")
 		.notNull()
@@ -136,6 +140,7 @@ const createSchema = createInsertSchema(server, {
 	name: z.string().min(1),
 	description: z.string().optional(),
 	serverType: z.enum(["deploy", "build"]).optional(),
+	webServerProvider: z.enum(["traefik", "caddy"]).optional(),
 });
 
 export const apiCreateServer = createSchema

@@ -11,8 +11,10 @@ import { getBuildComposeCommand } from "@dokploy/server/utils/builders/compose";
 import { randomizeSpecificationFile } from "@dokploy/server/utils/docker/compose";
 import {
 	cloneCompose,
+	getCaddyComposeRouteTargetsForWebServer,
 	loadDockerCompose,
 	loadDockerComposeRemote,
+	writeCaddyComposeRoutesForTargets,
 } from "@dokploy/server/utils/docker/domain";
 import type { ComposeSpecification } from "@dokploy/server/utils/docker/types";
 import { sendBuildErrorNotifications } from "@dokploy/server/utils/notifications/build-error";
@@ -266,6 +268,9 @@ export const deployCompose = async ({
 			}
 		}
 
+		const caddyComposeRouteTargets =
+			await getCaddyComposeRouteTargetsForWebServer(entity, compose.domains);
+
 		command = "set -e;";
 		command += await getBuildComposeCommand(entity);
 		commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
@@ -273,6 +278,10 @@ export const deployCompose = async ({
 			await execAsyncRemote(compose.serverId, commandWithLog);
 		} else {
 			await execAsync(commandWithLog);
+		}
+
+		if (caddyComposeRouteTargets) {
+			await writeCaddyComposeRoutesForTargets(entity, caddyComposeRouteTargets);
 		}
 
 		await updateDeploymentStatus(deployment.deploymentId, "done");
@@ -380,6 +389,9 @@ export const rebuildCompose = async ({
 			}
 		}
 
+		const caddyComposeRouteTargets =
+			await getCaddyComposeRouteTargetsForWebServer(compose, compose.domains);
+
 		command = "set -e;";
 		command += await getBuildComposeCommand(compose);
 		commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
@@ -387,6 +399,13 @@ export const rebuildCompose = async ({
 			await execAsyncRemote(compose.serverId, commandWithLog);
 		} else {
 			await execAsync(commandWithLog);
+		}
+
+		if (caddyComposeRouteTargets) {
+			await writeCaddyComposeRoutesForTargets(
+				compose,
+				caddyComposeRouteTargets,
+			);
 		}
 
 		await updateDeploymentStatus(deployment.deploymentId, "done");

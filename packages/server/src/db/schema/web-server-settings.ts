@@ -3,7 +3,7 @@ import { boolean, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { certificateType } from "./shared";
+import { certificateType, webServerProvider } from "./shared";
 
 export const webServerSettings = pgTable("webServerSettings", {
 	id: text("id")
@@ -11,6 +11,9 @@ export const webServerSettings = pgTable("webServerSettings", {
 		.primaryKey()
 		.$defaultFn(() => nanoid()),
 	// Web Server Configuration
+	webServerProvider: webServerProvider("webServerProvider")
+		.notNull()
+		.default("traefik"),
 	serverIp: text("serverIp"),
 	certificateType: certificateType("certificateType").notNull().default("none"),
 	https: boolean("https").notNull().default(false),
@@ -124,6 +127,7 @@ const createSchema = createInsertSchema(webServerSettings, {
 });
 
 export const apiUpdateWebServerSettings = createSchema.partial().extend({
+	webServerProvider: z.enum(["traefik", "caddy"]).optional(),
 	serverIp: z.string().optional(),
 	certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
 	https: z.boolean().optional(),

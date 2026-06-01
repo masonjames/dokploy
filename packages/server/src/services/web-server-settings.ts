@@ -1,5 +1,9 @@
 import { db } from "@dokploy/server/db";
-import { webServerSettings } from "@dokploy/server/db/schema";
+import { server, webServerSettings } from "@dokploy/server/db/schema";
+import {
+	normalizeWebServerProvider,
+	type WebServerProvider,
+} from "@dokploy/server/utils/web-server/providers";
 import { eq } from "drizzle-orm";
 
 /**
@@ -41,4 +45,55 @@ export const updateWebServerSettings = async (
 		.returning();
 
 	return updated;
+};
+
+export const getLocalWebServerProvider = async (): Promise<WebServerProvider> => {
+	const settings = await getWebServerSettings();
+	return normalizeWebServerProvider(settings?.webServerProvider);
+};
+
+export const updateLocalWebServerProvider = async (
+	provider: WebServerProvider,
+) => {
+	return updateWebServerSettings({ webServerProvider: provider });
+};
+
+export const getRemoteWebServerProvider = async (
+	serverId: string,
+): Promise<WebServerProvider> => {
+	const remoteServer = await db.query.server.findFirst({
+		where: eq(server.serverId, serverId),
+		columns: {
+			webServerProvider: true,
+		},
+	});
+
+	if (!remoteServer) {
+		throw new Error(`Server not found: ${serverId}`);
+	}
+
+	return normalizeWebServerProvider(remoteServer.webServerProvider);
+};
+
+export const updateRemoteWebServerProvider = async (
+	serverId: string,
+	provider: WebServerProvider,
+) => {
+	const [updated] = await db
+		.update(server)
+		.set({ webServerProvider: provider })
+		.where(eq(server.serverId, serverId))
+		.returning();
+
+	return updated;
+};
+
+export const resolveWebServerProvider = async (
+	serverId?: string | null,
+): Promise<WebServerProvider> => {
+	if (serverId) {
+		return getRemoteWebServerProvider(serverId);
+	}
+
+	return getLocalWebServerProvider();
 };

@@ -178,6 +178,13 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 	const { mutateAsync: generateDomain, isPending: isLoadingGenerate } =
 		api.domain.generateDomain.useMutation();
 
+	const { data: activeProvider, isLoading: isLoadingProvider } =
+		api.settings.getActiveWebServerProvider.useQuery(
+			{ serverId: application?.serverId || undefined },
+			{ enabled: !!application },
+		);
+	const isCaddyProvider = activeProvider === "caddy";
+
 	const { data: canGenerateTraefikMeDomains } =
 		api.domain.canGenerateTraefikMeDomains.useQuery({
 			serverId: application?.serverId || "",
@@ -264,12 +271,15 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 		}
 	}, [form, data, isPending, domainId]);
 
-	// Separate effect for handling custom cert resolver validation
+	// Separate effect for handling provider-specific certificate fields
 	useEffect(() => {
 		if (certificateType === "custom") {
 			form.trigger("customCertResolver");
 		}
-	}, [certificateType, form]);
+		if (isCaddyProvider && certificateType !== "custom") {
+			form.setValue("customCertResolver", undefined);
+		}
+	}, [certificateType, form, isCaddyProvider]);
 
 	const dictionary = {
 		success: domainId ? "Domain Updated" : "Domain Created",
@@ -281,6 +291,13 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 	};
 
 	const onSubmit = async (data: Domain) => {
+		if (isCaddyProvider && data.certificateType === "custom") {
+			toast.error(
+				"Caddy does not support Traefik custom certificate resolvers. Choose Let's Encrypt or None.",
+			);
+			return;
+		}
+
 		await mutateAsync({
 			domainId,
 			...(data.domainType === "application" && {
@@ -300,6 +317,9 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 						applicationId: id,
 					});
 					await utils.application.readTraefikConfig.invalidate({
+						applicationId: id,
+					});
+					await utils.application.readWebServerConfig.invalidate({
 						applicationId: id,
 					});
 				} else if (data.domainType === "compose") {
@@ -334,6 +354,15 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 					<AlertBlock type="info" className="mb-4">
 						Whenever you make changes to domains, remember to redeploy your
 						compose to apply the changes.
+					</AlertBlock>
+				)}
+
+				{isCaddyProvider && (
+					<AlertBlock type="info" className="mb-4">
+						This server uses Caddy. Dokploy will generate Caddy route fragments,
+						Caddy will manage HTTPS certificates for public DNS names, and
+						Traefik-only custom entrypoints, middleware references, and custom
+						certificate resolvers are hidden.
 					</AlertBlock>
 				)}
 
@@ -658,36 +687,38 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 									}}
 								/>
 
-								<FormField
-									control={form.control}
-									name="useCustomEntrypoint"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between p-3 mt-4 border rounded-lg shadow-sm">
-											<div className="space-y-0.5">
-												<FormLabel>Custom Entrypoint</FormLabel>
-												<FormDescription>
-													Use custom entrypoint for domain
-													<br />
-													"web" and/or "websecure" is used by default.
-												</FormDescription>
-												<FormMessage />
-											</div>
-											<FormControl>
-												<Switch
-													checked={field.value}
-													onCheckedChange={(checked) => {
-														field.onChange(checked);
-														if (!checked) {
-															form.setValue("customEntrypoint", undefined);
-														}
-													}}
-												/>
-											</FormControl>
-										</FormItem>
-									)}
-								/>
+								{!isCaddyProvider && (
+									<FormField
+										control={form.control}
+										name="useCustomEntrypoint"
+										render={({ field }) => (
+											<FormItem className="flex flex-row items-center justify-between p-3 mt-4 border rounded-lg shadow-sm">
+												<div className="space-y-0.5">
+													<FormLabel>Custom Entrypoint</FormLabel>
+													<FormDescription>
+														Use custom entrypoint for domain
+														<br />
+														"web" and/or "websecure" is used by default.
+													</FormDescription>
+													<FormMessage />
+												</div>
+												<FormControl>
+													<Switch
+														checked={field.value}
+														onCheckedChange={(checked) => {
+															field.onChange(checked);
+															if (!checked) {
+																form.setValue("customEntrypoint", undefined);
+															}
+														}}
+													/>
+												</FormControl>
+											</FormItem>
+										)}
+									/>
+								)}
 
-								{useCustomEntrypoint && (
+								{!isCaddyProvider && useCustomEntrypoint && (
 									<FormField
 										control={form.control}
 										name="customEntrypoint"
@@ -715,7 +746,9 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 											<div className="space-y-0.5">
 												<FormLabel>HTTPS</FormLabel>
 												<FormDescription>
-													Automatically provision SSL Certificate.
+													{isCaddyProvider
+														? "Let Caddy manage HTTPS automatically for this host."
+														: "Automatically provision SSL Certificate."}
 												</FormDescription>
 												<FormMessage />
 											</div>
@@ -758,9 +791,15 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 															<SelectContent>
 																<SelectItem value={"none"}>None</SelectItem>
 																<SelectItem value={"letsencrypt"}>
-																	Let's Encrypt
+																	{isCaddyProvider
+																		? "Caddy-managed HTTPS (ACME)"
+																		: "Let's Encrypt"}
 																</SelectItem>
-																<SelectItem value={"custom"}>Custom</SelectItem>
+																{!isCaddyProvider && (
+																	<SelectItem value={"custom"}>
+																		Custom
+																	</SelectItem>
+																)}
 															</SelectContent>
 														</Select>
 														<FormMessage />
@@ -769,7 +808,15 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 											}}
 										/>
 
-										{certificateType === "custom" && (
+										{isCaddyProvider && certificateType === "custom" && (
+											<AlertBlock type="warning">
+												This domain uses a Traefik custom certificate resolver.
+												Caddy does not use resolver names; choose Caddy-managed
+												HTTPS or None before saving.
+											</AlertBlock>
+										)}
+
+										{!isCaddyProvider && certificateType === "custom" && (
 											<FormField
 												control={form.control}
 												name="customCertResolver"
@@ -797,52 +844,71 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 										)}
 									</>
 								)}
-								<FormField
-									control={form.control}
-									name="middlewares"
-									render={({ field }) => (
-										<FormItem>
-											<div className="flex items-center gap-2">
-												<FormLabel>Middlewares</FormLabel>
-												<TooltipProvider>
-													<Tooltip>
-														<TooltipTrigger type="button">
-															<div className="size-4 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">
-																?
-															</div>
-														</TooltipTrigger>
-														<TooltipContent className="max-w-[300px]">
-															<p>
-																Add Traefik middleware references. Middlewares
-																must be defined in your Traefik configuration.
-															</p>
-														</TooltipContent>
-													</Tooltip>
-												</TooltipProvider>
-											</div>
-											<div className="flex flex-wrap gap-2 mb-2">
-												{field.value?.map((name, index) => (
-													<Badge key={index} variant="secondary">
-														{name}
-														<X
-															className="ml-1 size-3 cursor-pointer"
-															onClick={() => {
-																const newMiddlewares = [...(field.value || [])];
-																newMiddlewares.splice(index, 1);
-																form.setValue("middlewares", newMiddlewares);
+								{!isCaddyProvider && (
+									<FormField
+										control={form.control}
+										name="middlewares"
+										render={({ field }) => (
+											<FormItem>
+												<div className="flex items-center gap-2">
+													<FormLabel>Middlewares</FormLabel>
+													<TooltipProvider>
+														<Tooltip>
+															<TooltipTrigger type="button">
+																<div className="size-4 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">
+																	?
+																</div>
+															</TooltipTrigger>
+															<TooltipContent className="max-w-[300px]">
+																<p>
+																	Add Traefik middleware references. Middlewares
+																	must be defined in your Traefik configuration.
+																</p>
+															</TooltipContent>
+														</Tooltip>
+													</TooltipProvider>
+												</div>
+												<div className="flex flex-wrap gap-2 mb-2">
+													{field.value?.map((name, index) => (
+														<Badge key={index} variant="secondary">
+															{name}
+															<X
+																className="ml-1 size-3 cursor-pointer"
+																onClick={() => {
+																	const newMiddlewares = [...(field.value || [])];
+																	newMiddlewares.splice(index, 1);
+																	form.setValue("middlewares", newMiddlewares);
+																}}
+															/>
+														</Badge>
+													))}
+												</div>
+												<FormControl>
+													<div className="flex gap-2">
+														<Input
+															placeholder="e.g., rate-limit@file, auth@file"
+															onKeyDown={(e) => {
+																if (e.key === "Enter") {
+																	e.preventDefault();
+																	const input = e.currentTarget;
+																	const value = input.value.trim();
+																	if (value && !field.value?.includes(value)) {
+																		form.setValue("middlewares", [
+																			...(field.value || []),
+																			value,
+																		]);
+																		input.value = "";
+																	}
+																}
 															}}
 														/>
-													</Badge>
-												))}
-											</div>
-											<FormControl>
-												<div className="flex gap-2">
-													<Input
-														placeholder="e.g., rate-limit@file, auth@file"
-														onKeyDown={(e) => {
-															if (e.key === "Enter") {
-																e.preventDefault();
-																const input = e.currentTarget;
+														<Button
+															type="button"
+															variant="secondary"
+															onClick={() => {
+																const input = document.querySelector(
+																	'input[placeholder="e.g., rate-limit@file, auth@file"]',
+																) as HTMLInputElement;
 																const value = input.value.trim();
 																if (value && !field.value?.includes(value)) {
 																	form.setValue("middlewares", [
@@ -851,40 +917,28 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 																	]);
 																	input.value = "";
 																}
-															}
-														}}
-													/>
-													<Button
-														type="button"
-														variant="secondary"
-														onClick={() => {
-															const input = document.querySelector(
-																'input[placeholder="e.g., rate-limit@file, auth@file"]',
-															) as HTMLInputElement;
-															const value = input.value.trim();
-															if (value && !field.value?.includes(value)) {
-																form.setValue("middlewares", [
-																	...(field.value || []),
-																	value,
-																]);
-																input.value = "";
-															}
-														}}
-													>
-														Add
-													</Button>
-												</div>
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
+															}}
+														>
+															Add
+														</Button>
+													</div>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								)}
 							</div>
 						</div>
 					</form>
 
 					<DialogFooter>
-						<Button isLoading={isPending} form="hook-form" type="submit">
+						<Button
+							isLoading={isPending || isLoadingProvider}
+							disabled={isLoadingProvider}
+							form="hook-form"
+							type="submit"
+						>
 							{dictionary.submit}
 						</Button>
 					</DialogFooter>

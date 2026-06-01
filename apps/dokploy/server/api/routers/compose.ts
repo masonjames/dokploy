@@ -1,5 +1,5 @@
 import {
-	addDomainToCompose,
+	addDomainToComposeForWebServer,
 	clearOldDeployments,
 	cloneCompose,
 	createCommand,
@@ -411,7 +411,10 @@ export const composeRouter = createTRPCRouter({
 			});
 			const compose = await findComposeById(input.composeId);
 			const domains = await findDomainsByComposeId(input.composeId);
-			const composeFile = await addDomainToCompose(compose, domains);
+			const composeFile = await addDomainToComposeForWebServer(
+				compose,
+				domains,
+			);
 			return stringify(composeFile, {
 				lineWidth: 1000,
 			});

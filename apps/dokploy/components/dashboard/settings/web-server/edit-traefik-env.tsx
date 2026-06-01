@@ -40,19 +40,23 @@ interface Props {
 export const EditTraefikEnv = ({ children, serverId }: Props) => {
 	const [canEdit, setCanEdit] = useState(true);
 
-	const { data } = api.settings.readTraefikEnv.useQuery({
+	const { data: activeProvider } =
+		api.settings.getActiveWebServerProvider.useQuery({ serverId });
+	const providerLabel = activeProvider === "caddy" ? "Caddy" : "Traefik";
+
+	const { data } = api.settings.readWebServerEnv.useQuery({
 		serverId,
 	});
 
 	const { mutateAsync, isPending, error, isError } =
-		api.settings.writeTraefikEnv.useMutation();
+		api.settings.writeWebServerEnv.useMutation();
 
 	const {
 		execute: executeWithHealthCheck,
 		isExecuting: isHealthCheckExecuting,
 	} = useHealthCheckAfterMutation({
 		initialDelay: 5000,
-		successMessage: "Traefik Env Updated",
+		successMessage: `${providerLabel} env updated`,
 	});
 
 	const form = useForm<Schema>({
@@ -80,7 +84,7 @@ export const EditTraefikEnv = ({ children, serverId }: Props) => {
 				}),
 			);
 		} catch {
-			toast.error("Error updating the Traefik env");
+			toast.error(`Error updating the ${providerLabel} env`);
 		}
 	};
 
@@ -109,9 +113,9 @@ export const EditTraefikEnv = ({ children, serverId }: Props) => {
 			<DialogTrigger asChild>{children}</DialogTrigger>
 			<DialogContent className="sm:max-w-4xl">
 				<DialogHeader>
-					<DialogTitle>Update Traefik Environment</DialogTitle>
+					<DialogTitle>Update {providerLabel} Environment</DialogTitle>
 					<DialogDescription>
-						Update the traefik environment variables
+						Update the active web server environment variables.
 					</DialogDescription>
 				</DialogHeader>
 				{isError && <AlertBlock type="error">{error?.message}</AlertBlock>}
@@ -133,14 +137,20 @@ export const EditTraefikEnv = ({ children, serverId }: Props) => {
 											<CodeEditor
 												language="properties"
 												wrapperClassName="h-[35rem] font-mono"
-												placeholder={`TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=test@localhost.com
+												placeholder={
+													activeProvider === "caddy"
+														? `CADDY_ADMIN=localhost:2019
+# Add Caddy container environment variables here if needed.
+                                                    `
+														: `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=test@localhost.com
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_STORAGE=/etc/dokploy/traefik/dynamic/acme.json
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_HTTP_CHALLENGE=true
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_HTTP_CHALLENGE_PRETTY=true
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_HTTP_CHALLENGE_ENTRYPOINT=web
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_HTTP_CHALLENGE_DNS_CHALLENGE=true
 TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_HTTP_CHALLENGE_DNS_PROVIDER=cloudflare
-                                                    `}
+                                                    `
+												}
 												{...field}
 											/>
 										</FormControl>

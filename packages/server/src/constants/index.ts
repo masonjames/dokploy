@@ -90,11 +90,23 @@ export const paths = (isServer = false) => {
 			: path.join(process.cwd(), ".docker");
 	const MAIN_TRAEFIK_PATH = `${BASE_PATH}/traefik`;
 	const DYNAMIC_TRAEFIK_PATH = `${MAIN_TRAEFIK_PATH}/dynamic`;
+	const MAIN_CADDY_PATH = `${BASE_PATH}/caddy`;
+	const CADDY_CONFIG_PATH = `${MAIN_CADDY_PATH}/caddy.json`;
+	const CADDY_FRAGMENTS_PATH = `${MAIN_CADDY_PATH}/fragments`;
+	const CADDY_DATA_PATH = `${MAIN_CADDY_PATH}/data`;
+	const CADDY_CONFIG_DIR_PATH = `${MAIN_CADDY_PATH}/config`;
+	const CADDY_MIGRATIONS_PATH = `${MAIN_CADDY_PATH}/migrations`;
 
 	return {
 		BASE_PATH,
 		MAIN_TRAEFIK_PATH,
 		DYNAMIC_TRAEFIK_PATH,
+		MAIN_CADDY_PATH,
+		CADDY_CONFIG_PATH,
+		CADDY_FRAGMENTS_PATH,
+		CADDY_DATA_PATH,
+		CADDY_CONFIG_DIR_PATH,
+		CADDY_MIGRATIONS_PATH,
 		LOGS_PATH: `${BASE_PATH}/logs`,
 		APPLICATIONS_PATH: `${BASE_PATH}/applications`,
 		COMPOSE_PATH: `${BASE_PATH}/compose`,
