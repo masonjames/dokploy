@@ -85,6 +85,30 @@ test("compiles explicit http and https servers with managed HTTPS redirect", () 
 	expect(servers.https.trusted_proxies).toBeUndefined();
 	expect(servers.http.client_ip_headers).toBeUndefined();
 	expect(servers.https.client_ip_headers).toBeUndefined();
+	expect((config as any).logging).toBeUndefined();
+	expect(servers.http.logs).toBeUndefined();
+	expect(servers.https.logs).toBeUndefined();
+});
+
+test("compiles Caddy access-log output when request analytics are enabled", () => {
+	const config = compileCaddyConfig({
+		routes: [route({ https: true })],
+		accessLogs: { enabled: true },
+	});
+
+	const servers = getServers(config);
+	expect(servers.http.logs).toEqual({});
+	expect(servers.https.logs).toEqual({});
+	expect((config as any).logging.logs["dokploy-requests"]).toEqual({
+		writer: {
+			output: "file",
+			filename: "/etc/caddy/access.log",
+		},
+		encoder: {
+			format: "json",
+		},
+		include: ["http.log.access"],
+	});
 });
 
 test("compiles Cloudflare trusted proxy settings with safe client IP headers", () => {

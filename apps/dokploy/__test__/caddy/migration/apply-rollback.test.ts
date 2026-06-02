@@ -335,6 +335,36 @@ describe("applyCaddyMigration", () => {
 		);
 	});
 
+	test("rejects apply when Caddy request-log compile settings changed after prepare", async () => {
+		const report = seedMigration("caddy-apply-stale-request-logs");
+		vi.mocked(providerService.getCaddyCompileSettings).mockResolvedValueOnce({
+			trustedProxies: null,
+			accessLogs: { enabled: true },
+		});
+
+		await expect(
+			applyCaddyMigration({ migrationId: report.migrationId }),
+		).rejects.toThrow("Caddy compile settings changed after prepare");
+
+		expect(
+			upstreamPreflight.runCaddyMigrationUpstreamPreflight,
+		).not.toHaveBeenCalled();
+		expect(settingsService.stopDockerResource).not.toHaveBeenCalled();
+		expect(settingsService.writeCaddySetup).not.toHaveBeenCalled();
+		const failedReport = JSON.parse(
+			vol.readFileSync(report.artifactPaths.reportJson, "utf8") as string,
+		) as CaddyMigrationReport;
+		expect(failedReport.status).toBe("failed");
+		expect(failedReport.warnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "apply-failed",
+					message: expect.stringContaining("Caddy compile settings changed"),
+				}),
+			]),
+		);
+	});
+
 	test("rewrites the mounted Caddy config file in place after setup", async () => {
 		const report = seedMigration("caddy-apply-preserves-config-inode");
 		let mountedConfigFd: number | undefined;

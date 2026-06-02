@@ -1205,6 +1205,13 @@
       "when": 1780360688821,
       "tag": "0171_caddy_trusted_proxy_config",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1780371136997,
+      "tag": "0172_normal_gauntlet",
+      "breakpoints": true
     }
   ]
 }

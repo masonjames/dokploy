@@ -26,6 +26,7 @@ import type {
 
 const CADDY_FRAGMENT_VERSION = 1;
 const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
+const CADDY_ACCESS_LOG_CONTAINER_PATH = "/etc/caddy/access.log";
 export const CLOUDFLARE_TRUSTED_PROXY_RANGES = [
 	"173.245.48.0/20",
 	"103.21.244.0/22",
@@ -357,6 +358,35 @@ const createTlsAppConfig = (
 	return Object.keys(tlsApp).length ? { tls: tlsApp } : {};
 };
 
+const createCaddyAccessLogConfig = (
+	accessLogs: CaddyCompileOptions["accessLogs"],
+) => {
+	if (!accessLogs?.enabled) {
+		return {};
+	}
+
+	return {
+		logging: {
+			logs: {
+				"dokploy-requests": {
+					writer: {
+						output: "file",
+						filename: accessLogs.filename || CADDY_ACCESS_LOG_CONTAINER_PATH,
+					},
+					encoder: {
+						format: "json",
+					},
+					include: ["http.log.access"],
+				},
+			},
+		},
+	};
+};
+
+const createCaddyServerLogConfig = (
+	accessLogs: CaddyCompileOptions["accessLogs"],
+) => (accessLogs?.enabled ? { logs: {} } : {});
+
 const createHeaderHandler = (route: CaddyRouteIntent) => {
 	const requestHeaders = route.transforms?.requestHeaders;
 	const responseHeaders = route.transforms?.responseHeaders;
@@ -612,6 +642,7 @@ export const compileCaddyConfig = ({
 	routes = [],
 	letsEncryptEmail,
 	trustedProxies,
+	accessLogs,
 }: CaddyCompileOptions = {}) => {
 	const allRoutes = sortCaddyRouteIntents([
 		...flattenCaddyFragments(fragments),
@@ -650,17 +681,20 @@ export const compileCaddyConfig = ({
 		admin: {
 			listen: "localhost:2019",
 		},
+		...createCaddyAccessLogConfig(accessLogs),
 		apps: {
 			...createTlsAppConfig(letsEncryptEmail, manualTlsCertificates),
 			http: {
 				servers: {
 					http: {
 						listen: [":80"],
+						...createCaddyServerLogConfig(accessLogs),
 						...trustedProxyServerOptions,
 						routes: httpRoutes,
 					},
 					https: {
 						listen: [":443"],
+						...createCaddyServerLogConfig(accessLogs),
 						...trustedProxyServerOptions,
 						routes: httpsRoutes,
 					},
@@ -807,6 +841,7 @@ export const compileAndWriteCaddyConfig = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
 		trustedProxies?: CaddyCompileOptions["trustedProxies"];
+		accessLogs?: CaddyCompileOptions["accessLogs"];
 	} = {},
 ) => {
 	const fragments = await readCaddyRouteFragments(options);
@@ -814,6 +849,7 @@ export const compileAndWriteCaddyConfig = async (
 		fragments,
 		letsEncryptEmail: options.letsEncryptEmail,
 		trustedProxies: options.trustedProxies,
+		accessLogs: options.accessLogs,
 	});
 	await writeCaddyConfigFile(config, options);
 	return config;
@@ -881,6 +917,7 @@ export const compileWriteAndReloadCaddyConfigSafely = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
 		trustedProxies?: CaddyCompileOptions["trustedProxies"];
+		accessLogs?: CaddyCompileOptions["accessLogs"];
 	} = {},
 ) => {
 	const fragments = await readCaddyRouteFragments(options);
@@ -888,6 +925,7 @@ export const compileWriteAndReloadCaddyConfigSafely = async (
 		fragments,
 		letsEncryptEmail: options.letsEncryptEmail,
 		trustedProxies: options.trustedProxies,
+		accessLogs: options.accessLogs,
 	});
 	await writeAndReloadCaddyConfigSafely(config, options);
 	return config;
@@ -897,6 +935,7 @@ export const ensureDefaultCaddyConfig = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
 		trustedProxies?: CaddyCompileOptions["trustedProxies"];
+		accessLogs?: CaddyCompileOptions["accessLogs"];
 	} = {},
 ) => {
 	const caddyPaths = paths(!!options.serverId);

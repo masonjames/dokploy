@@ -18,13 +18,19 @@ interface Props {
 }
 export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 	const [file, setFile] = React.useState<null | string>(null);
+	const { data: resolvedProvider } =
+		api.settings.getActiveWebServerProvider.useQuery(
+			{ serverId },
+			{ enabled: !activeProvider },
+		);
+	const provider = activeProvider ?? resolvedProvider;
 	const providerLabel =
-		activeProvider === "caddy"
+		provider === "caddy"
 			? "Caddy"
-			: activeProvider === "traefik"
+			: provider === "traefik"
 				? "Traefik"
 				: "Web Server";
-	const isCaddy = activeProvider === "caddy";
+	const isCaddy = provider === "caddy";
 
 	React.useEffect(() => {
 		setFile(null);
@@ -32,7 +38,7 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 
 	React.useEffect(() => {
 		setFile(null);
-	}, [activeProvider]);
+	}, [provider]);
 
 	const {
 		data: directories,
@@ -60,7 +66,7 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 						<CardDescription>
 							{isCaddy
 								? "Review generated Caddy artifacts such as caddy.json, route fragments, and non-backup migration artifacts."
-								: activeProvider === "traefik"
+								: provider === "traefik"
 									? "Manage files and directories for the active Traefik web server."
 									: "Review files and directories for the active web server."}
 						</CardDescription>
@@ -110,7 +116,7 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 												<ShowTraefikFile
 													path={file}
 													serverId={serverId}
-													activeProvider={activeProvider}
+													activeProvider={provider}
 												/>
 											) : (
 												<div className="h-full w-full flex-col gap-2 flex items-center justify-center">

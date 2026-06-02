@@ -21,6 +21,7 @@ const baseSettings: WebServerSettings = {
 	webServerProvider: "traefik",
 	caddyTrustedProxyConfig: null,
 	https: false,
+	requestLogsEnabled: false,
 	certificateType: "none",
 	host: null,
 	serverIp: null,

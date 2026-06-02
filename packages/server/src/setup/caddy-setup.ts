@@ -5,7 +5,10 @@ import {
 	reloadCaddyAfterValidation,
 	validateCaddyConfigWithContainer,
 } from "../utils/caddy/config";
-import type { CaddyTrustedProxyConfig } from "../utils/caddy/types";
+import type {
+	CaddyAccessLogConfig,
+	CaddyTrustedProxyConfig,
+} from "../utils/caddy/types";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 
 export const CADDY_SSL_PORT =
@@ -32,6 +35,7 @@ export interface CaddyOptions {
 	}[];
 	letsEncryptEmail?: string | null;
 	trustedProxies?: CaddyTrustedProxyConfig | null;
+	accessLogs?: CaddyAccessLogConfig | null;
 }
 
 type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
@@ -186,11 +190,13 @@ export const initializeStandaloneCaddy = async ({
 	additionalPorts = [],
 	letsEncryptEmail,
 	trustedProxies,
+	accessLogs,
 }: CaddyOptions = {}) => {
 	await ensureDefaultCaddyConfig({
 		serverId,
 		letsEncryptEmail,
 		trustedProxies,
+		accessLogs,
 	});
 	const imageName = `caddy:${CADDY_VERSION}`;
 	const containerName = "dokploy-caddy";
@@ -243,11 +249,13 @@ export const initializeCaddyService = async ({
 	serverId,
 	letsEncryptEmail,
 	trustedProxies,
+	accessLogs,
 }: CaddyOptions) => {
 	await ensureDefaultCaddyConfig({
 		serverId,
 		letsEncryptEmail,
 		trustedProxies,
+		accessLogs,
 	});
 	const imageName = `caddy:${CADDY_VERSION}`;
 	const appName = "dokploy-caddy";

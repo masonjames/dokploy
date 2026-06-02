@@ -18,6 +18,7 @@ export const webServerSettings = pgTable("webServerSettings", {
 	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig")
 		.$type<CaddyTrustedProxySettings | null>()
 		.default(null),
+	requestLogsEnabled: boolean("requestLogsEnabled").notNull().default(false),
 	serverIp: text("serverIp"),
 	certificateType: certificateType("certificateType").notNull().default("none"),
 	https: boolean("https").notNull().default(false),
@@ -148,6 +149,7 @@ export const apiUpdateWebServerSettings = createSchema.partial().extend({
 	letsEncryptEmail: z.string().email().optional().nullable(),
 	sshPrivateKey: z.string().optional(),
 	enableDockerCleanup: z.boolean().optional(),
+	requestLogsEnabled: z.boolean().optional(),
 	logCleanupCron: z.string().optional().nullable(),
 	metricsConfig: z
 		.object({

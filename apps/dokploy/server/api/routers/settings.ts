@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import {
 	applyCaddyMigration as applyCaddyMigrationCutover,
 	CLEANUP_CRON_JOB,
@@ -13,6 +15,7 @@ import {
 	cleanupImages,
 	cleanupSystem,
 	cleanupVolumes,
+	compileAndWriteCaddyConfig,
 	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	execAsync,
@@ -371,6 +374,80 @@ const getCaddySetupOptions = async (
 ) => {
 	if (provider !== "caddy") return {};
 	return getCaddyCompileSettings(serverId);
+};
+
+const getLocalAccessLogPath = (provider: WebServerProvider) => {
+	const currentPaths = paths();
+	return provider === "caddy"
+		? currentPaths.CADDY_ACCESS_LOG_PATH
+		: `${currentPaths.DYNAMIC_TRAEFIK_PATH}/access.log`;
+};
+
+const readAccessLogFile = async (filePath: string, readAll = false) => {
+	if (!existsSync(filePath)) {
+		return "";
+	}
+	if (readAll) {
+		return readFileSync(filePath, "utf8");
+	}
+
+	const recentLines: string[] = [];
+	const fileStream = createReadStream(filePath, { encoding: "utf8" });
+	const readline = createInterface({
+		input: fileStream,
+		crlfDelay: Number.POSITIVE_INFINITY,
+	});
+	for await (const line of readline) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+			recentLines.push(line);
+			if (recentLines.length > 500) {
+				recentLines.shift();
+			}
+		}
+	}
+	return recentLines.length ? `${recentLines.join("\n")}\n` : "";
+};
+
+const readActiveRequestAccessLog = async (readAll = false) => {
+	const provider = await resolveWebServerProvider();
+	if (provider === "traefik") {
+		return (await readMonitoringConfig(readAll)) ?? "";
+	}
+	return readAccessLogFile(getLocalAccessLogPath(provider), readAll);
+};
+
+const getRequestAnalyticsState = async () => {
+	if (IS_CLOUD) {
+		return {
+			provider: "traefik" as const,
+			enabled: true,
+			reloadResourceName: "dokploy-traefik",
+			accessLogPath: getLocalAccessLogPath("traefik"),
+		};
+	}
+
+	const provider = await resolveWebServerProvider();
+	if (provider === "caddy") {
+		const settings = await getWebServerSettings();
+		return {
+			provider,
+			enabled: Boolean(settings?.requestLogsEnabled),
+			reloadResourceName: getWebServerResourceName(provider),
+			accessLogPath: getLocalAccessLogPath(provider),
+		};
+	}
+
+	const config = readMainConfig();
+	const parsedConfig = config
+		? (parse(config) as { accessLog?: { filePath?: string } })
+		: null;
+	return {
+		provider,
+		enabled: Boolean(parsedConfig?.accessLog?.filePath),
+		reloadResourceName: getWebServerResourceName(provider),
+		accessLogPath: getLocalAccessLogPath(provider),
+	};
 };
 
 export const settingsRouter = createTRPCRouter({
@@ -1442,6 +1519,9 @@ export const settingsRouter = createTRPCRouter({
 			return { provider, enabled: false };
 		}),
 
+	getRequestAnalyticsState: protectedProcedure.query(async () => {
+		return getRequestAnalyticsState();
+	}),
 	readStatsLogs: protectedProcedure
 		.meta({
 			openapi: {
@@ -1459,7 +1539,7 @@ export const settingsRouter = createTRPCRouter({
 					totalCount: 0,
 				};
 			}
-			const rawConfig = await readMonitoringConfig(
+			const rawConfig = await readActiveRequestAccessLog(
 				!!input.dateRange?.start && !!input.dateRange?.end,
 			);
 
@@ -1499,26 +1579,14 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return [];
 			}
-			const rawConfig = await readMonitoringConfig(
+			const rawConfig = await readActiveRequestAccessLog(
 				!!input?.dateRange?.start || !!input?.dateRange?.end,
 			);
 			const processedLogs = processLogs(rawConfig as string, input?.dateRange);
 			return processedLogs || [];
 		}),
 	haveActivateRequests: protectedProcedure.query(async () => {
-		if (IS_CLOUD) {
-			return true;
-		}
-		const config = readMainConfig();
-
-		if (!config) return false;
-		const parsedConfig = parse(config) as {
-			accessLog?: {
-				filePath: string;
-			};
-		};
-
-		return !!parsedConfig?.accessLog?.filePath;
+		return (await getRequestAnalyticsState()).enabled;
 	}),
 	toggleRequests: protectedProcedure
 		.input(
@@ -1530,6 +1598,29 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
+			const provider = await resolveWebServerProvider();
+			if (provider === "caddy") {
+				const previousSettings = await getWebServerSettings();
+				const previousEnabled = Boolean(previousSettings?.requestLogsEnabled);
+				await updateWebServerSettings({
+					requestLogsEnabled: input.enable,
+				});
+				try {
+					await compileAndWriteCaddyConfig(await getCaddyCompileSettings());
+				} catch (error) {
+					await updateWebServerSettings({
+						requestLogsEnabled: previousEnabled,
+					});
+					throw error;
+				}
+				await audit(ctx, {
+					action: "update",
+					resourceType: "settings",
+					resourceName: "toggle-requests",
+				});
+				return true;
+			}
+
 			const mainConfig = readMainConfig();
 			if (!mainConfig) return false;
 

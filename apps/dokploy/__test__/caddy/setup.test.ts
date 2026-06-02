@@ -127,6 +127,38 @@ describe("Caddy runtime setup", () => {
 		]);
 	});
 
+	test("passes access-log settings into standalone Caddy config generation", async () => {
+		const createContainer = vi.fn();
+		const start = vi.fn();
+		const remove = vi.fn().mockRejectedValue(new Error("missing"));
+		const docker = {
+			pull: vi.fn(
+				(_imageName: string, callback: (error: Error | null) => void) => {
+					callback(null);
+				},
+			),
+			modem: { followProgress: vi.fn() },
+			createContainer,
+			getContainer: vi.fn(() => ({ remove, start })),
+		};
+		getRemoteDockerMock.mockResolvedValue(docker);
+		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
+		validateCaddyConfigWithContainerMock.mockResolvedValue(undefined);
+		const { initializeStandaloneCaddy } = await loadCaddySetup();
+
+		await initializeStandaloneCaddy({
+			letsEncryptEmail: "ops@example.com",
+			accessLogs: { enabled: true },
+		});
+
+		expect(ensureDefaultCaddyConfigMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				letsEncryptEmail: "ops@example.com",
+				accessLogs: { enabled: true },
+			}),
+		);
+	});
+
 	test("does not publish the Caddy admin port for Caddy services", async () => {
 		const createService = vi.fn();
 		const docker = {
@@ -146,6 +178,7 @@ describe("Caddy runtime setup", () => {
 		const { initializeCaddyService } = await loadCaddySetup();
 
 		await initializeCaddyService({
+			accessLogs: { enabled: true },
 			additionalPorts: [
 				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
 				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
@@ -178,6 +211,9 @@ describe("Caddy runtime setup", () => {
 					Protocol: "tcp",
 				}),
 			]),
+		);
+		expect(ensureDefaultCaddyConfigMock).toHaveBeenCalledWith(
+			expect.objectContaining({ accessLogs: { enabled: true } }),
 		);
 	});
 });

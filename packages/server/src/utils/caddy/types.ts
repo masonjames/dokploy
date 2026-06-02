@@ -77,11 +77,17 @@ export interface CaddyTrustedProxySettings {
 	strict?: boolean | null;
 }
 
+export interface CaddyAccessLogConfig {
+	enabled: boolean;
+	filename?: string | null;
+}
+
 export interface CaddyCompileOptions {
 	fragments?: CaddyRouteFragment[];
 	routes?: CaddyRouteIntent[];
 	letsEncryptEmail?: string | null;
 	trustedProxies?: CaddyTrustedProxyConfig | null;
+	accessLogs?: CaddyAccessLogConfig | null;
 }
 
 export type CaddyJsonObject = Record<string, unknown>;

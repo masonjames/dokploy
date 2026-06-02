@@ -58,6 +58,7 @@ const normalizeCompileSettings = (
 ): CaddyMigrationCompileSettings => ({
 	letsEncryptEmail: settings?.letsEncryptEmail ?? null,
 	trustedProxies: settings?.trustedProxies ?? null,
+	accessLogs: settings?.accessLogs ?? null,
 });
 
 const compileSettingsChanged = (

@@ -93,6 +93,7 @@ export const paths = (isServer = false) => {
 	const MAIN_CADDY_PATH = `${BASE_PATH}/caddy`;
 	const CADDY_CONFIG_PATH = `${MAIN_CADDY_PATH}/caddy.json`;
 	const CADDY_FRAGMENTS_PATH = `${MAIN_CADDY_PATH}/fragments`;
+	const CADDY_ACCESS_LOG_PATH = `${MAIN_CADDY_PATH}/access.log`;
 	const CADDY_DATA_PATH = `${MAIN_CADDY_PATH}/data`;
 	const CADDY_CONFIG_DIR_PATH = `${MAIN_CADDY_PATH}/config`;
 	const CADDY_MIGRATIONS_PATH = `${MAIN_CADDY_PATH}/migrations`;
@@ -104,6 +105,7 @@ export const paths = (isServer = false) => {
 		MAIN_CADDY_PATH,
 		CADDY_CONFIG_PATH,
 		CADDY_FRAGMENTS_PATH,
+		CADDY_ACCESS_LOG_PATH,
 		CADDY_DATA_PATH,
 		CADDY_CONFIG_DIR_PATH,
 		CADDY_MIGRATIONS_PATH,

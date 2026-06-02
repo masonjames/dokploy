@@ -183,7 +183,7 @@ export interface CaddyMigrationReport {
 	};
 	compileSettings?: Pick<
 		CaddyCompileOptions,
-		"letsEncryptEmail" | "trustedProxies"
+		"letsEncryptEmail" | "trustedProxies" | "accessLogs"
 	>;
 	runtimePreflight?: CaddyMigrationRuntimePreflight;
 	warnings: CaddyMigrationWarning[];

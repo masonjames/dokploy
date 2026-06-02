@@ -2,6 +2,7 @@ import { db } from "@dokploy/server/db";
 import { server, webServerSettings } from "@dokploy/server/db/schema";
 import { assertValidCaddyTrustedProxyConfig } from "@dokploy/server/utils/caddy/config";
 import type {
+	CaddyAccessLogConfig,
 	CaddyTrustedProxyConfig,
 	CaddyTrustedProxySettings,
 } from "@dokploy/server/utils/caddy/types";
@@ -195,6 +196,7 @@ export const getCaddyCompileSettings = async (
 ): Promise<{
 	letsEncryptEmail?: string | null;
 	trustedProxies?: CaddyTrustedProxyConfig | null;
+	accessLogs?: CaddyAccessLogConfig | null;
 }> => {
 	if (serverId) {
 		return {
@@ -208,6 +210,7 @@ export const getCaddyCompileSettings = async (
 		trustedProxies: caddyTrustedProxySettingsToConfig(
 			normalizeCaddyTrustedProxySettings(settings?.caddyTrustedProxyConfig),
 		),
+		accessLogs: settings?.requestLogsEnabled ? { enabled: true } : null,
 	};
 };
 
