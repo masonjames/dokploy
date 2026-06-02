@@ -738,6 +738,16 @@ export const settingsRouter = createTRPCRouter({
 	toggleDashboard: adminProcedure
 		.input(apiEnableDashboard)
 		.mutation(async ({ input, ctx }) => {
+			await ensureServerAccess(ctx, input.serverId);
+			const provider = await resolveWebServerProvider(input.serverId);
+			if (provider !== "traefik") {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message:
+						"The dashboard toggle is only available for Traefik. The Caddy admin API is kept local-only and is not exposed through Dokploy.",
+				});
+			}
+
 			const ports = await readPorts("dokploy-traefik", input.serverId);
 			const env = await readEnvironmentVariables(
 				"dokploy-traefik",

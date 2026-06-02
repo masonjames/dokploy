@@ -104,12 +104,14 @@ import {
 	getWebServerResourceName,
 	getWebServerSettings,
 	isCaddyAdminAdditionalPort,
+	prepareEnvironmentVariables,
 	readEnvironmentVariables,
 	readPorts,
 	resolveWebServerProvider,
 	updateCaddyTrustedProxySettings,
 	updateServerCaddy,
 	updateWebServerSettings,
+	writeTraefikSetup,
 	writeWebServerSetup,
 } from "@dokploy/server";
 import { settingsRouter } from "@/server/api/routers/settings";
@@ -194,6 +196,7 @@ beforeEach(() => {
 		undefined as never,
 	);
 	vi.mocked(readEnvironmentVariables).mockResolvedValue("");
+	vi.mocked(prepareEnvironmentVariables).mockReturnValue([]);
 	vi.mocked(getWebServerResourceName).mockImplementation((provider) =>
 		provider === "caddy" ? "dokploy-caddy" : "dokploy-traefik",
 	);
@@ -206,6 +209,7 @@ beforeEach(() => {
 		(port) => port.targetPort === 2019 && (port.protocol ?? "tcp") === "tcp",
 	);
 	vi.mocked(writeWebServerSetup).mockResolvedValue(undefined as never);
+	vi.mocked(writeTraefikSetup).mockResolvedValue(undefined as never);
 });
 
 test("persists Caddy trusted proxy settings without rebuilding when Traefik is active", async () => {
@@ -383,6 +387,48 @@ test("keeps Traefik dashboard state based on the Traefik dashboard port", async 
 
 	expect(readPorts).toHaveBeenCalledWith("dokploy-traefik", undefined);
 	expect(result).toEqual({ provider: "traefik", enabled: true });
+});
+
+test("rejects direct dashboard toggles when Caddy is active", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+
+	await expect(
+		caller.toggleDashboard({ enableDashboard: true }),
+	).rejects.toThrow("Caddy admin API is kept local-only");
+
+	expect(readPorts).not.toHaveBeenCalled();
+	expect(readEnvironmentVariables).not.toHaveBeenCalled();
+	expect(prepareEnvironmentVariables).not.toHaveBeenCalled();
+	expect(checkPortInUse).not.toHaveBeenCalled();
+	expect(writeTraefikSetup).not.toHaveBeenCalled();
+	expect(audit).not.toHaveBeenCalled();
+});
+
+test("keeps dashboard toggles available when Traefik is active", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("traefik");
+	vi.mocked(readPorts).mockResolvedValue([]);
+	vi.mocked(readEnvironmentVariables).mockResolvedValue("TRAEFIK_ENV=1");
+	vi.mocked(prepareEnvironmentVariables).mockReturnValue(["TRAEFIK_ENV=1"]);
+
+	await caller.toggleDashboard({ enableDashboard: true });
+
+	expect(readPorts).toHaveBeenCalledWith("dokploy-traefik", undefined);
+	expect(readEnvironmentVariables).toHaveBeenCalledWith(
+		"dokploy-traefik",
+		undefined,
+	);
+	expect(checkPortInUse).toHaveBeenCalledWith(8080, undefined);
+	expect(writeTraefikSetup).toHaveBeenCalledWith({
+		env: ["TRAEFIK_ENV=1"],
+		additionalPorts: [
+			{ targetPort: 8080, publishedPort: 8080, protocol: "tcp" },
+		],
+		serverId: undefined,
+	});
+	expect(audit).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ resourceName: "toggle-dashboard" }),
+	);
 });
 
 test("restores dashboard settings when active Caddy domain rewrite fails", async () => {
