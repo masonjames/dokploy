@@ -112,7 +112,7 @@ export const CaddyMigrationPanel = ({ serverId }: Props) => {
 
 	return (
 		<Card className="bg-transparent">
-			<CardHeader className="px-0">
+			<CardHeader className="pb-3">
 				<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 					<div>
 						<CardTitle className="text-base">Caddy migration</CardTitle>
@@ -131,7 +131,7 @@ export const CaddyMigrationPanel = ({ serverId }: Props) => {
 					</Button>
 				</div>
 			</CardHeader>
-			<CardContent className="px-0 pb-0 space-y-4">
+			<CardContent className="space-y-4">
 				{activeProvider === "caddy" && (
 					<AlertBlock type="success">
 						Caddy is already the active provider. Dry runs are still useful for

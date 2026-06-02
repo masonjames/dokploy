@@ -61,14 +61,14 @@ export const WebServerProviderSelector = ({ serverId }: Props) => {
 
 	return (
 		<Card className="bg-transparent">
-			<CardHeader className="px-0 pt-0">
+			<CardHeader className="pb-3">
 				<CardTitle className="text-base">Active provider</CardTitle>
 				<CardDescription>
 					Review the active web server Dokploy uses for provider-aware reload,
 					configuration, and new domain changes.
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="px-0 pb-0 space-y-3">
+			<CardContent className="space-y-3">
 				<Select
 					disabled={isLoading || isPending}
 					value={activeProvider ?? "traefik"}

@@ -82,4 +82,33 @@ describe("provider-neutral Caddy UI contract", () => {
 			'activeProvider === "caddy" ? "Caddy" : "Traefik"',
 		);
 	});
+
+	test("keeps read-only web-server files scrollable", () => {
+		const editor = readSource("../../components/shared/code-editor.tsx");
+		const fileEditor = readSource(
+			"../../components/dashboard/file-system/show-traefik-file.tsx",
+		);
+
+		expect(editor).toContain("pointer-events-none absolute");
+		expect(fileEditor).toContain(
+			'activeProvider === "caddy" ? "json" : "yaml"',
+		);
+		expect(fileEditor).toContain("disabled={!isTraefik || canEdit}");
+	});
+
+	test("keeps Caddy web-server settings cards padded", () => {
+		const providerSelector = readSource(
+			"../../components/dashboard/settings/web-server/web-server-provider-selector.tsx",
+		);
+		const migrationPanel = readSource(
+			"../../components/dashboard/settings/web-server/caddy-migration-panel.tsx",
+		);
+
+		expect(providerSelector).toContain('CardHeader className="pb-3"');
+		expect(providerSelector).toContain('CardContent className="space-y-3"');
+		expect(migrationPanel).toContain('CardHeader className="pb-3"');
+		expect(migrationPanel).toContain('CardContent className="space-y-4"');
+		expect(providerSelector).not.toContain('CardHeader className="px-0 pt-0"');
+		expect(migrationPanel).not.toContain('CardHeader className="px-0"');
+	});
 });
