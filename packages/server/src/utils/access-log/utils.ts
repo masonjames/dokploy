@@ -39,9 +39,7 @@ const isCaddyLogEntry = (value: unknown): value is CaddyRawAccessLogEntry => {
 };
 
 const getRequestPath = (uri = "") => {
-	if (!uri) return "";
-	const queryIndex = uri.indexOf("?");
-	return queryIndex === -1 ? uri : uri.slice(0, queryIndex) || "/";
+	return uri;
 };
 
 const getHostPort = (host = "", tls?: unknown) => {

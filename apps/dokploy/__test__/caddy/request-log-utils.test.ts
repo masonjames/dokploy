@@ -43,7 +43,7 @@ test("normalizes Caddy JSON access logs into the Requests table shape", () => {
 		Duration: 14_729_375,
 		RequestHost: "app.example.com",
 		RequestMethod: "GET",
-		RequestPath: "/dashboard",
+		RequestPath: "/dashboard?_rsc=1",
 		RequestPort: "443",
 		RequestProtocol: "HTTP/2.0",
 		RequestScheme: "https",

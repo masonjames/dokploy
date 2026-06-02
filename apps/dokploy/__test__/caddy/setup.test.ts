@@ -69,9 +69,11 @@ describe("Caddy runtime setup", () => {
 				}),
 			}),
 		);
-		expect(
-			(createContainer.mock.calls[0]?.[0] as any).HostConfig.Binds,
-		).not.toEqual(
+		const binds = (createContainer.mock.calls[0]?.[0] as any).HostConfig.Binds;
+		expect(binds).toEqual(
+			expect.arrayContaining([expect.stringMatching(/\/caddy:\/etc\/caddy$/)]),
+		);
+		expect(binds).not.toEqual(
 			expect.arrayContaining([
 				expect.stringMatching(
 					/\/caddy\/caddy\.json:\/etc\/caddy\/caddy\.json$/,
@@ -188,6 +190,15 @@ describe("Caddy runtime setup", () => {
 		});
 
 		const createOptions = createService.mock.calls[0]?.[0] as any;
+		expect(createOptions.TaskTemplate.ContainerSpec.Mounts).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					Type: "bind",
+					Source: expect.stringMatching(/\/caddy$/),
+					Target: "/etc/caddy",
+				}),
+			]),
+		);
 		expect(createOptions.EndpointSpec.Ports).not.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ TargetPort: 2019, Protocol: "tcp" }),
