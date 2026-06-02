@@ -102,11 +102,14 @@ import {
 	getCaddyCompileSettings,
 	getCaddyTrustedProxySettings,
 	getWebServerResourceName,
+	getWebServerSettings,
 	isCaddyAdminAdditionalPort,
 	readEnvironmentVariables,
 	readPorts,
 	resolveWebServerProvider,
 	updateCaddyTrustedProxySettings,
+	updateServerCaddy,
+	updateWebServerSettings,
 	writeWebServerSetup,
 } from "@dokploy/server";
 import { settingsRouter } from "@/server/api/routers/settings";
@@ -380,6 +383,50 @@ test("keeps Traefik dashboard state based on the Traefik dashboard port", async 
 
 	expect(readPorts).toHaveBeenCalledWith("dokploy-traefik", undefined);
 	expect(result).toEqual({ provider: "traefik", enabled: true });
+});
+
+test("restores dashboard settings when active Caddy domain rewrite fails", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+	const previousSettings = {
+		host: "old-dashboard.example.com",
+		letsEncryptEmail: "old-ops@example.com",
+		certificateType: "letsencrypt",
+		https: true,
+	};
+	const updatedSettings = {
+		...previousSettings,
+		host: "new-dashboard.example.com",
+		letsEncryptEmail: "new-ops@example.com",
+	};
+	vi.mocked(getWebServerSettings).mockResolvedValue(previousSettings as never);
+	vi.mocked(updateWebServerSettings)
+		.mockResolvedValueOnce(updatedSettings as never)
+		.mockResolvedValueOnce(previousSettings as never);
+	vi.mocked(updateServerCaddy).mockRejectedValueOnce(
+		new Error("caddy reload failed") as never,
+	);
+
+	await expect(
+		caller.assignDomainServer({
+			host: "new-dashboard.example.com",
+			letsEncryptEmail: "new-ops@example.com",
+			certificateType: "letsencrypt",
+			https: true,
+		}),
+	).rejects.toThrow("caddy reload failed");
+
+	expect(updateWebServerSettings).toHaveBeenNthCalledWith(1, {
+		host: "new-dashboard.example.com",
+		letsEncryptEmail: "new-ops@example.com",
+		certificateType: "letsencrypt",
+		https: true,
+	});
+	expect(updateWebServerSettings).toHaveBeenNthCalledWith(2, previousSettings);
+	expect(updateServerCaddy).toHaveBeenCalledWith(
+		updatedSettings,
+		"new-dashboard.example.com",
+	);
+	expect(audit).not.toHaveBeenCalled();
 });
 
 test("reads remote Traefik dashboard state from the remote web server", async () => {

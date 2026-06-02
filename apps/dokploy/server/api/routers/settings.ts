@@ -891,6 +891,14 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
+			const previousSettings = await getWebServerSettings();
+			if (!previousSettings) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Web server settings not found",
+				});
+			}
+
 			const settings = await updateWebServerSettings({
 				host: input.host,
 				letsEncryptEmail: input.letsEncryptEmail,
@@ -907,7 +915,17 @@ export const settingsRouter = createTRPCRouter({
 
 			const provider = await resolveWebServerProvider();
 			if (provider === "caddy") {
-				await updateServerCaddy(settings, input.host);
+				try {
+					await updateServerCaddy(settings, input.host);
+				} catch (error) {
+					await updateWebServerSettings({
+						host: previousSettings.host,
+						letsEncryptEmail: previousSettings.letsEncryptEmail,
+						certificateType: previousSettings.certificateType,
+						https: previousSettings.https,
+					});
+					throw error;
+				}
 			} else {
 				updateServerTraefik(settings, input.host);
 				if (input.letsEncryptEmail) {

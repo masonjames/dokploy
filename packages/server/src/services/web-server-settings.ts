@@ -205,6 +205,16 @@ export const getCaddyCompileSettings = async (
 	}
 
 	const settings = await getWebServerSettings();
+	return localWebServerSettingsToCaddyCompileSettings(settings);
+};
+
+export const localWebServerSettingsToCaddyCompileSettings = (
+	settings: typeof webServerSettings.$inferSelect | null | undefined,
+): {
+	letsEncryptEmail?: string | null;
+	trustedProxies?: CaddyTrustedProxyConfig | null;
+	accessLogs?: CaddyAccessLogConfig | null;
+} => {
 	return {
 		letsEncryptEmail: settings?.letsEncryptEmail,
 		trustedProxies: caddyTrustedProxySettingsToConfig(

@@ -1,7 +1,8 @@
 import type { webServerSettings } from "@dokploy/server/db/schema/web-server-settings";
-import { caddyTrustedProxySettingsToConfig } from "@dokploy/server/services/web-server-settings";
+import { localWebServerSettingsToCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import {
 	compileWriteAndReloadCaddyConfigSafely,
+	readCaddyRouteFragments,
 	removeCaddyRouteFragment,
 	writeCaddyRouteFragment,
 } from "./config";
@@ -47,18 +48,27 @@ export const updateServerCaddy = async (
 	settings: typeof webServerSettings.$inferSelect,
 	newHost: string | null,
 ) => {
-	if (newHost) {
-		await writeCaddyRouteFragment(
-			createCaddyDashboardRouteFragment(settings, newHost),
-		);
-	} else {
-		await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
-	}
+	const compileSettings =
+		localWebServerSettingsToCaddyCompileSettings(settings);
+	const previousDashboardFragment = (await readCaddyRouteFragments()).find(
+		(fragment) => fragment.id === DASHBOARD_FRAGMENT_ID,
+	);
+	try {
+		if (newHost) {
+			await writeCaddyRouteFragment(
+				createCaddyDashboardRouteFragment(settings, newHost),
+			);
+		} else {
+			await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
+		}
 
-	await compileWriteAndReloadCaddyConfigSafely({
-		letsEncryptEmail: settings.letsEncryptEmail,
-		trustedProxies: caddyTrustedProxySettingsToConfig(
-			settings.caddyTrustedProxyConfig,
-		),
-	});
+		await compileWriteAndReloadCaddyConfigSafely(compileSettings);
+	} catch (error) {
+		if (previousDashboardFragment) {
+			await writeCaddyRouteFragment(previousDashboardFragment);
+		} else {
+			await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
+		}
+		throw error;
+	}
 };

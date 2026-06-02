@@ -23,6 +23,7 @@ import {
 	compileCaddyConfig,
 	compileWriteAndReloadCaddyConfigSafely,
 	compileWriteAndValidateCaddyConfigSafely,
+	createCaddyDashboardRouteFragment,
 	type Domain,
 	getCaddyMigrationArtifactPaths,
 	manageCaddyDomain,
@@ -30,9 +31,11 @@ import {
 	paths,
 	readCaddyRouteFragments,
 	removeCaddyDomain,
+	updateServerCaddy,
 	validateCaddyConfigFileWithImage,
 	writeCaddyRouteFragment,
 } from "@dokploy/server";
+import type { webServerSettings } from "@dokploy/server/db/schema";
 import { beforeEach, expect, test, vi } from "vitest";
 
 const route = (
@@ -50,6 +53,34 @@ const getServers = (config: ReturnType<typeof compileCaddyConfig>) => {
 	const apps = config.apps as Record<string, any>;
 	return apps.http.servers as Record<string, any>;
 };
+
+type WebServerSettings = typeof webServerSettings.$inferSelect;
+
+const settings = (overrides: Partial<WebServerSettings> = {}) =>
+	({
+		id: "settings-1",
+		webServerProvider: "caddy",
+		caddyTrustedProxyConfig: null,
+		requestLogsEnabled: false,
+		https: false,
+		certificateType: "none",
+		host: null,
+		serverIp: null,
+		letsEncryptEmail: null,
+		sshPrivateKey: null,
+		enableDockerCleanup: false,
+		logCleanupCron: null,
+		metricsConfig: {} as WebServerSettings["metricsConfig"],
+		whitelabelingConfig: null,
+		remoteServersOnly: false,
+		enforceSSO: false,
+		cleanupCacheApplications: false,
+		cleanupCacheOnCompose: false,
+		cleanupCacheOnPreviews: false,
+		createdAt: null,
+		updatedAt: new Date(),
+		...overrides,
+	}) as WebServerSettings;
 
 beforeEach(() => {
 	vol.reset();
@@ -110,6 +141,93 @@ test("compiles Caddy access-log output when request analytics are enabled", () =
 		},
 		include: ["http.log.access"],
 	});
+});
+
+test("dashboard Caddy updates preserve enabled request access logs", async () => {
+	await updateServerCaddy(
+		settings({
+			requestLogsEnabled: true,
+			https: true,
+			letsEncryptEmail: "ops@example.com",
+			caddyTrustedProxyConfig: {
+				mode: "static",
+				ranges: ["192.0.2.0/24"],
+				clientIpHeaders: ["X-Forwarded-For"],
+				strict: true,
+			},
+		}),
+		"dashboard.example.com",
+	);
+
+	const config = JSON.parse(
+		vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8") as string,
+	);
+	const servers = (config.apps as Record<string, any>).http.servers;
+
+	expect(servers.http.logs).toEqual({});
+	expect(servers.http.trusted_proxies).toEqual({
+		source: "static",
+		ranges: ["192.0.2.0/24"],
+	});
+	expect(servers.http.client_ip_headers).toEqual(["X-Forwarded-For"]);
+	expect(servers.https.trusted_proxies).toEqual(servers.http.trusted_proxies);
+	expect((config.apps as any).tls.automation.policies[0].issuers[0].email).toBe(
+		"ops@example.com",
+	);
+	expect((config as any).logging.logs["dokploy-requests"]).toEqual({
+		writer: {
+			output: "file",
+			filename: "/etc/caddy/access.log",
+		},
+		encoder: {
+			format: "json",
+		},
+		include: ["http.log.access"],
+	});
+});
+
+test("restores dashboard fragments when Caddy dashboard reload fails", async () => {
+	const existingFragment = createCaddyDashboardRouteFragment(
+		settings(),
+		"old-dashboard.example.com",
+	);
+	const concurrentFragment: CaddyRouteFragment = {
+		version: 1,
+		id: "application.concurrent",
+		source: "dokploy-application",
+		routes: [route({ id: "concurrent", hosts: ["concurrent.example.com"] })],
+	};
+	await writeCaddyRouteFragment(existingFragment);
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ fragments: [existingFragment] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	let concurrentFragmentWritten = false;
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			if (!concurrentFragmentWritten) {
+				concurrentFragmentWritten = true;
+				await writeCaddyRouteFragment(concurrentFragment);
+			}
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(
+		updateServerCaddy(settings(), "new-dashboard.example.com"),
+	).rejects.toThrow("validation failed");
+
+	expect(await readCaddyRouteFragments()).toEqual([
+		concurrentFragment,
+		existingFragment,
+	]);
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
 });
 
 test("compiles Cloudflare trusted proxy settings with safe client IP headers", () => {
