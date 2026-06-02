@@ -260,8 +260,11 @@ export const getCaddyComposeRouteTargetsForWebServer = async (
 export const writeCaddyComposeRoutesForTargets = async (
 	compose: Compose,
 	caddyRouteTargets: CaddyComposeRouteTarget[],
+	options: {
+		organizationId?: string | null;
+	} = {},
 ) => {
-	await writeCaddyComposeRouteFragments(compose, caddyRouteTargets);
+	await writeCaddyComposeRouteFragments(compose, caddyRouteTargets, options);
 };
 
 export const addDomainToComposeForWebServer = async (

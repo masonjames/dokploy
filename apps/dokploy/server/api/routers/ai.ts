@@ -352,12 +352,17 @@ ${input.logs}`,
 
 			if (input.domains && input.domains?.length > 0) {
 				for (const domain of input.domains) {
-					await createComposeDomain(compose, {
-						...domain,
-						domainType: "compose",
-						certificateType: "none",
-						composeId: compose.composeId,
-					});
+					await createComposeDomain(
+						compose,
+						{
+							...domain,
+							domainType: "compose",
+							certificateType: "none",
+							composeId: compose.composeId,
+						},
+						undefined,
+						ctx.session.activeOrganizationId,
+					);
 				}
 			}
 			if (input.configFiles && input.configFiles?.length > 0) {

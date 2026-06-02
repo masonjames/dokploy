@@ -64,7 +64,12 @@ export const domainRouter = createTRPCRouter({
 					});
 					const compose = await findComposeById(input.composeId);
 					const provider = await resolveWebServerProvider(compose.serverId);
-					const domain = await createComposeDomain(compose, input, provider);
+					const domain = await createComposeDomain(
+						compose,
+						input,
+						provider,
+						ctx.session.activeOrganizationId,
+					);
 					await audit(ctx, {
 						action: "create",
 						resourceType: "domain",
@@ -217,7 +222,12 @@ export const domainRouter = createTRPCRouter({
 						throw new Error("Error updating domain");
 					}
 					try {
-						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
+						await refreshCaddyComposeRoutes(
+							compose,
+							undefined,
+							"caddy",
+							ctx.session.activeOrganizationId,
+						);
 						await audit(ctx, {
 							action: "update",
 							resourceType: "domain",
@@ -230,7 +240,12 @@ export const domainRouter = createTRPCRouter({
 							input.domainId,
 							toDomainUpdateFields(currentDomain),
 						);
-						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
+						await refreshCaddyComposeRoutes(
+							compose,
+							undefined,
+							"caddy",
+							ctx.session.activeOrganizationId,
+						);
 						throw error;
 					}
 				}
@@ -348,7 +363,12 @@ export const domainRouter = createTRPCRouter({
 						(item) => item.domainId !== domain.domainId,
 					);
 					try {
-						await refreshCaddyComposeRoutes(compose, remainingDomains, "caddy");
+						await refreshCaddyComposeRoutes(
+							compose,
+							remainingDomains,
+							"caddy",
+							ctx.session.activeOrganizationId,
+						);
 						const result = await removeDomainById(input.domainId);
 						await audit(ctx, {
 							action: "delete",
@@ -358,7 +378,12 @@ export const domainRouter = createTRPCRouter({
 						});
 						return result;
 					} catch (error) {
-						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
+						await refreshCaddyComposeRoutes(
+							compose,
+							undefined,
+							"caddy",
+							ctx.session.activeOrganizationId,
+						);
 						throw error;
 					}
 				}

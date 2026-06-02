@@ -109,13 +109,18 @@ export const createCaddyComposeRouteFragment = (
 export const writeCaddyComposeRouteFragments = async (
 	compose: Compose,
 	domains: Array<{ domain: Domain; finalServiceName: string }>,
+	options: {
+		organizationId?: string | null;
+	} = {},
 ) => {
 	const serverId = compose.serverId || undefined;
-	const organizationId = (
-		compose as Compose & {
-			environment?: { project?: { organizationId?: string | null } };
-		}
-	).environment?.project?.organizationId;
+	const organizationId =
+		options.organizationId ??
+		(
+			compose as Compose & {
+				environment?: { project?: { organizationId?: string | null } };
+			}
+		).environment?.project?.organizationId;
 	for (const { domain } of domains) {
 		await assertCaddyDomainCertificateAvailable(
 			serverId,
@@ -123,7 +128,7 @@ export const writeCaddyComposeRouteFragments = async (
 			organizationId,
 		);
 	}
-	const options = { serverId };
+	const routeFragmentOptions = { serverId };
 	const fragmentPrefix = getCaddyComposeFragmentPrefix(compose.appName);
 	const nextFragmentIds = new Set(
 		domains.map(({ domain }) =>
@@ -132,7 +137,7 @@ export const writeCaddyComposeRouteFragments = async (
 	);
 	let changed = false;
 
-	const existingFragments = await readCaddyRouteFragments(options);
+	const existingFragments = await readCaddyRouteFragments(routeFragmentOptions);
 	try {
 		for (const fragment of existingFragments) {
 			if (
@@ -140,7 +145,7 @@ export const writeCaddyComposeRouteFragments = async (
 				fragment.id.startsWith(fragmentPrefix) &&
 				!nextFragmentIds.has(fragment.id)
 			) {
-				await removeCaddyRouteFragment(fragment.id, options);
+				await removeCaddyRouteFragment(fragment.id, routeFragmentOptions);
 				changed = true;
 			}
 		}
@@ -148,7 +153,7 @@ export const writeCaddyComposeRouteFragments = async (
 		for (const { domain, finalServiceName } of domains) {
 			await writeCaddyRouteFragment(
 				createCaddyComposeRouteFragment(compose, domain, finalServiceName),
-				options,
+				routeFragmentOptions,
 			);
 			changed = true;
 		}
@@ -162,7 +167,7 @@ export const writeCaddyComposeRouteFragments = async (
 			...(await getCaddyCompileSettings(serverId)),
 		});
 	} catch (error) {
-		await restoreCaddyRouteFragments(existingFragments, options);
+		await restoreCaddyRouteFragments(existingFragments, routeFragmentOptions);
 		throw error;
 	}
 };

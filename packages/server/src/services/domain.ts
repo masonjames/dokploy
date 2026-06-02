@@ -158,6 +158,7 @@ export const refreshCaddyComposeRoutes = async (
 	compose: Compose,
 	domainsInput?: Domain[],
 	provider?: WebServerProvider,
+	organizationId?: string | null,
 ) => {
 	const domainsArray =
 		domainsInput ?? (await findDomainsByComposeId(compose.composeId));
@@ -167,7 +168,9 @@ export const refreshCaddyComposeRoutes = async (
 		provider,
 	);
 	if (routeTargets) {
-		await writeCaddyComposeRoutesForTargets(compose, routeTargets);
+		await writeCaddyComposeRoutesForTargets(compose, routeTargets, {
+			organizationId,
+		});
 	}
 };
 
@@ -175,14 +178,25 @@ export const createComposeDomain = async (
 	compose: Compose,
 	input: z.infer<typeof apiCreateDomain>,
 	provider?: WebServerProvider,
+	organizationId?: string | null,
 ) => {
 	const domain = await createDomain(input);
 	try {
-		await refreshCaddyComposeRoutes(compose, undefined, provider);
+		await refreshCaddyComposeRoutes(
+			compose,
+			undefined,
+			provider,
+			organizationId,
+		);
 		return domain;
 	} catch (error) {
 		await removeDomainById(domain.domainId);
-		await refreshCaddyComposeRoutes(compose, undefined, provider);
+		await refreshCaddyComposeRoutes(
+			compose,
+			undefined,
+			provider,
+			organizationId,
+		);
 		throw error;
 	}
 };
@@ -191,6 +205,7 @@ export const removeComposeDomainsForWebServer = async (
 	compose: Compose,
 	domainsToRemove: Domain[],
 	provider?: WebServerProvider,
+	organizationId?: string | null,
 ) => {
 	if (domainsToRemove.length === 0) {
 		return [];
@@ -228,7 +243,12 @@ export const removeComposeDomainsForWebServer = async (
 		(domain) => !domainIdsToRemove.has(domain.domainId),
 	);
 
-	await refreshCaddyComposeRoutes(compose, remainingDomains, resolvedProvider);
+	await refreshCaddyComposeRoutes(
+		compose,
+		remainingDomains,
+		resolvedProvider,
+		organizationId,
+	);
 
 	try {
 		return await db.transaction(async (tx) =>
@@ -243,7 +263,12 @@ export const removeComposeDomainsForWebServer = async (
 				.returning(),
 		);
 	} catch (error) {
-		await refreshCaddyComposeRoutes(compose, currentDomains, resolvedProvider);
+		await refreshCaddyComposeRoutes(
+			compose,
+			currentDomains,
+			resolvedProvider,
+			organizationId,
+		);
 		throw error;
 	}
 };

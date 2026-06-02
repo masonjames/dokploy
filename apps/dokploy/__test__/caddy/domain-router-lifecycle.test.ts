@@ -276,6 +276,7 @@ test("restores previous compose domain fields when Caddy route refresh fails aft
 		compose,
 		undefined,
 		"caddy",
+		"org-1",
 	);
 });
 
@@ -296,12 +297,14 @@ test("preserves compose domain rows when Caddy route refresh fails before delete
 		compose,
 		[siblingComposeDomain],
 		"caddy",
+		"org-1",
 	);
 	expect(refreshCaddyComposeRoutes).toHaveBeenNthCalledWith(
 		2,
 		compose,
 		undefined,
 		"caddy",
+		"org-1",
 	);
 	expect(removeDomainById).not.toHaveBeenCalled();
 });
@@ -323,11 +326,13 @@ test("restores all compose routes when compose domain delete persistence fails",
 		compose,
 		[siblingComposeDomain],
 		"caddy",
+		"org-1",
 	);
 	expect(refreshCaddyComposeRoutes).toHaveBeenNthCalledWith(
 		2,
 		compose,
 		undefined,
 		"caddy",
+		"org-1",
 	);
 });

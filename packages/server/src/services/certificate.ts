@@ -45,15 +45,19 @@ export const assertCertificatePathAvailableForServer = async (
 	serverId?: string | null,
 	organizationId?: string | null,
 ) => {
+	if (!organizationId) {
+		throw new Error(
+			"Caddy custom certificate validation requires organization context.",
+		);
+	}
+
 	const certificate = await findCertificateByPath(certificatePath);
 	const expectedServerId = serverId ?? null;
-	const expectedOrganizationId = organizationId ?? null;
 
 	if (
 		!certificate ||
 		(certificate.serverId ?? null) !== expectedServerId ||
-		(expectedOrganizationId &&
-			certificate.organizationId !== expectedOrganizationId)
+		certificate.organizationId !== organizationId
 	) {
 		throw new Error(
 			`Caddy custom certificate "${certificatePath}" is not available for this server and organization. Use an uploaded certificate assigned to the same server and project organization.`,

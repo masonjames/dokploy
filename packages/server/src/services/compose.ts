@@ -281,7 +281,13 @@ export const deployCompose = async ({
 		}
 
 		if (caddyComposeRouteTargets) {
-			await writeCaddyComposeRoutesForTargets(entity, caddyComposeRouteTargets);
+			await writeCaddyComposeRoutesForTargets(
+				entity,
+				caddyComposeRouteTargets,
+				{
+					organizationId: compose.environment.project.organizationId,
+				},
+			);
 		}
 
 		await updateDeploymentStatus(deployment.deploymentId, "done");
@@ -405,6 +411,9 @@ export const rebuildCompose = async ({
 			await writeCaddyComposeRoutesForTargets(
 				compose,
 				caddyComposeRouteTargets,
+				{
+					organizationId: compose.environment.project.organizationId,
+				},
 			);
 		}
 

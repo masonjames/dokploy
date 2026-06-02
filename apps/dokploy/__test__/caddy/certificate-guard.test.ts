@@ -70,6 +70,22 @@ test("allows uploaded Caddy certificates assigned to the same server and organiz
 	).resolves.toBeUndefined();
 });
 
+test("requires organization context for uploaded Caddy certificate validation", async () => {
+	writeCertificateFiles("certificate-uploaded");
+	certificatesFindFirstMock.mockResolvedValue({
+		certificatePath: "certificate-uploaded",
+		serverId: null,
+		organizationId: "org-1",
+	});
+
+	await expect(
+		assertCaddyDomainCertificateAvailable(null, domain(), null),
+	).rejects.toThrow(
+		"Caddy custom certificate validation requires organization context",
+	);
+	expect(certificatesFindFirstMock).not.toHaveBeenCalled();
+});
+
 test("rejects missing, cross-server, or cross-organization Caddy certificate paths", async () => {
 	certificatesFindFirstMock.mockResolvedValueOnce(null);
 	await expect(
@@ -113,6 +129,17 @@ test("ignores stale custom certificate fields when HTTPS is disabled", async () 
 			null,
 			domain({ https: false }),
 			"org-1",
+		),
+	).resolves.toBeUndefined();
+	expect(certificatesFindFirstMock).not.toHaveBeenCalled();
+});
+
+test("does not require organization context for non-custom Caddy certificates", async () => {
+	await expect(
+		assertCaddyDomainCertificateAvailable(
+			null,
+			domain({ certificateType: "letsencrypt", customCertResolver: null }),
+			null,
 		),
 	).resolves.toBeUndefined();
 	expect(certificatesFindFirstMock).not.toHaveBeenCalled();

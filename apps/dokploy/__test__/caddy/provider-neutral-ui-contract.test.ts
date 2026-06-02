@@ -39,10 +39,19 @@ describe("provider-neutral Caddy UI contract", () => {
 		const actions = readSource(
 			"../../components/dashboard/settings/servers/actions/show-traefik-actions.tsx",
 		);
+		const envEditor = readSource(
+			"../../components/dashboard/settings/web-server/edit-web-server-env.tsx",
+		);
 		const fileSystem = readSource(
 			"../../components/dashboard/file-system/show-traefik-system.tsx",
 		);
 
+		expect(actions).toContain("EditWebServerEnv");
+		expect(actions).not.toContain("EditTraefikEnv");
+		expect(envEditor).toContain("readWebServerEnv");
+		expect(envEditor).toContain("writeWebServerEnv");
+		expect(envEditor).not.toContain("readTraefikEnv");
+		expect(envEditor).not.toContain("writeTraefikEnv");
 		expect(actions).toContain(': "Web Server";');
 		expect(actions).toMatch(
 			/const resourceName =[\s\S]*activeProvider === "caddy"[\s\S]*"dokploy-caddy"[\s\S]*activeProvider === "traefik"[\s\S]*"dokploy-traefik"[\s\S]*: null;/,
