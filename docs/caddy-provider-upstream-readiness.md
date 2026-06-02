@@ -45,7 +45,7 @@ Local state observed before this document was added:
 | Caddy settings UI | Migration panel, provider selector, Caddy domain certificate labels, Caddy trusted proxy settings, provider-neutral uploaded certificate copy, and provider-neutral port-mapping copy now exist. Existing Traefik file-system views remain Traefik-specific. | Needs manual UI QA | Browser-smoke the settings/domain flows when a Dokploy dev server or review app is available. |
 | Caddy dashboard | Caddy admin endpoint is local-only in the current design, and this PR does not expose it through the Dokploy UI. | Deferred | Prefer no public dashboard in this PR; document local-only admin API and track any dashboard proxy as a follow-up with auth and network controls. |
 | Migration dry-run/apply/rollback | Current PR includes prepare/apply/rollback, runtime preflight, rollback CLI, fail-closed runtime migration tests, and focused migration tests. Prepare records compile settings and apply rejects stale dry-runs if trusted proxy/ACME settings changed after prepare. | Locally covered | Add runtime proof after explicit approval. |
-| Developer paper cuts | Generated RepoPrompt exports, private docs, stale Traefik labels, broad noisy tests, and provider-specific UI names can cause review friction. | Ongoing | Keep PR surface generic; run targeted checks and `git diff --check`. |
+| Developer paper cuts | Generated RepoPrompt exports, private docs, stale Traefik labels, broad noisy tests, and provider-specific UI names can cause review friction. Current upstream-surface audit found no forbidden prompt exports/private docs/platform runbooks and commit subjects are generic. | Locally covered | Re-run the hygiene audit and `git diff --check` after any further commits before push. |
 
 ## Code Evidence
 
@@ -363,12 +363,13 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 19 files, 111 tests after shared domain validation cleanup. Covers focused Caddy config, certificates, domain lifecycle, validation, preview cleanup, migration prepare/apply/rollback, upstream preflight, and runtime migration tests. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, and `git diff --check` | Passed | App/server typechecks and whitespace checks passed after the shared validation cleanup. Node v26 produced the expected engine warning. |
 | 2026-06-02 | Provider-neutral Caddy UI copy pass | Complete | Updated trusted-proxy Cloudflare SSL guidance, migration stale-settings safety copy, and provider-neutral additional port mapping text. |
+| 2026-06-02 | Upstream hygiene audit against `upstream/canary...HEAD` | Passed | 88 changed files. No `prompt-exports/`, `docs/plans/`, `docs/reviews/`, `AGENTS.md`, or `CLAUDE.md` in the PR surface. Private-string scan only found generic test values such as `private.registry.example` and HTTP cache header text. Commit subjects are generic. |
 
 ## Upstream Hygiene Checklist
 
-- [ ] No `prompt-exports/` files in the final diff.
-- [ ] No platform-specific hostnames, route manifests, or production logs in this repo.
-- [ ] No private runbooks or agent files added to PR surface.
-- [ ] Caddy fixtures remain generic.
-- [ ] Proof log entries are sanitized.
-- [ ] Commit messages describe generic Dokploy behavior, not private deployment details.
+- [x] No `prompt-exports/` files in the current diff.
+- [x] No platform-specific hostnames, route manifests, or production logs in this repo.
+- [x] No private runbooks or agent files added to PR surface.
+- [x] Caddy fixtures remain generic.
+- [x] Proof log entries are sanitized.
+- [x] Commit messages describe generic Dokploy behavior, not private deployment details.
