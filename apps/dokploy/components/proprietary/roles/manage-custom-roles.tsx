@@ -76,8 +76,8 @@ const RESOURCE_META: Record<string, { label: string; description: string }> = {
 		description: "Access to Git providers (GitHub, GitLab, Bitbucket, Gitea)",
 	},
 	traefikFiles: {
-		label: "Traefik Files",
-		description: "Access to the Traefik file system configuration",
+		label: "Web Server Files",
+		description: "Access to the active web server file browser",
 	},
 	api: {
 		label: "API / CLI",

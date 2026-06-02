@@ -24,7 +24,12 @@ interface Props {
 export const ShowTraefikActions = ({ serverId }: Props) => {
 	const { data: activeProvider, isLoading: isLoadingProvider } =
 		api.settings.getActiveWebServerProvider.useQuery({ serverId });
-	const providerLabel = activeProvider === "caddy" ? "Caddy" : "Traefik";
+	const providerLabel =
+		activeProvider === "caddy"
+			? "Caddy"
+			: activeProvider === "traefik"
+				? "Traefik"
+				: "Web Server";
 	const resourceName =
 		activeProvider === "caddy" ? "dokploy-caddy" : "dokploy-traefik";
 

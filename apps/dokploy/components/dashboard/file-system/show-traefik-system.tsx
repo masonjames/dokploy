@@ -31,6 +31,7 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 				? "Traefik"
 				: "Web Server";
 	const isCaddy = provider === "caddy";
+	const isTraefik = provider === "traefik";
 
 	React.useEffect(() => {
 		setFile(null);
@@ -71,10 +72,12 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 									: "Review files and directories for the active web server."}
 						</CardDescription>
 
-						<AlertBlock type={isCaddy ? "info" : "warning"}>
+						<AlertBlock type={isTraefik ? "warning" : "info"}>
 							{isCaddy
 								? "Caddy generated config is read-only here. Use Dokploy settings, domains, and migration controls to change generated Caddy config."
-								: "Adding invalid configuration to existing files can break your Traefik instance, preventing access to your applications."}
+								: isTraefik
+									? "Adding invalid configuration to existing files can break your Traefik instance, preventing access to your applications."
+									: "Review active web server files here. Provider-specific edit controls appear after Dokploy resolves the active provider."}
 						</AlertBlock>
 					</CardHeader>
 					<CardContent className="space-y-2 py-8 border-t">
