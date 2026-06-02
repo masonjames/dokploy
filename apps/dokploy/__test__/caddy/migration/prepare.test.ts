@@ -97,6 +97,13 @@ const genericComposeFixture = [
 	"      - traefik.http.middlewares.plugin-only.plugin.demo.enabled=true",
 ].join("\n");
 
+const writeCertificateFiles = (certificatePath: string) => {
+	const certDir = `${paths().CERTIFICATES_PATH}/${certificatePath}`;
+	vol.mkdirSync(certDir, { recursive: true });
+	vol.writeFileSync(`${certDir}/chain.crt`, "cert");
+	vol.writeFileSync(`${certDir}/privkey.key`, "key");
+};
+
 describe("prepareCaddyMigration", () => {
 	beforeEach(() => {
 		vol.reset();
@@ -241,6 +248,50 @@ describe("prepareCaddyMigration", () => {
 			]),
 		);
 		expect(report.summary.fragments).toBe(0);
+	});
+
+	test("keeps DB fallback routes with readable uploaded custom certificates", async () => {
+		writeCertificateFiles("certificate-uploaded");
+		vi.mocked(db.query.applications.findMany).mockResolvedValue([
+			{
+				applicationId: "app-1",
+				appName: "custom-cert-app",
+				serverId: null,
+				environment: { project: { organizationId: "org-1" } },
+				domains: [
+					{
+						...domain,
+						certificateType: "custom",
+						customCertResolver: "certificate-uploaded",
+					},
+				],
+			} as any,
+		]);
+		vi.mocked(db.query.certificates.findFirst).mockResolvedValue({
+			certificatePath: "certificate-uploaded",
+			serverId: null,
+			organizationId: "org-1",
+		} as any);
+
+		const report = await prepareCaddyMigration();
+		const draft = JSON.parse(
+			vol.readFileSync(report.artifactPaths.caddyJson, "utf8") as string,
+		) as any;
+		const certificatePath = `${paths().CERTIFICATES_PATH}/certificate-uploaded`;
+
+		expect(report.summary.blockingWarnings).toBe(0);
+		expect(report.warnings).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ code: "missing-certificate" }),
+			]),
+		);
+		expect(report.summary.fragments).toBe(1);
+		expect(draft.apps.tls.certificates.load_files).toEqual([
+			{
+				certificate: `${certificatePath}/chain.crt`,
+				key: `${certificatePath}/privkey.key`,
+			},
+		]);
 	});
 
 	test("carries existing manual Caddy fragments into the migration draft", async () => {

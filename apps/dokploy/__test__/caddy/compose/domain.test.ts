@@ -153,6 +153,32 @@ describe("Caddy compose route generation", () => {
 		});
 	});
 
+	test("loads uploaded certificates for custom Caddy compose HTTPS routes", () => {
+		const fragment = createCaddyComposeRouteFragment(
+			compose(),
+			domain({
+				https: true,
+				certificateType: "custom",
+				customCertResolver: "certificate-uploaded",
+			}),
+			"web",
+		);
+		const config = compileCaddyConfig({ fragments: [fragment] });
+		const tls = (config.apps as any).tls;
+		const certificatePath = `${paths(false).CERTIFICATES_PATH}/certificate-uploaded`;
+
+		expect(tls.certificates.load_files).toEqual([
+			{
+				certificate: `${certificatePath}/chain.crt`,
+				key: `${certificatePath}/privkey.key`,
+			},
+		]);
+		expect(getServers(config).https.routes[0].handle.at(-1)).toMatchObject({
+			handler: "reverse_proxy",
+			upstreams: [{ dial: "my-compose-web:8080" }],
+		});
+	});
+
 	test("skips compose route refresh for Traefik provider", async () => {
 		const composeInput = compose();
 		writeComposeFile(composeInput, {
