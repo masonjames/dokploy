@@ -42,7 +42,7 @@ Local state observed before this document was added:
 | Custom SSL certificates | Caddy domains can now select uploaded certificates. Route intents reference certificate/key files and compiled Caddy JSON emits `apps.tls.certificates.load_files`. Backend guards require matching server/org context and readable `chain.crt` plus `privkey.key`; active Caddy domains block certificate file replacement/deletion until the domain is changed. | Locally covered | Add runtime proof after explicit approval. Consider a follow-up schema rename because Caddy currently stores the uploaded certificate path in the existing `customCertResolver` field. |
 | LetsEncrypt / automatic HTTPS | Caddy application and compose fragments set `https` from domain settings and pass local LetsEncrypt email where available. Config and route lifecycle tests cover the generated ACME paths. | Locally covered | Add runtime proof after explicit approval. |
 | Cloudflare proxy awareness | `compileCaddyConfig()` supports explicit static trusted proxy CIDRs and a Cloudflare preset using static Cloudflare IP ranges plus `CF-Connecting-IP` and `X-Forwarded-For`. Local and remote settings persist the selected mode and Caddy rebuild paths pass it into generated JSON. Default config still trusts no forwarded headers. Strict mode emits a Caddy-compatible boolean. | Locally covered | Add runtime proof after explicit approval by enabling Cloudflare or static trusted proxies and validating generated `caddy.json` plus route behavior. |
-| Caddy settings UI | Migration panel, provider selector, Caddy domain certificate labels, Caddy trusted proxy settings, and provider-neutral uploaded certificate copy now exist. Existing Traefik file-system views remain Traefik-specific. | Needs manual UI QA | Browser-smoke the settings/domain flows when a Dokploy dev server or review app is available. |
+| Caddy settings UI | Migration panel, provider selector, Caddy domain certificate labels, Caddy trusted proxy settings, provider-neutral uploaded certificate copy, and provider-neutral port-mapping copy now exist. Existing Traefik file-system views remain Traefik-specific. | Needs manual UI QA | Browser-smoke the settings/domain flows when a Dokploy dev server or review app is available. |
 | Caddy dashboard | Caddy admin endpoint is local-only in the current design, and this PR does not expose it through the Dokploy UI. | Deferred | Prefer no public dashboard in this PR; document local-only admin API and track any dashboard proxy as a follow-up with auth and network controls. |
 | Migration dry-run/apply/rollback | Current PR includes prepare/apply/rollback, runtime preflight, rollback CLI, fail-closed runtime migration tests, and focused migration tests. Prepare records compile settings and apply rejects stale dry-runs if trusted proxy/ACME settings changed after prepare. | Locally covered | Add runtime proof after explicit approval. |
 | Developer paper cuts | Generated RepoPrompt exports, private docs, stale Traefik labels, broad noisy tests, and provider-specific UI names can cause review friction. | Ongoing | Keep PR surface generic; run targeted checks and `git diff --check`. |
@@ -224,12 +224,12 @@ Implemented:
 - Local `webServerSettings` and remote `server` rows persist Caddy trusted proxy settings.
 - Caddy domain, compose, dashboard, migration dry-run, migration apply setup, and web-server setup paths pass persisted trusted proxy options into Caddy compilation.
 - Settings -> Web Server exposes a Caddy trusted proxy dialog for local settings; remote web-server actions expose the same dialog for remote Caddy.
+- The Caddy trusted proxy dialog includes Cloudflare origin SSL mode guidance: DNS-only or Full (strict) are acceptable; Flexible SSL is not recommended.
 - `apps/dokploy/__test__/caddy/config.test.ts` covers default no-trust behavior, Cloudflare trusted proxy config, custom static CIDRs, invalid CIDR/header rejection, and persisted-setting normalization.
 
 Still needed:
 
 - Runtime proof after explicit approval.
-- Decide whether Cloudflare SSL mode guidance belongs in the app UI, docs, or PR notes.
 
 ### 7. Polish UI and dashboard behavior
 
@@ -239,6 +239,7 @@ UI changes:
 - Add a Caddy settings section for trusted proxy mode if Cloudflare support lands.
 - Keep the provider selector guardrails: direct Caddy activation should go through migration apply, and Caddy to Traefik should go through rollback.
 - Make dry-run/apply/rollback safety copy explicit.
+- Warn in the migration panel that changing Caddy settings after a dry run requires preparing a fresh dry run before apply.
 
 Dashboard decision:
 
@@ -361,6 +362,7 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/domain-validation.test.ts __test__/caddy/preview-deployment.test.ts __test__/caddy/domain-router-lifecycle.test.ts` | Passed | 3 files, 11 tests. Covers optional custom certificate resolver validation when HTTPS is disabled plus preview and router domain regressions. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 19 files, 111 tests after shared domain validation cleanup. Covers focused Caddy config, certificates, domain lifecycle, validation, preview cleanup, migration prepare/apply/rollback, upstream preflight, and runtime migration tests. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, and `git diff --check` | Passed | App/server typechecks and whitespace checks passed after the shared validation cleanup. Node v26 produced the expected engine warning. |
+| 2026-06-02 | Provider-neutral Caddy UI copy pass | Complete | Updated trusted-proxy Cloudflare SSL guidance, migration stale-settings safety copy, and provider-neutral additional port mapping text. |
 
 ## Upstream Hygiene Checklist
 

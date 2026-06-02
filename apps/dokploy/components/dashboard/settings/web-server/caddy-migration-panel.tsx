@@ -272,7 +272,8 @@ export const CaddyMigrationPanel = ({ serverId }: Props) => {
 									<p className="text-sm">
 										Apply stops Traefik, starts Caddy on ports 80/443/443 UDP,
 										and changes the active provider only after cutover checks
-										pass. Run this during a maintenance window.
+										pass. Run this during a maintenance window. Changing Caddy
+										settings after a dry run requires preparing a fresh dry run.
 									</p>
 									<div className="flex items-center gap-2">
 										<Checkbox

@@ -292,7 +292,7 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 											<span className="text-sm">
 												<strong>
 													Each port mapping defines how external traffic reaches
-													your containers through Traefik.
+													your containers through {providerLabel}.
 												</strong>
 												<ul className="pt-2">
 													<li>

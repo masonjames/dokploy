@@ -150,7 +150,8 @@ export const CaddyTrustedProxySettings = ({ serverId, children }: Props) => {
 								<Cloud className="mt-0.5 size-4 shrink-0" />
 								<span>
 									Caddy will trust Cloudflare IP ranges and use CF-Connecting-IP
-									before X-Forwarded-For.
+									before X-Forwarded-For. Use DNS-only or Full (strict) SSL mode
+									for origin traffic; Flexible SSL is not recommended.
 								</span>
 							</div>
 						</AlertBlock>
