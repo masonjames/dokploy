@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import z from "zod";
+import { invalidateApplicationWebServerConfig } from "@/components/dashboard/application/web-server-config-cache";
 import { AlertBlock } from "@/components/shared/alert-block";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -322,12 +323,7 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 					await utils.domain.byApplicationId.invalidate({
 						applicationId: id,
 					});
-					await utils.application.readTraefikConfig.invalidate({
-						applicationId: id,
-					});
-					await utils.application.readWebServerConfig.invalidate({
-						applicationId: id,
-					});
+					await invalidateApplicationWebServerConfig(utils, id);
 				} else if (data.domainType === "compose") {
 					await utils.domain.byComposeId.invalidate({
 						composeId: id,
