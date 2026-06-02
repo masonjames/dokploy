@@ -35,6 +35,7 @@ import {
 	findComposeById,
 	findDomainById,
 	findDomainsByComposeId,
+	findPreviewDeploymentById,
 	manageWebServerDomain,
 	refreshCaddyComposeRoutes,
 	removeDomainById,
@@ -92,6 +93,20 @@ const siblingComposeDomain = {
 	uniqueConfigKey: 8,
 };
 
+const previewDeployment = {
+	previewDeploymentId: "preview-1",
+	applicationId: "app-1",
+	appName: "my-app-pr-42",
+};
+
+const currentPreviewDomain = {
+	...currentDomain,
+	applicationId: null,
+	previewDeploymentId: "preview-1",
+	domainType: "preview" as const,
+	host: "preview.example.com",
+};
+
 const updateInput = {
 	domainId: "domain-1",
 	domainType: "application" as const,
@@ -130,6 +145,9 @@ beforeEach(() => {
 	vi.mocked(findDomainById).mockResolvedValue(currentDomain as never);
 	vi.mocked(findApplicationById).mockResolvedValue(application as never);
 	vi.mocked(findComposeById).mockResolvedValue(compose as never);
+	vi.mocked(findPreviewDeploymentById).mockResolvedValue(
+		previewDeployment as never,
+	);
 	vi.mocked(findDomainsByComposeId).mockResolvedValue([
 		currentComposeDomain,
 		siblingComposeDomain,
@@ -162,6 +180,20 @@ test("restores the previous Caddy application route when domain update persisten
 	);
 });
 
+test("preserves application domain rows when Caddy route removal fails before delete", async () => {
+	vi.mocked(removeWebServerDomain).mockRejectedValueOnce(
+		new Error("caddy route removal failed") as never,
+	);
+
+	await expect(caller.delete({ domainId: "domain-1" })).rejects.toThrow(
+		"caddy route removal failed",
+	);
+
+	expect(removeWebServerDomain).toHaveBeenCalledWith(application, 7);
+	expect(removeDomainById).not.toHaveBeenCalled();
+	expect(manageWebServerDomain).not.toHaveBeenCalled();
+});
+
 test("restores the removed Caddy application route when domain delete persistence fails", async () => {
 	vi.mocked(removeDomainById).mockRejectedValueOnce(
 		new Error("db delete failed") as never,
@@ -176,6 +208,26 @@ test("restores the removed Caddy application route when domain delete persistenc
 		application,
 		currentDomain,
 	);
+});
+
+test("preserves preview domain rows when Caddy route removal fails before delete", async () => {
+	vi.mocked(findDomainById).mockResolvedValueOnce(
+		currentPreviewDomain as never,
+	);
+	vi.mocked(removeWebServerDomain).mockRejectedValueOnce(
+		new Error("preview caddy route removal failed") as never,
+	);
+
+	await expect(caller.delete({ domainId: "domain-1" })).rejects.toThrow(
+		"preview caddy route removal failed",
+	);
+
+	expect(findPreviewDeploymentById).toHaveBeenCalledWith("preview-1");
+	expect(removeWebServerDomain).toHaveBeenCalledWith(
+		expect.objectContaining({ appName: "my-app-pr-42" }),
+		7,
+	);
+	expect(removeDomainById).not.toHaveBeenCalled();
 });
 
 test("restores previous compose domain fields when Caddy route refresh fails after update", async () => {
@@ -225,6 +277,33 @@ test("restores previous compose domain fields when Caddy route refresh fails aft
 		undefined,
 		"caddy",
 	);
+});
+
+test("preserves compose domain rows when Caddy route refresh fails before delete", async () => {
+	vi.mocked(findDomainById).mockResolvedValueOnce(
+		currentComposeDomain as never,
+	);
+	vi.mocked(refreshCaddyComposeRoutes)
+		.mockRejectedValueOnce(new Error("caddy refresh failed") as never)
+		.mockResolvedValueOnce(undefined as never);
+
+	await expect(caller.delete({ domainId: "domain-1" })).rejects.toThrow(
+		"caddy refresh failed",
+	);
+
+	expect(refreshCaddyComposeRoutes).toHaveBeenNthCalledWith(
+		1,
+		compose,
+		[siblingComposeDomain],
+		"caddy",
+	);
+	expect(refreshCaddyComposeRoutes).toHaveBeenNthCalledWith(
+		2,
+		compose,
+		undefined,
+		"caddy",
+	);
+	expect(removeDomainById).not.toHaveBeenCalled();
 });
 
 test("restores all compose routes when compose domain delete persistence fails", async () => {
