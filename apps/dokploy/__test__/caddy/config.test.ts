@@ -442,6 +442,59 @@ test("reloads the restored Caddy config when safe reload fails", async () => {
 	expect(reloads).toBe(2);
 });
 
+test("preserves the original safe reload error when the restored Caddy reload also fails", async () => {
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ routes: [route({ hosts: ["old.example.com"] })] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.mkdirSync(paths().CADDY_FRAGMENTS_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	const restoreError = new Error("restored reload failed");
+	let reloads = 0;
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy reload")) {
+			reloads += 1;
+			if (reloads === 1) {
+				throw new Error("new config reload failed");
+			}
+			throw restoreError;
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+	const consoleError = vi
+		.spyOn(console, "error")
+		.mockImplementation(() => undefined);
+
+	let thrownError: Error | undefined;
+	try {
+		await compileWriteAndReloadCaddyConfigSafely({
+			trustedProxies: {
+				source: "static",
+				ranges: ["192.0.2.0/24"],
+			},
+		});
+	} catch (error) {
+		thrownError = error as Error;
+	}
+
+	expect(thrownError).toBeInstanceOf(Error);
+	expect(thrownError?.message).toBe("new config reload failed");
+	expect((thrownError as Error & { restoreError?: unknown }).restoreError).toBe(
+		restoreError,
+	);
+	expect(consoleError).toHaveBeenCalledWith(
+		"Failed to restore Caddy config:",
+		restoreError,
+	);
+	consoleError.mockRestore();
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
+	expect(reloads).toBe(2);
+});
+
 test("restores previous fragments when Caddy domain reload fails", async () => {
 	const existingFragment: CaddyRouteFragment = {
 		version: 1,

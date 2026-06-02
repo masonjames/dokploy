@@ -15,7 +15,11 @@ export const CADDY_PORT =
 export const CADDY_HTTP3_PORT =
 	Number.parseInt(process.env.CADDY_HTTP3_PORT ?? "", 10) || 443;
 export const CADDY_ADMIN_PORT = 2019;
-const CADDY_RESERVED_TCP_TARGET_PORTS = new Set([8080, 8082, CADDY_ADMIN_PORT]);
+const CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS = new Set([
+	8080,
+	8082,
+	CADDY_ADMIN_PORT,
+]);
 export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
 
 export interface CaddyOptions {
@@ -32,16 +36,28 @@ export interface CaddyOptions {
 
 type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
 
-export const isCaddyAdminPort = (port: CaddyAdditionalPort) =>
+export const isCaddyAdminAdditionalPort = (port: CaddyAdditionalPort) =>
 	port.targetPort === CADDY_ADMIN_PORT && (port.protocol ?? "tcp") === "tcp";
 
-export const isCaddyReservedAdditionalPort = (port: CaddyAdditionalPort) =>
-	CADDY_RESERVED_TCP_TARGET_PORTS.has(port.targetPort) &&
+export const isCaddyAdminPort = isCaddyAdminAdditionalPort;
+export const isCaddyReservedAdditionalPort = isCaddyAdminAdditionalPort;
+
+export const isTraefikCarryOverPortForCaddyMigration = (
+	port: CaddyAdditionalPort,
+) =>
+	CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS.has(port.targetPort) &&
 	(port.protocol ?? "tcp") === "tcp";
 
 export const filterCaddyAdditionalPorts = (
 	additionalPorts: CaddyOptions["additionalPorts"] = [],
-) => additionalPorts.filter((port) => !isCaddyReservedAdditionalPort(port));
+) => additionalPorts.filter((port) => !isCaddyAdminAdditionalPort(port));
+
+export const filterTraefikCarryOverPortsForCaddyMigration = (
+	additionalPorts: CaddyOptions["additionalPorts"] = [],
+) =>
+	additionalPorts.filter(
+		(port) => !isTraefikCarryOverPortForCaddyMigration(port),
+	);
 
 const getCaddyMounts = (serverId?: string) => {
 	const { CADDY_CONFIG_DIR_PATH, CADDY_DATA_PATH, MAIN_CADDY_PATH } = paths(

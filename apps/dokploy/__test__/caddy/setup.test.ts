@@ -102,6 +102,8 @@ describe("Caddy runtime setup", () => {
 		await initializeStandaloneCaddy({
 			additionalPorts: [
 				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
+				{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
 				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
 			],
 		});
@@ -111,6 +113,14 @@ describe("Caddy runtime setup", () => {
 		expect(createOptions.HostConfig.PortBindings).not.toHaveProperty(
 			"2019/tcp",
 		);
+		expect(createOptions.ExposedPorts).toHaveProperty("8080/tcp");
+		expect(createOptions.HostConfig.PortBindings["8080/tcp"]).toEqual([
+			{ HostPort: "18080" },
+		]);
+		expect(createOptions.ExposedPorts).toHaveProperty("8082/tcp");
+		expect(createOptions.HostConfig.PortBindings["8082/tcp"]).toEqual([
+			{ HostPort: "18082" },
+		]);
 		expect(createOptions.ExposedPorts).toHaveProperty("9000/tcp");
 		expect(createOptions.HostConfig.PortBindings["9000/tcp"]).toEqual([
 			{ HostPort: "9000" },
@@ -138,6 +148,8 @@ describe("Caddy runtime setup", () => {
 		await initializeCaddyService({
 			additionalPorts: [
 				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
+				{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
 				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
 			],
 		});
@@ -150,6 +162,16 @@ describe("Caddy runtime setup", () => {
 		);
 		expect(createOptions.EndpointSpec.Ports).toEqual(
 			expect.arrayContaining([
+				expect.objectContaining({
+					TargetPort: 8080,
+					PublishedPort: 18080,
+					Protocol: "tcp",
+				}),
+				expect.objectContaining({
+					TargetPort: 8082,
+					PublishedPort: 18082,
+					Protocol: "tcp",
+				}),
 				expect.objectContaining({
 					TargetPort: 9000,
 					PublishedPort: 9000,

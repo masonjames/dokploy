@@ -27,7 +27,7 @@ import {
 	getWebServerResourceName,
 	getWebServerSettings,
 	IS_CLOUD,
-	isCaddyReservedAdditionalPort,
+	isCaddyAdminAdditionalPort,
 	parseRawConfig,
 	paths,
 	prepareCaddyMigration as prepareCaddyMigrationDryRun,
@@ -221,6 +221,28 @@ const assertCaddyReadableFilePath = (filePath: string, serverId?: string) => {
 	});
 };
 
+type WebServerDirectoryNode = {
+	id: string;
+	name: string;
+	type: "file" | "directory";
+	children?: WebServerDirectoryNode[];
+};
+
+const pruneCaddyBackupDirectoryNodes = (
+	nodes: WebServerDirectoryNode[],
+	serverId?: string,
+): WebServerDirectoryNode[] =>
+	nodes
+		.filter((node) => !isCaddyMigrationBackupPath(node.id, serverId))
+		.map((node) =>
+			node.children
+				? {
+						...node,
+						children: pruneCaddyBackupDirectoryNodes(node.children, serverId),
+					}
+				: node,
+		);
+
 const readCaddySafeDirectoryTree = async (serverId?: string) => {
 	const caddyPaths = paths(!!serverId);
 	const readOptionalDirectory = async (dirPath: string) => {
@@ -252,7 +274,10 @@ const readCaddySafeDirectoryTree = async (serverId?: string) => {
 			id: caddyPaths.CADDY_MIGRATIONS_PATH,
 			name: "migrations",
 			type: "directory" as const,
-			children: await readOptionalDirectory(caddyPaths.CADDY_MIGRATIONS_PATH),
+			children: pruneCaddyBackupDirectoryNodes(
+				await readOptionalDirectory(caddyPaths.CADDY_MIGRATIONS_PATH),
+				serverId,
+			),
 		},
 	];
 };
@@ -1736,7 +1761,7 @@ export const settingsRouter = createTRPCRouter({
 
 				if (provider === "caddy") {
 					const reservedPort = input.additionalPorts.find(
-						isCaddyReservedAdditionalPort,
+						isCaddyAdminAdditionalPort,
 					);
 					if (reservedPort) {
 						throw new TRPCError({

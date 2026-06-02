@@ -859,12 +859,20 @@ export const writeAndReloadCaddyConfigSafely = async (
 	try {
 		await reloadCaddyAfterValidation(options.serverId);
 	} catch (error) {
-		if (previousConfig) {
-			await writeCaddyConfigContent(previousConfig, options);
-		} else {
-			await writeCaddyConfigFile(compileCaddyConfig(), options);
+		try {
+			if (previousConfig) {
+				await writeCaddyConfigContent(previousConfig, options);
+			} else {
+				await writeCaddyConfigFile(compileCaddyConfig(), options);
+			}
+			await reloadCaddyAfterValidation(options.serverId);
+		} catch (restoreError) {
+			if (error instanceof Error) {
+				(error as Error & { restoreError?: unknown }).restoreError =
+					restoreError;
+			}
+			console.error("Failed to restore Caddy config:", restoreError);
 		}
-		await reloadCaddyAfterValidation(options.serverId);
 		throw error;
 	}
 };

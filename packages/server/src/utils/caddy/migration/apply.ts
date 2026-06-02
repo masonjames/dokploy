@@ -14,7 +14,7 @@ import {
 	updateLocalWebServerProvider,
 	updateRemoteWebServerProvider,
 } from "@dokploy/server/services/web-server-settings";
-import { filterCaddyAdditionalPorts } from "@dokploy/server/setup/caddy-setup";
+import { filterTraefikCarryOverPortsForCaddyMigration } from "@dokploy/server/setup/caddy-setup";
 import {
 	reloadCaddyAfterValidation,
 	validateCaddyConfigFileWithImage,
@@ -390,7 +390,7 @@ const applyCaddyMigrationUnlocked = async (input: {
 					env: undefined,
 					additionalPorts: traefikRuntime.additionalPorts,
 				};
-		const caddyAdditionalPorts = filterCaddyAdditionalPorts(
+		const caddyAdditionalPorts = filterTraefikCarryOverPortsForCaddyMigration(
 			runtime.additionalPorts,
 		);
 		const droppedPorts = runtime.additionalPorts.filter(

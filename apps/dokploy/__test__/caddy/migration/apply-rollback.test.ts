@@ -236,6 +236,74 @@ describe("applyCaddyMigration", () => {
 		);
 	});
 
+	test("applies and rolls back approved Caddy custom certificate artifacts", async () => {
+		const report = seedMigration("caddy-custom-cert-apply-rollback");
+		const certificatePath = `${paths().CERTIFICATES_PATH}/certificate-uploaded`;
+		const loadFiles = [
+			{
+				certificate: `${certificatePath}/chain.crt`,
+				key: `${certificatePath}/privkey.key`,
+			},
+		];
+		vol.writeFileSync(
+			report.artifactPaths.caddyJson,
+			`${JSON.stringify(
+				{
+					apps: {
+						http: {},
+						tls: {
+							certificates: {
+								load_files: loadFiles,
+							},
+						},
+					},
+				},
+				null,
+				2,
+			)}\n`,
+		);
+		vi.mocked(
+			caddyConfig.validateCaddyConfigFileWithImage,
+		).mockImplementationOnce(async (filePath: string) => {
+			const validatedConfig = JSON.parse(
+				vol.readFileSync(filePath, "utf8") as string,
+			);
+			expect(validatedConfig.apps.tls.certificates.load_files).toEqual(
+				loadFiles,
+			);
+			return {} as any;
+		});
+
+		const applied = await applyCaddyMigration({
+			migrationId: report.migrationId,
+		});
+
+		expect(applied.status).toBe("applied");
+		expect(caddyConfig.validateCaddyConfigFileWithImage).toHaveBeenCalledWith(
+			report.artifactPaths.caddyJson,
+			undefined,
+		);
+		const activeConfig = JSON.parse(
+			vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8") as string,
+		);
+		expect(activeConfig.apps.tls.certificates.load_files).toEqual(loadFiles);
+
+		const rolledBack = await rollbackCaddyMigration({
+			migrationId: report.migrationId,
+		});
+
+		expect(rolledBack.status).toBe("rolled_back");
+		expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+			'{"old":true}\n',
+		);
+		expect(vol.existsSync(`${paths().CADDY_FRAGMENTS_PATH}/old.json`)).toBe(
+			true,
+		);
+		expect(providerService.updateLocalWebServerProvider).toHaveBeenCalledWith(
+			"traefik",
+		);
+	});
+
 	test("rejects apply when Caddy compile settings changed after prepare", async () => {
 		const report = seedMigration("caddy-apply-stale-settings");
 		vi.mocked(providerService.getCaddyCompileSettings).mockResolvedValueOnce({

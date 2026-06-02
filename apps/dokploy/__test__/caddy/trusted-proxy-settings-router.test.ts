@@ -27,6 +27,7 @@ const serverMocks = vi.hoisted(() => ({
 	getWebServerPaths: vi.fn(),
 	getWebServerResourceName: vi.fn(),
 	getWebServerSettings: vi.fn(),
+	isCaddyAdminAdditionalPort: vi.fn(),
 	isCaddyReservedAdditionalPort: vi.fn(),
 	parseRawConfig: vi.fn(),
 	paths: vi.fn(),
@@ -101,7 +102,7 @@ import {
 	getCaddyCompileSettings,
 	getCaddyTrustedProxySettings,
 	getWebServerResourceName,
-	isCaddyReservedAdditionalPort,
+	isCaddyAdminAdditionalPort,
 	readEnvironmentVariables,
 	readPorts,
 	resolveWebServerProvider,
@@ -198,11 +199,10 @@ beforeEach(() => {
 		serverId: "server-1",
 		organizationId: "org-1",
 	} as never);
-	vi.mocked(isCaddyReservedAdditionalPort).mockImplementation(
-		(port) =>
-			[8080, 8082, 2019].includes(port.targetPort) &&
-			(port.protocol ?? "tcp") === "tcp",
+	vi.mocked(isCaddyAdminAdditionalPort).mockImplementation(
+		(port) => port.targetPort === 2019 && (port.protocol ?? "tcp") === "tcp",
 	);
+	vi.mocked(writeWebServerSetup).mockResolvedValue(undefined as never);
 });
 
 test("persists Caddy trusted proxy settings without rebuilding when Traefik is active", async () => {
@@ -309,6 +309,58 @@ test("restores previous trusted proxy settings when active Caddy rebuild fails",
 	expect(audit).not.toHaveBeenCalled();
 });
 
+test("restores remote trusted proxy settings when remote Caddy rebuild fails", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+	persistedTrustedProxySettings = {
+		mode: "cloudflare",
+		clientIpHeaders: ["CF-Connecting-IP"],
+		strict: true,
+	};
+	vi.mocked(compileWriteAndReloadCaddyConfigSafely).mockRejectedValueOnce(
+		new Error("remote caddy reload failed") as never,
+	);
+
+	await expect(
+		caller.updateCaddyTrustedProxySettings({
+			...staticInput,
+			serverId: "server-1",
+		}),
+	).rejects.toThrow("remote caddy reload failed");
+
+	expect(resolveWebServerProvider).toHaveBeenCalledWith("server-1");
+	expect(getCaddyCompileSettings).toHaveBeenCalledWith("server-1");
+	expect(compileWriteAndReloadCaddyConfigSafely).toHaveBeenCalledWith({
+		serverId: "server-1",
+		letsEncryptEmail: "ops@example.com",
+		trustedProxies: {
+			source: "static",
+			ranges: ["192.0.2.0/24"],
+			clientIpHeaders: ["X-Forwarded-For"],
+			strict: true,
+		},
+	});
+	expect(updateCaddyTrustedProxySettings).toHaveBeenNthCalledWith(
+		1,
+		staticInput,
+		"server-1",
+	);
+	expect(updateCaddyTrustedProxySettings).toHaveBeenNthCalledWith(
+		2,
+		{
+			mode: "cloudflare",
+			clientIpHeaders: ["CF-Connecting-IP"],
+			strict: true,
+		},
+		"server-1",
+	);
+	expect(persistedTrustedProxySettings).toEqual({
+		mode: "cloudflare",
+		clientIpHeaders: ["CF-Connecting-IP"],
+		strict: true,
+	});
+	expect(audit).not.toHaveBeenCalled();
+});
+
 test("reports Caddy dashboard disabled instead of exposing the Caddy admin API", async () => {
 	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
 
@@ -358,4 +410,32 @@ test("rejects Caddy admin port publishing before rebuilding the web server", asy
 
 	expect(checkPortInUse).not.toHaveBeenCalled();
 	expect(writeWebServerSetup).not.toHaveBeenCalled();
+});
+
+test("allows non-admin Caddy additional ports before rebuilding the web server", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+
+	await caller.updateWebServerPorts({
+		additionalPorts: [
+			{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
+			{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
+		],
+	});
+
+	expect(checkPortInUse).toHaveBeenCalledWith(18080, undefined);
+	expect(checkPortInUse).toHaveBeenCalledWith(18082, undefined);
+	expect(writeWebServerSetup).toHaveBeenCalledWith(
+		"caddy",
+		expect.objectContaining({
+			additionalPorts: [
+				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
+				{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
+			],
+			serverId: undefined,
+		}),
+	);
+	expect(audit).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ resourceName: "web-server-ports" }),
+	);
 });

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, vi } from "vitest";
 import { invalidateApplicationWebServerConfig } from "@/components/dashboard/application/web-server-config-cache";
 
@@ -59,3 +60,37 @@ test("propagates application web-server config cache invalidation failures", asy
 		applicationId: "app-1",
 	});
 });
+
+const applicationMutationHandlers = [
+	[
+		"domain handler",
+		"../../components/dashboard/application/domains/handle-domain.tsx",
+	],
+	[
+		"redirect form handler",
+		"../../components/dashboard/application/advanced/redirects/handle-redirect.tsx",
+	],
+	[
+		"redirect delete handler",
+		"../../components/dashboard/application/advanced/redirects/show-redirects.tsx",
+	],
+	[
+		"security form handler",
+		"../../components/dashboard/application/advanced/security/handle-security.tsx",
+	],
+	[
+		"security delete handler",
+		"../../components/dashboard/application/advanced/security/show-security.tsx",
+	],
+] as const;
+
+test.each(applicationMutationHandlers)(
+	"%s uses the shared application web-server cache invalidation helper",
+	(_name, filePath) => {
+		const source = readFileSync(new URL(filePath, import.meta.url), "utf8");
+
+		expect(source).toContain("invalidateApplicationWebServerConfig");
+		expect(source).not.toMatch(/readTraefikConfig\.invalidate/);
+		expect(source).not.toMatch(/readWebServerConfig\.invalidate/);
+	},
+);
