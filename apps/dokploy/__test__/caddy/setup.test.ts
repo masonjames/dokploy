@@ -79,4 +79,83 @@ describe("Caddy runtime setup", () => {
 			]),
 		);
 	});
+
+	test("does not publish the Caddy admin port for standalone Caddy", async () => {
+		const createContainer = vi.fn();
+		const start = vi.fn();
+		const remove = vi.fn().mockRejectedValue(new Error("missing"));
+		const docker = {
+			pull: vi.fn(
+				(_imageName: string, callback: (error: Error | null) => void) => {
+					callback(null);
+				},
+			),
+			modem: { followProgress: vi.fn() },
+			createContainer,
+			getContainer: vi.fn(() => ({ remove, start })),
+		};
+		getRemoteDockerMock.mockResolvedValue(docker);
+		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
+		validateCaddyConfigWithContainerMock.mockResolvedValue(undefined);
+		const { initializeStandaloneCaddy } = await loadCaddySetup();
+
+		await initializeStandaloneCaddy({
+			additionalPorts: [
+				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
+			],
+		});
+
+		const createOptions = createContainer.mock.calls[0]?.[0] as any;
+		expect(createOptions.ExposedPorts).not.toHaveProperty("2019/tcp");
+		expect(createOptions.HostConfig.PortBindings).not.toHaveProperty(
+			"2019/tcp",
+		);
+		expect(createOptions.ExposedPorts).toHaveProperty("9000/tcp");
+		expect(createOptions.HostConfig.PortBindings["9000/tcp"]).toEqual([
+			{ HostPort: "9000" },
+		]);
+	});
+
+	test("does not publish the Caddy admin port for Caddy services", async () => {
+		const createService = vi.fn();
+		const docker = {
+			pull: vi.fn(
+				(_imageName: string, callback: (error: Error | null) => void) => {
+					callback(null);
+				},
+			),
+			modem: { followProgress: vi.fn() },
+			createService,
+			getService: vi.fn(() => ({
+				inspect: vi.fn().mockRejectedValue(new Error("missing")),
+			})),
+		};
+		getRemoteDockerMock.mockResolvedValue(docker);
+		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
+		const { initializeCaddyService } = await loadCaddySetup();
+
+		await initializeCaddyService({
+			additionalPorts: [
+				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
+			],
+		});
+
+		const createOptions = createService.mock.calls[0]?.[0] as any;
+		expect(createOptions.EndpointSpec.Ports).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ TargetPort: 2019, Protocol: "tcp" }),
+			]),
+		);
+		expect(createOptions.EndpointSpec.Ports).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					TargetPort: 9000,
+					PublishedPort: 9000,
+					Protocol: "tcp",
+				}),
+			]),
+		);
+	});
 });

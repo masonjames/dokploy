@@ -14,6 +14,7 @@ import {
 	updateLocalWebServerProvider,
 	updateRemoteWebServerProvider,
 } from "@dokploy/server/services/web-server-settings";
+import { filterCaddyAdditionalPorts } from "@dokploy/server/setup/caddy-setup";
 import {
 	reloadCaddyAfterValidation,
 	validateCaddyConfigFileWithImage,
@@ -65,17 +66,6 @@ const compileSettingsChanged = (
 ) =>
 	JSON.stringify(normalizeCompileSettings(prepared)) !==
 	JSON.stringify(normalizeCompileSettings(current));
-
-const filterCaddyAdditionalPorts = (
-	ports: { targetPort: number; publishedPort: number; protocol?: string }[],
-) =>
-	ports.filter(
-		(port) =>
-			!(
-				(port.targetPort === 8080 || port.targetPort === 8082) &&
-				(port.protocol ?? "tcp") === "tcp"
-			),
-	);
 
 const createFileBackup = async (
 	label: string,

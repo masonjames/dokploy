@@ -171,6 +171,17 @@ describe("applyCaddyMigration", () => {
 
 	test("writes approved artifacts, starts Caddy, validates, then updates provider", async () => {
 		const report = seedMigration("caddy-apply-success");
+		vi.mocked(settingsService.readPorts).mockImplementation(
+			async (resourceName: string) =>
+				resourceName === "dokploy-traefik"
+					? [
+							{ targetPort: 8080, publishedPort: 8080, protocol: "tcp" },
+							{ targetPort: 8082, publishedPort: 8082, protocol: "tcp" },
+							{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+							{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
+						]
+					: [],
+		);
 
 		const applied = await applyCaddyMigration({
 			migrationId: report.migrationId,
@@ -199,7 +210,13 @@ describe("applyCaddyMigration", () => {
 			vi.mocked(settingsService.stopDockerResource).mock
 				.invocationCallOrder[0] ?? 0,
 		);
-		expect(settingsService.writeCaddySetup).toHaveBeenCalled();
+		expect(settingsService.writeCaddySetup).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalPorts: [
+					{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
+				],
+			}),
+		);
 		expect(caddyConfig.validateCaddyConfigWithContainer).toHaveBeenCalled();
 		expect(providerService.updateLocalWebServerProvider).toHaveBeenCalledWith(
 			"caddy",

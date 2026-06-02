@@ -21,6 +21,7 @@ import {
 	caddyTrustedProxySettingsToConfig,
 	compileAndWriteCaddyConfig,
 	compileCaddyConfig,
+	compileWriteAndReloadCaddyConfigSafely,
 	type Domain,
 	getCaddyMigrationArtifactPaths,
 	manageCaddyDomain,
@@ -404,6 +405,41 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 	);
 	expect(validateCommand).toContain(" caddy validate --config");
 	expect(validateCommand).not.toContain("caddy\\:2.11.3 validate --config");
+});
+
+test("reloads the restored Caddy config when safe reload fails", async () => {
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ routes: [route({ hosts: ["old.example.com"] })] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.mkdirSync(paths().CADDY_FRAGMENTS_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	let reloads = 0;
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy reload")) {
+			reloads += 1;
+			if (reloads === 1) {
+				throw new Error("reload failed");
+			}
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(
+		compileWriteAndReloadCaddyConfigSafely({
+			trustedProxies: {
+				source: "static",
+				ranges: ["192.0.2.0/24"],
+			},
+		}),
+	).rejects.toThrow("reload failed");
+
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
+	expect(reloads).toBe(2);
 });
 
 test("restores previous fragments when Caddy domain reload fails", async () => {

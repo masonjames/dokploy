@@ -27,6 +27,7 @@ import {
 	getWebServerResourceName,
 	getWebServerSettings,
 	IS_CLOUD,
+	isCaddyReservedAdditionalPort,
 	parseRawConfig,
 	paths,
 	prepareCaddyMigration as prepareCaddyMigrationDryRun,
@@ -1732,6 +1733,18 @@ export const settingsRouter = createTRPCRouter({
 					resourceName,
 					input.serverId,
 				);
+
+				if (provider === "caddy") {
+					const reservedPort = input.additionalPorts.find(
+						isCaddyReservedAdditionalPort,
+					);
+					if (reservedPort) {
+						throw new TRPCError({
+							code: "BAD_REQUEST",
+							message: `Caddy target port ${reservedPort.targetPort}/${reservedPort.protocol ?? "tcp"} is reserved and cannot be published.`,
+						});
+					}
+				}
 
 				for (const port of input.additionalPorts) {
 					const portCheck = await checkPortInUse(

@@ -864,6 +864,7 @@ export const writeAndReloadCaddyConfigSafely = async (
 		} else {
 			await writeCaddyConfigFile(compileCaddyConfig(), options);
 		}
+		await reloadCaddyAfterValidation(options.serverId);
 		throw error;
 	}
 };

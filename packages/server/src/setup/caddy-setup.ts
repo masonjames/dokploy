@@ -14,6 +14,8 @@ export const CADDY_PORT =
 	Number.parseInt(process.env.CADDY_PORT ?? "", 10) || 80;
 export const CADDY_HTTP3_PORT =
 	Number.parseInt(process.env.CADDY_HTTP3_PORT ?? "", 10) || 443;
+export const CADDY_ADMIN_PORT = 2019;
+const CADDY_RESERVED_TCP_TARGET_PORTS = new Set([8080, 8082, CADDY_ADMIN_PORT]);
 export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
 
 export interface CaddyOptions {
@@ -27,6 +29,19 @@ export interface CaddyOptions {
 	letsEncryptEmail?: string | null;
 	trustedProxies?: CaddyTrustedProxyConfig | null;
 }
+
+type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
+
+export const isCaddyAdminPort = (port: CaddyAdditionalPort) =>
+	port.targetPort === CADDY_ADMIN_PORT && (port.protocol ?? "tcp") === "tcp";
+
+export const isCaddyReservedAdditionalPort = (port: CaddyAdditionalPort) =>
+	CADDY_RESERVED_TCP_TARGET_PORTS.has(port.targetPort) &&
+	(port.protocol ?? "tcp") === "tcp";
+
+export const filterCaddyAdditionalPorts = (
+	additionalPorts: CaddyOptions["additionalPorts"] = [],
+) => additionalPorts.filter((port) => !isCaddyReservedAdditionalPort(port));
 
 const getCaddyMounts = (serverId?: string) => {
 	const { CADDY_CONFIG_DIR_PATH, CADDY_DATA_PATH, MAIN_CADDY_PATH } = paths(
@@ -83,7 +98,7 @@ const buildStandalonePorts = (
 		[`${CADDY_HTTP3_PORT}/udp`]: [{ HostPort: CADDY_HTTP3_PORT.toString() }],
 	};
 
-	for (const port of additionalPorts ?? []) {
+	for (const port of filterCaddyAdditionalPorts(additionalPorts)) {
 		const portKey = `${port.targetPort}/${port.protocol ?? "tcp"}`;
 		exposedPorts[portKey] = {};
 		portBindings[portKey] = [{ HostPort: port.publishedPort.toString() }];
@@ -141,7 +156,7 @@ const buildServicePorts = (
 		PublishMode: "host" as const,
 		Protocol: "tcp" as const,
 	},
-	...(additionalPorts ?? []).map((port) => ({
+	...filterCaddyAdditionalPorts(additionalPorts).map((port) => ({
 		TargetPort: port.targetPort,
 		PublishedPort: port.publishedPort,
 		Protocol: port.protocol as "tcp" | "udp" | "sctp" | undefined,
