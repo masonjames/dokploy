@@ -185,6 +185,7 @@ Implemented:
 - Missing custom certificate references fail before writing Caddy config.
 - Migration dry-runs emit a blocking warning instead of generating DB fallback Caddy routes when a custom certificate reference does not map to an uploaded certificate with readable files for the same server and organization.
 - Custom certificate guards ignore stale uploaded-certificate fields when HTTPS is disabled.
+- Shared domain validation only requires `customCertResolver` when HTTPS custom certificates are selected, so preview-domain and API submissions are not blocked by hidden certificate fields.
 - Active Caddy domains block deleting an uploaded certificate or replacing its cert/key files until the domain no longer references it.
 
 Tradeoff:
@@ -357,6 +358,9 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/certificate-guard.test.ts __test__/caddy/certificate-lifecycle.test.ts` | Passed | 2 files, 6 tests. Covers same-server/org/readable custom certificate guards and active Caddy certificate delete/update blocks. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 18 files, 109 tests after RepoPrompt review hardening. Covers focused Caddy config, certificates, domain lifecycle, preview cleanup, migration prepare/apply/rollback, upstream preflight, and runtime migration tests. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck` and `pnpm --filter=@dokploy/server typecheck` | Passed | App and server package typechecks passed. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/domain-validation.test.ts __test__/caddy/preview-deployment.test.ts __test__/caddy/domain-router-lifecycle.test.ts` | Passed | 3 files, 11 tests. Covers optional custom certificate resolver validation when HTTPS is disabled plus preview and router domain regressions. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 19 files, 111 tests after shared domain validation cleanup. Covers focused Caddy config, certificates, domain lifecycle, validation, preview cleanup, migration prepare/apply/rollback, upstream preflight, and runtime migration tests. |
+| 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, and `git diff --check` | Passed | App/server typechecks and whitespace checks passed after the shared validation cleanup. Node v26 produced the expected engine warning. |
 
 ## Upstream Hygiene Checklist
 

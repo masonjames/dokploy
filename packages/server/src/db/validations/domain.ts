@@ -19,7 +19,7 @@ export const domain = z
 			.optional(),
 		https: z.boolean().optional(),
 		certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
-		customCertResolver: z.string(),
+		customCertResolver: z.string().optional(),
 		middlewares: z.array(z.string()).optional(),
 	})
 	.superRefine((input, ctx) => {
@@ -86,7 +86,7 @@ export const domainCompose = z
 			.optional(),
 		https: z.boolean().optional(),
 		certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
-		customCertResolver: z.string(),
+		customCertResolver: z.string().optional(),
 		serviceName: z.string().min(1, { message: "Service name is required" }),
 		middlewares: z.array(z.string()).optional(),
 	})
