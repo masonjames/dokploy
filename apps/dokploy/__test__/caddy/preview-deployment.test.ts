@@ -273,3 +273,28 @@ test("removes preview domains through the active web server provider", async () 
 		17,
 	);
 });
+
+test("keeps preview deployment row when provider route removal fails", async () => {
+	const application = createApplication();
+	vi.mocked(findApplicationById).mockResolvedValue(application as never);
+	dbMock.query.previewDeployments.findFirst.mockResolvedValue({
+		...previewDeploymentRow,
+		domain: {
+			domainId: "domain-1",
+			uniqueConfigKey: 17,
+		},
+		application: {
+			applicationId: "app-1",
+			serverId: null,
+		},
+	});
+	vi.mocked(removeWebServerDomain).mockRejectedValueOnce(
+		new Error("caddy route cleanup failed") as never,
+	);
+
+	await expect(removePreviewDeployment("preview-1")).rejects.toThrow(
+		"caddy route cleanup failed",
+	);
+
+	expect(dbMock.delete).not.toHaveBeenCalled();
+});

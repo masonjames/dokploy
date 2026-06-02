@@ -65,10 +65,18 @@ export const getUnsupportedCaddyDomainFieldMessages = (domain: Domain) => {
 	if (domain.customEntrypoint) {
 		messages.push("custom entrypoints are not supported by Caddy routes");
 	}
-	if (domain.customCertResolver && domain.certificateType !== "custom") {
+	if (
+		domain.https &&
+		domain.customCertResolver &&
+		domain.certificateType !== "custom"
+	) {
 		messages.push("custom certificate resolvers are Traefik-specific");
 	}
-	if (domain.certificateType === "custom" && !domain.customCertResolver) {
+	if (
+		domain.https &&
+		domain.certificateType === "custom" &&
+		!domain.customCertResolver
+	) {
 		messages.push("custom certificates require an uploaded certificate");
 	}
 	if (domain.middlewares?.length) {
@@ -89,11 +97,17 @@ export const assertCaddyDomainSupported = (domain: Domain) => {
 export const assertCaddyDomainCertificateAvailable = async (
 	serverId: string | null | undefined,
 	domain: Domain,
+	organizationId?: string | null,
 ) => {
-	if (domain.certificateType === "custom" && domain.customCertResolver) {
+	if (
+		domain.https &&
+		domain.certificateType === "custom" &&
+		domain.customCertResolver
+	) {
 		await assertCertificatePathAvailableForServer(
 			domain.customCertResolver,
 			serverId,
+			organizationId,
 		);
 	}
 };
@@ -120,7 +134,9 @@ export const createCaddyApplicationRouteIntent = (
 		upstreams: [`http://${app.appName}:${domain.port || 80}`],
 		upstreamNetwork: DOKPLOY_CADDY_NETWORK,
 		tlsCertificate:
-			domain.certificateType === "custom" && domain.customCertResolver
+			domain.https &&
+			domain.certificateType === "custom" &&
+			domain.customCertResolver
 				? getCaddyCustomCertificateFiles(
 						app.serverId,
 						domain.customCertResolver,
@@ -149,7 +165,11 @@ export const manageCaddyDomain = async (
 	domain: Domain,
 ) => {
 	const serverId = app.serverId || undefined;
-	await assertCaddyDomainCertificateAvailable(serverId, domain);
+	await assertCaddyDomainCertificateAvailable(
+		serverId,
+		domain,
+		app.environment?.project?.organizationId,
+	);
 	const options = { serverId };
 	const previousFragments = await readCaddyRouteFragments(options);
 	try {

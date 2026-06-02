@@ -1,4 +1,5 @@
 import type {
+	CaddyCompileOptions,
 	CaddyHeaderMap,
 	CaddyRouteRedirectScheme,
 	CaddyRouteTransform,
@@ -180,6 +181,10 @@ export interface CaddyMigrationReport {
 		status: "passed" | "failed" | "skipped";
 		message?: string;
 	};
+	compileSettings?: Pick<
+		CaddyCompileOptions,
+		"letsEncryptEmail" | "trustedProxies"
+	>;
 	runtimePreflight?: CaddyMigrationRuntimePreflight;
 	warnings: CaddyMigrationWarning[];
 	backup?: CaddyMigrationBackupSummary;

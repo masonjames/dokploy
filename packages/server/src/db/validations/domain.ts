@@ -31,7 +31,11 @@ export const domain = z
 			});
 		}
 
-		if (input.certificateType === "custom" && !input.customCertResolver) {
+		if (
+			input.https &&
+			input.certificateType === "custom" &&
+			!input.customCertResolver
+		) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["customCertResolver"],
@@ -95,7 +99,11 @@ export const domainCompose = z
 			});
 		}
 
-		if (input.certificateType === "custom" && !input.customCertResolver) {
+		if (
+			input.https &&
+			input.certificateType === "custom" &&
+			!input.customCertResolver
+		) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["customCertResolver"],

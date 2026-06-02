@@ -80,7 +80,11 @@ export const domain = z
 			});
 		}
 
-		if (input.certificateType === "custom" && !input.customCertResolver) {
+		if (
+			input.https &&
+			input.certificateType === "custom" &&
+			!input.customCertResolver
+		) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["customCertResolver"],
@@ -661,7 +665,13 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 											<FormControl>
 												<Switch
 													checked={field.value}
-													onCheckedChange={field.onChange}
+													onCheckedChange={(checked) => {
+														field.onChange(checked);
+														if (!checked) {
+															form.setValue("certificateType", "none");
+															form.setValue("customCertResolver", undefined);
+														}
+													}}
 												/>
 											</FormControl>
 										</FormItem>

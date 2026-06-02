@@ -70,7 +70,9 @@ export const createCaddyComposeRouteIntent = (
 		upstreams: [`http://${upstreamServiceName}:${domain.port || 80}`],
 		upstreamNetwork,
 		tlsCertificate:
-			domain.certificateType === "custom" && domain.customCertResolver
+			domain.https &&
+			domain.certificateType === "custom" &&
+			domain.customCertResolver
 				? getCaddyCustomCertificateFiles(
 						compose.serverId,
 						domain.customCertResolver,
@@ -109,8 +111,17 @@ export const writeCaddyComposeRouteFragments = async (
 	domains: Array<{ domain: Domain; finalServiceName: string }>,
 ) => {
 	const serverId = compose.serverId || undefined;
+	const organizationId = (
+		compose as Compose & {
+			environment?: { project?: { organizationId?: string | null } };
+		}
+	).environment?.project?.organizationId;
 	for (const { domain } of domains) {
-		await assertCaddyDomainCertificateAvailable(serverId, domain);
+		await assertCaddyDomainCertificateAvailable(
+			serverId,
+			domain,
+			organizationId,
+		);
 	}
 	const options = { serverId };
 	const fragmentPrefix = getCaddyComposeFragmentPrefix(compose.appName);

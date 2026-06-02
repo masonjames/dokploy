@@ -58,6 +58,15 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 		);
 
 		application.appName = previewDeployment.appName;
+		if (previewDeployment.domain) {
+			await removeWebServerDomain(
+				application,
+				previewDeployment.domain.uniqueConfigKey,
+			);
+		} else {
+			await removeTraefikConfig(application?.appName, application?.serverId);
+		}
+
 		const cleanupOperations = [
 			async () =>
 				await removeService(application?.appName, application?.serverId),
@@ -68,16 +77,6 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 				),
 			async () =>
 				await removeDirectoryCode(application?.appName, application?.serverId),
-			async () => {
-				if (previewDeployment.domain) {
-					await removeWebServerDomain(
-						application,
-						previewDeployment.domain.uniqueConfigKey,
-					);
-					return;
-				}
-				await removeTraefikConfig(application?.appName, application?.serverId);
-			},
 			async () =>
 				await db
 					.delete(previewDeployments)

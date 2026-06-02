@@ -112,6 +112,7 @@ describe("prepareCaddyMigration", () => {
 				applicationId: "app-1",
 				appName: "test-app",
 				serverId: null,
+				environment: { project: { organizationId: "org-1" } },
 				domains: [domain],
 			} as any,
 		]);
@@ -177,6 +178,7 @@ describe("prepareCaddyMigration", () => {
 				applicationId: "app-1",
 				appName: "custom-cert-app",
 				serverId: null,
+				environment: { project: { organizationId: "org-1" } },
 				domains: [
 					{
 						...domain,
@@ -197,6 +199,44 @@ describe("prepareCaddyMigration", () => {
 					code: "missing-certificate",
 					source: "custom-cert-app",
 					message: expect.stringContaining("legacy-traefik-resolver"),
+				}),
+			]),
+		);
+		expect(report.summary.fragments).toBe(0);
+	});
+
+	test("blocks DB fallback routes with cross-organization uploaded certificates", async () => {
+		vi.mocked(db.query.applications.findMany).mockResolvedValue([
+			{
+				applicationId: "app-1",
+				appName: "custom-cert-app",
+				serverId: null,
+				environment: { project: { organizationId: "org-1" } },
+				domains: [
+					{
+						...domain,
+						certificateType: "custom",
+						customCertResolver: "certificate-uploaded",
+					},
+				],
+			} as any,
+		]);
+		vi.mocked(db.query.certificates.findFirst).mockResolvedValue({
+			certificatePath: "certificate-uploaded",
+			serverId: null,
+			organizationId: "org-2",
+		} as any);
+
+		const report = await prepareCaddyMigration();
+
+		expect(report.summary.blockingWarnings).toBe(1);
+		expect(report.warnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					blocking: true,
+					code: "missing-certificate",
+					source: "custom-cert-app",
+					message: expect.stringContaining("server and organization"),
 				}),
 			]),
 		);

@@ -2,7 +2,8 @@ import { isIP } from "node:net";
 import * as path from "node:path";
 import { paths } from "@dokploy/server/constants";
 import { db } from "@dokploy/server/db";
-import { applications, certificates, compose } from "@dokploy/server/db/schema";
+import { applications, compose } from "@dokploy/server/db/schema";
+import { assertCertificatePathAvailableForServer } from "@dokploy/server/services/certificate";
 import { getCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import { createCaddyComposeRouteFragment } from "@dokploy/server/utils/caddy/compose";
 import {
@@ -472,17 +473,24 @@ const warnOnManualFragmentConflicts = (
 const hasAvailableUploadedCertificate = async (
 	certificatePath: string,
 	serverId: string | null | undefined,
+	organizationId?: string | null,
 ) => {
-	const certificate = await db.query.certificates.findFirst({
-		where: eq(certificates.certificatePath, certificatePath),
-	});
-
-	return !!certificate && (certificate.serverId ?? null) === (serverId ?? null);
+	try {
+		await assertCertificatePathAvailableForServer(
+			certificatePath,
+			serverId,
+			organizationId,
+		);
+		return true;
+	} catch {
+		return false;
+	}
 };
 
 const warnIfCustomCertificateMissing = async (
 	domain: {
 		host: string;
+		https: boolean;
 		certificateType: string;
 		customCertResolver?: string | null;
 	},
@@ -490,19 +498,28 @@ const warnIfCustomCertificateMissing = async (
 	serverId: string | null | undefined,
 	warnings: CaddyMigrationWarning[],
 	serviceName?: string | null,
+	organizationId?: string | null,
 ) => {
-	if (domain.certificateType !== "custom" || !domain.customCertResolver) {
+	if (
+		!domain.https ||
+		domain.certificateType !== "custom" ||
+		!domain.customCertResolver
+	) {
 		return false;
 	}
 	if (
-		await hasAvailableUploadedCertificate(domain.customCertResolver, serverId)
+		await hasAvailableUploadedCertificate(
+			domain.customCertResolver,
+			serverId,
+			organizationId,
+		)
 	) {
 		return false;
 	}
 
 	warnings.push(
 		warning(
-			`Domain "${domain.host}" references custom certificate "${domain.customCertResolver}" that is not an uploaded certificate for this server`,
+			`Domain "${domain.host}" references custom certificate "${domain.customCertResolver}" that is not an uploaded certificate with readable files for this server and organization`,
 			{
 				blocking: true,
 				code: "missing-certificate",
@@ -783,7 +800,7 @@ export const prepareCaddyMigration = async (
 		: isNull(applications.serverId);
 	const applicationRows = await db.query.applications.findMany({
 		where: appWhere,
-		with: { domains: true },
+		with: { domains: true, environment: { with: { project: true } } },
 	});
 	let applicationDomainCount = 0;
 	for (const app of applicationRows) {
@@ -809,6 +826,8 @@ export const prepareCaddyMigration = async (
 					app.appName,
 					app.serverId,
 					warnings,
+					undefined,
+					app.environment?.project?.organizationId,
 				)
 			) {
 				continue;
@@ -825,7 +844,7 @@ export const prepareCaddyMigration = async (
 		: isNull(compose.serverId);
 	const composeRows = await db.query.compose.findMany({
 		where: composeWhere,
-		with: { domains: true },
+		with: { domains: true, environment: { with: { project: true } } },
 	});
 	let composeDomainCount = 0;
 	for (const composeEntity of composeRows) {
@@ -866,6 +885,7 @@ export const prepareCaddyMigration = async (
 					composeEntity.serverId,
 					warnings,
 					domain.serviceName,
+					composeEntity.environment?.project?.organizationId,
 				)
 			) {
 				continue;
@@ -989,12 +1009,13 @@ export const prepareCaddyMigration = async (
 	}
 	warnOnManualFragmentConflicts(fragments, warnings);
 
+	const compileSettings = await getCaddyCompileSettings(serverId);
 	let config: ReturnType<typeof compileCaddyConfig>;
 	let validation: CaddyMigrationReport["validation"];
 	try {
 		config = compileCaddyConfig({
 			fragments,
-			...(await getCaddyCompileSettings(serverId)),
+			...compileSettings,
 		});
 		validation = {
 			status: "passed",
@@ -1055,6 +1076,7 @@ export const prepareCaddyMigration = async (
 			blockingWarnings: warnings.filter((item) => item.blocking).length,
 		},
 		validation,
+		compileSettings,
 		warnings,
 		events: [
 			{

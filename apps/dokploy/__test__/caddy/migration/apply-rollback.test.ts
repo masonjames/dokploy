@@ -71,6 +71,10 @@ const createReport = (migrationId: string): CaddyMigrationReport => {
 			blockingWarnings: 0,
 		},
 		validation: { status: "passed", message: "ok" },
+		compileSettings: {
+			letsEncryptEmail: null,
+			trustedProxies: null,
+		},
 		warnings: [],
 		events: [],
 	};
@@ -212,6 +216,37 @@ describe("applyCaddyMigration", () => {
 		);
 		expect(vol.existsSync(`${paths().CADDY_FRAGMENTS_PATH}/app.json`)).toBe(
 			true,
+		);
+	});
+
+	test("rejects apply when Caddy compile settings changed after prepare", async () => {
+		const report = seedMigration("caddy-apply-stale-settings");
+		vi.mocked(providerService.getCaddyCompileSettings).mockResolvedValueOnce({
+			trustedProxies: {
+				source: "cloudflare",
+			},
+		});
+
+		await expect(
+			applyCaddyMigration({ migrationId: report.migrationId }),
+		).rejects.toThrow("Caddy compile settings changed after prepare");
+
+		expect(
+			upstreamPreflight.runCaddyMigrationUpstreamPreflight,
+		).not.toHaveBeenCalled();
+		expect(settingsService.stopDockerResource).not.toHaveBeenCalled();
+		expect(settingsService.writeCaddySetup).not.toHaveBeenCalled();
+		const failedReport = JSON.parse(
+			vol.readFileSync(report.artifactPaths.reportJson, "utf8") as string,
+		) as CaddyMigrationReport;
+		expect(failedReport.status).toBe("failed");
+		expect(failedReport.warnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "apply-failed",
+					message: expect.stringContaining("Caddy compile settings changed"),
+				}),
+			]),
 		);
 	});
 

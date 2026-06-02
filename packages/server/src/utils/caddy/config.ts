@@ -298,7 +298,9 @@ const createTrustedProxyServerOptions = (
 			ranges,
 		},
 		client_ip_headers: clientIpHeaders,
-		...(trustedProxies.strict === false ? {} : { trusted_proxies_strict: 1 }),
+		...(trustedProxies.strict === false
+			? {}
+			: { trusted_proxies_strict: true }),
 	};
 };
 

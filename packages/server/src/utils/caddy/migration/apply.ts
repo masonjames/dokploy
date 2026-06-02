@@ -48,6 +48,24 @@ const updateProviderToCaddy = async (serverId?: string | null) => {
 	await updateLocalWebServerProvider("caddy");
 };
 
+type CaddyMigrationCompileSettings = NonNullable<
+	CaddyMigrationReport["compileSettings"]
+>;
+
+const normalizeCompileSettings = (
+	settings: CaddyMigrationReport["compileSettings"],
+): CaddyMigrationCompileSettings => ({
+	letsEncryptEmail: settings?.letsEncryptEmail ?? null,
+	trustedProxies: settings?.trustedProxies ?? null,
+});
+
+const compileSettingsChanged = (
+	prepared: CaddyMigrationReport["compileSettings"],
+	current: CaddyMigrationReport["compileSettings"],
+) =>
+	JSON.stringify(normalizeCompileSettings(prepared)) !==
+	JSON.stringify(normalizeCompileSettings(current));
+
 const filterCaddyAdditionalPorts = (
 	ports: { targetPort: number; publishedPort: number; protocol?: string }[],
 ) =>
@@ -273,6 +291,15 @@ const applyCaddyMigrationUnlocked = async (input: {
 			`Cannot apply Caddy migration ${input.migrationId}: active provider is ${provider}`,
 		);
 	}
+	const currentCompileSettings = await getCaddyCompileSettings(serverId);
+	if (
+		report.compileSettings &&
+		compileSettingsChanged(report.compileSettings, currentCompileSettings)
+	) {
+		const message = `Cannot apply Caddy migration ${input.migrationId}: Caddy compile settings changed after prepare. Prepare a fresh migration dry run before applying.`;
+		await markFailed(report, message, serverId);
+		throw new Error(message);
+	}
 
 	report = await writeCaddyMigrationReport(
 		appendCaddyMigrationEvent(
@@ -404,7 +431,7 @@ const applyCaddyMigrationUnlocked = async (input: {
 				report.artifactPaths.caddyJson,
 				serverId,
 			),
-			trustedProxies: (await getCaddyCompileSettings(serverId)).trustedProxies,
+			trustedProxies: currentCompileSettings.trustedProxies,
 		});
 		await copyMigrationFileInPlace(
 			report.artifactPaths.caddyJson,

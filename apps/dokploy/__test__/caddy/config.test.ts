@@ -104,7 +104,7 @@ test("compiles Cloudflare trusted proxy settings with safe client IP headers", (
 			"CF-Connecting-IP",
 			"X-Forwarded-For",
 		]);
-		expect(server.trusted_proxies_strict).toBe(1);
+		expect(server.trusted_proxies_strict).toBe(true);
 	}
 });
 
