@@ -5,7 +5,7 @@ import {
 	checkPortInUse,
 	checkPostgresHealth,
 	checkRedisHealth,
-	checkTraefikHealth,
+	checkWebServerHealth,
 	cleanupAll,
 	cleanupAllBackground,
 	cleanupBuilders,
@@ -1559,21 +1559,29 @@ export const settingsRouter = createTRPCRouter({
 		}
 	}),
 	checkInfrastructureHealth: adminProcedure.query(async () => {
+		const provider = await resolveWebServerProvider();
 		if (IS_CLOUD) {
+			const webServer = { provider, status: "healthy" as const };
 			return {
 				postgres: { status: "healthy" as const },
 				redis: { status: "healthy" as const },
-				traefik: { status: "healthy" as const },
+				webServer,
+				traefik: { status: webServer.status },
 			};
 		}
 
-		const [postgres, redis, traefik] = await Promise.all([
+		const [postgres, redis, webServer] = await Promise.all([
 			checkPostgresHealth(),
 			checkRedisHealth(),
-			checkTraefikHealth(),
+			checkWebServerHealth(provider),
 		]);
 
-		return { postgres, redis, traefik };
+		return {
+			postgres,
+			redis,
+			webServer,
+			traefik: { status: webServer.status, message: webServer.message },
+		};
 	}),
 	setupGPU: adminProcedure
 		.input(
