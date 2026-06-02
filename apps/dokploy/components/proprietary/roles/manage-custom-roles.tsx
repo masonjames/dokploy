@@ -242,11 +242,11 @@ const ACTION_META: Record<
 	traefikFiles: {
 		read: {
 			label: "Read",
-			description: "View Traefik configuration files",
+			description: "View active web server configuration files",
 		},
 		write: {
 			label: "Write",
-			description: "Edit and save Traefik configuration files",
+			description: "Edit and save active web server configuration files",
 		},
 	},
 	api: {

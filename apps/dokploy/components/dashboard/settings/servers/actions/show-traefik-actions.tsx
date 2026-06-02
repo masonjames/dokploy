@@ -31,7 +31,11 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 				? "Traefik"
 				: "Web Server";
 	const resourceName =
-		activeProvider === "caddy" ? "dokploy-caddy" : "dokploy-traefik";
+		activeProvider === "caddy"
+			? "dokploy-caddy"
+			: activeProvider === "traefik"
+				? "dokploy-traefik"
+				: null;
 
 	const { mutateAsync: reloadWebServer, isPending: reloadTraefikIsLoading } =
 		api.settings.reloadWebServer.useMutation();
@@ -73,6 +77,7 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 			<DropdownMenuTrigger
 				asChild
 				disabled={
+					!activeProvider ||
 					isLoadingProvider ||
 					reloadTraefikIsLoading ||
 					toggleDashboardIsLoading ||
@@ -115,18 +120,20 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 					>
 						<span>Reload</span>
 					</DropdownMenuItem>
-					<ShowModalLogs
-						appName={resourceName}
-						serverId={serverId}
-						type="standalone"
-					>
-						<DropdownMenuItem
-							onSelect={(e) => e.preventDefault()}
-							className="cursor-pointer"
+					{resourceName && (
+						<ShowModalLogs
+							appName={resourceName}
+							serverId={serverId}
+							type="standalone"
 						>
-							View Logs
-						</DropdownMenuItem>
-					</ShowModalLogs>
+							<DropdownMenuItem
+								onSelect={(e) => e.preventDefault()}
+								className="cursor-pointer"
+							>
+								View Logs
+							</DropdownMenuItem>
+						</ShowModalLogs>
+					)}
 					<EditTraefikEnv serverId={serverId}>
 						<DropdownMenuItem
 							onSelect={(e) => e.preventDefault()}

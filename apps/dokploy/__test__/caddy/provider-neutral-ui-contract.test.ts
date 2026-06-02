@@ -24,8 +24,15 @@ describe("provider-neutral Caddy UI contract", () => {
 		expect(source).toContain(
 			'description: "Access to the active web server file browser"',
 		);
+		expect(source).toContain(
+			'description: "View active web server configuration files"',
+		);
+		expect(source).toContain(
+			'description: "Edit and save active web server configuration files"',
+		);
 		expect(source).not.toContain("Traefik Files");
 		expect(source).not.toContain("Traefik file system configuration");
+		expect(source).not.toContain("Traefik configuration files");
 	});
 
 	test("uses generic copy while active web-server provider is unresolved", () => {
@@ -37,6 +44,8 @@ describe("provider-neutral Caddy UI contract", () => {
 		);
 
 		expect(actions).toContain(': "Web Server";');
+		expect(actions).toContain(": null;");
+		expect(actions).toContain("{resourceName && (");
 		expect(fileSystem).toContain('const isTraefik = provider === "traefik";');
 		expect(fileSystem).toContain(
 			"Provider-specific edit controls appear after Dokploy resolves the active provider.",
