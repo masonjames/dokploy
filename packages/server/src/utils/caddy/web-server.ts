@@ -85,6 +85,15 @@ export const updateServerCaddy = async (
 			} else {
 				await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
 			}
+		} else {
+			try {
+				await compileWriteAndReloadCaddyConfigSafely(compileSettings);
+			} catch (resyncError) {
+				if (error instanceof Error) {
+					(error as Error & { resyncError?: unknown }).resyncError =
+						resyncError;
+				}
+			}
 		}
 		throw error;
 	}

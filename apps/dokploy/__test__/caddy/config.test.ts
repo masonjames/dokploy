@@ -245,10 +245,17 @@ test("does not overwrite a concurrent dashboard fragment update when dashboard r
 		null,
 		2,
 	)}\n`;
+	const concurrentConfig = `${JSON.stringify(
+		compileCaddyConfig({ fragments: [concurrentDashboardFragment] }),
+		null,
+		2,
+	)}\n`;
 	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
 	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	let failedInitialValidation = false;
 	execAsyncMock.mockImplementation(async (command: string) => {
-		if (command.includes("caddy validate")) {
+		if (command.includes("caddy validate") && !failedInitialValidation) {
+			failedInitialValidation = true;
 			await writeCaddyRouteFragment(concurrentDashboardFragment);
 			throw new Error("validation failed");
 		}
@@ -263,7 +270,7 @@ test("does not overwrite a concurrent dashboard fragment update when dashboard r
 		concurrentDashboardFragment,
 	]);
 	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
-		previousConfig,
+		concurrentConfig,
 	);
 });
 
