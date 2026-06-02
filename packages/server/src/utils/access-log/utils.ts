@@ -50,6 +50,17 @@ const getHostPort = (host = "", tls?: unknown) => {
 	return tls ? "443" : "80";
 };
 
+const getHeaderValue = (
+	headers: Record<string, string[]> | undefined,
+	name: string,
+) => {
+	if (!headers) return "";
+	const match = Object.entries(headers).find(
+		([headerName]) => headerName.toLowerCase() === name.toLowerCase(),
+	);
+	return match?.[1]?.[0] ?? "";
+};
+
 const normalizeCaddyLogEntry = (
 	entry: CaddyRawAccessLogEntry,
 ): LogEntry | null => {
@@ -103,7 +114,7 @@ const normalizeCaddyLogEntry = (
 		msg: entry.msg ?? "",
 		origin_Content_Type: "",
 		request_Content_Type: "",
-		request_User_Agent: request.headers?.["User-Agent"]?.[0] ?? "",
+		request_User_Agent: getHeaderValue(request.headers, "User-Agent"),
 		time: startUTC,
 	};
 };

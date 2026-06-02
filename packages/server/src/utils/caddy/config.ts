@@ -855,6 +855,37 @@ export const compileAndWriteCaddyConfig = async (
 	return config;
 };
 
+export const compileWriteAndValidateCaddyConfigSafely = async (
+	options: CaddyFragmentStoreOptions & {
+		letsEncryptEmail?: string | null;
+		trustedProxies?: CaddyCompileOptions["trustedProxies"];
+		accessLogs?: CaddyCompileOptions["accessLogs"];
+	} = {},
+) => {
+	const previousConfig = await readCaddyConfigFileIfExists(options);
+	const config = await compileAndWriteCaddyConfig(options);
+	try {
+		await validateCaddyConfigWithContainer(options.serverId);
+	} catch (error) {
+		try {
+			if (previousConfig) {
+				await writeCaddyConfigContent(previousConfig, options);
+			} else {
+				await writeCaddyConfigFile(compileCaddyConfig(), options);
+			}
+			await validateCaddyConfigWithContainer(options.serverId);
+		} catch (restoreError) {
+			if (error instanceof Error) {
+				(error as Error & { restoreError?: unknown }).restoreError =
+					restoreError;
+			}
+			console.error("Failed to restore Caddy config:", restoreError);
+		}
+		throw error;
+	}
+	return config;
+};
+
 export const readCaddyConfigFile = async (
 	options: CaddyFragmentStoreOptions = {},
 ) => {

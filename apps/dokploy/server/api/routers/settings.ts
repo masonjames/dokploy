@@ -1,6 +1,7 @@
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import {
+	ACCESS_LOG_RETAINED_LINES,
 	applyCaddyMigration as applyCaddyMigrationCutover,
 	CLEANUP_CRON_JOB,
 	checkGPUStatus,
@@ -15,8 +16,8 @@ import {
 	cleanupImages,
 	cleanupSystem,
 	cleanupVolumes,
-	compileAndWriteCaddyConfig,
 	compileWriteAndReloadCaddyConfigSafely,
+	compileWriteAndValidateCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	execAsync,
 	findServerById,
@@ -383,12 +384,9 @@ const getLocalAccessLogPath = (provider: WebServerProvider) => {
 		: `${currentPaths.DYNAMIC_TRAEFIK_PATH}/access.log`;
 };
 
-const readAccessLogFile = async (filePath: string, readAll = false) => {
+const readAccessLogFile = async (filePath: string) => {
 	if (!existsSync(filePath)) {
 		return "";
-	}
-	if (readAll) {
-		return readFileSync(filePath, "utf8");
 	}
 
 	const recentLines: string[] = [];
@@ -401,7 +399,7 @@ const readAccessLogFile = async (filePath: string, readAll = false) => {
 		const trimmed = line.trim();
 		if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
 			recentLines.push(line);
-			if (recentLines.length > 500) {
+			if (recentLines.length > ACCESS_LOG_RETAINED_LINES) {
 				recentLines.shift();
 			}
 		}
@@ -414,7 +412,7 @@ const readActiveRequestAccessLog = async (readAll = false) => {
 	if (provider === "traefik") {
 		return (await readMonitoringConfig(readAll)) ?? "";
 	}
-	return readAccessLogFile(getLocalAccessLogPath(provider), readAll);
+	return readAccessLogFile(getLocalAccessLogPath(provider));
 };
 
 const getRequestAnalyticsState = async () => {
@@ -1606,7 +1604,9 @@ export const settingsRouter = createTRPCRouter({
 					requestLogsEnabled: input.enable,
 				});
 				try {
-					await compileAndWriteCaddyConfig(await getCaddyCompileSettings());
+					await compileWriteAndValidateCaddyConfigSafely(
+						await getCaddyCompileSettings(),
+					);
 				} catch (error) {
 					await updateWebServerSettings({
 						requestLogsEnabled: previousEnabled,

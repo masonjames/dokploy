@@ -22,6 +22,7 @@ import {
 	compileAndWriteCaddyConfig,
 	compileCaddyConfig,
 	compileWriteAndReloadCaddyConfigSafely,
+	compileWriteAndValidateCaddyConfigSafely,
 	type Domain,
 	getCaddyMigrationArtifactPaths,
 	manageCaddyDomain,
@@ -429,6 +430,42 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 	);
 	expect(validateCommand).toContain(" caddy validate --config");
 	expect(validateCommand).not.toContain("caddy\\:2.11.3 validate --config");
+});
+
+test("restores the previous Caddy config when safe validation fails without reloading", async () => {
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ routes: [route({ hosts: ["old.example.com"] })] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.mkdirSync(paths().CADDY_FRAGMENTS_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+	const consoleError = vi
+		.spyOn(console, "error")
+		.mockImplementation(() => undefined);
+
+	await expect(
+		compileWriteAndValidateCaddyConfigSafely({
+			accessLogs: { enabled: true },
+		}),
+	).rejects.toThrow("validation failed");
+
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
+	expect(
+		execAsyncMock.mock.calls.some(([command]) =>
+			(command as string).includes("caddy reload"),
+		),
+	).toBe(false);
+	consoleError.mockRestore();
 });
 
 test("reloads the restored Caddy config when safe reload fails", async () => {

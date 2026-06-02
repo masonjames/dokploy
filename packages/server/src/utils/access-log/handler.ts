@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { paths } from "@dokploy/server/constants";
+import { ACCESS_LOG_RETAINED_LINES, paths } from "@dokploy/server/constants";
 import {
 	getWebServerSettings,
 	resolveWebServerProvider,
@@ -52,13 +52,13 @@ export const startLogCleanup = async (
 					const quotedTempPath = quote([`${accessLogPath}.tmp`]);
 					if (provider === "caddy") {
 						await execAsync(
-							`tail -n 1000 ${quotedAccessLogPath} > ${quotedTempPath} && cat ${quotedTempPath} > ${quotedAccessLogPath} && rm ${quotedTempPath}`,
+							`tail -n ${ACCESS_LOG_RETAINED_LINES} ${quotedAccessLogPath} > ${quotedTempPath} && cat ${quotedTempPath} > ${quotedAccessLogPath} && rm ${quotedTempPath}`,
 						);
 						return;
 					}
 
 					await execAsync(
-						`tail -n 1000 ${quotedAccessLogPath} > ${quotedTempPath} && mv ${quotedTempPath} ${quotedAccessLogPath}`,
+						`tail -n ${ACCESS_LOG_RETAINED_LINES} ${quotedAccessLogPath} > ${quotedTempPath} && mv ${quotedTempPath} ${quotedAccessLogPath}`,
 					);
 					await execAsync("docker exec dokploy-traefik kill -USR1 1");
 				} catch (error) {

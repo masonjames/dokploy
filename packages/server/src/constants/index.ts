@@ -12,6 +12,7 @@ export const DOKPLOY_DOCKER_PORT = process.env.DOKPLOY_DOCKER_PORT
 	: undefined;
 
 export const CLEANUP_CRON_JOB = "50 23 * * *";
+export const ACCESS_LOG_RETAINED_LINES = 1000;
 
 type DockerSocketCandidate = {
 	label: string;

@@ -18,6 +18,7 @@ const serverMocks = vi.hoisted(() => ({
 	cleanupSystem: vi.fn(),
 	cleanupVolumes: vi.fn(),
 	compileAndWriteCaddyConfig: vi.fn(),
+	compileWriteAndValidateCaddyConfigSafely: vi.fn(),
 	compileWriteAndReloadCaddyConfigSafely: vi.fn(),
 	execAsync: vi.fn(),
 	findServerById: vi.fn(),
@@ -73,6 +74,7 @@ const serverMocks = vi.hoisted(() => ({
 
 vi.mock("@dokploy/server", () => ({
 	...serverMocks,
+	ACCESS_LOG_RETAINED_LINES: 1000,
 	CLEANUP_CRON_JOB: "cleanup",
 	DEFAULT_UPDATE_DATA: { latestVersion: null, updateAvailable: false },
 	IS_CLOUD: false,
@@ -102,6 +104,7 @@ vi.mock("@/server/utils/backup", () => ({
 import {
 	checkPortInUse,
 	compileAndWriteCaddyConfig,
+	compileWriteAndValidateCaddyConfigSafely,
 	getCaddyCompileSettings,
 	getWebServerResourceName,
 	getWebServerSettings,
@@ -118,6 +121,7 @@ import {
 	writeMainConfig,
 	writeWebServerSetup,
 } from "@dokploy/server";
+import { apiUpdateWebServerSettings } from "@dokploy/server/db/schema";
 import { settingsRouter } from "@/server/api/routers/settings";
 import { audit } from "@/server/api/utils/audit";
 
@@ -169,6 +173,9 @@ beforeEach(() => {
 		accessLogs: requestLogsEnabled ? { enabled: true } : null,
 	}));
 	vi.mocked(compileAndWriteCaddyConfig).mockResolvedValue({} as never);
+	vi.mocked(compileWriteAndValidateCaddyConfigSafely).mockResolvedValue(
+		{} as never,
+	);
 	vi.mocked(checkPortInUse).mockResolvedValue({ isInUse: false } as never);
 	vi.mocked(readEnvironmentVariables).mockResolvedValue("CADDY_ENV=1");
 	vi.mocked(prepareEnvironmentVariables).mockReturnValue(["CADDY_ENV=1"]);
@@ -200,6 +207,7 @@ test("keeps Traefik request toggles on the existing Traefik YAML path", async ()
 		expect.stringContaining("/etc/dokploy/traefik/dynamic/access.log"),
 	);
 	expect(compileAndWriteCaddyConfig).not.toHaveBeenCalled();
+	expect(compileWriteAndValidateCaddyConfigSafely).not.toHaveBeenCalled();
 	expect(audit).toHaveBeenCalledWith(
 		expect.anything(),
 		expect.objectContaining({ resourceName: "toggle-requests" }),
@@ -230,10 +238,11 @@ test("toggles Caddy request logs without writing Traefik main config", async () 
 		requestLogsEnabled: true,
 	});
 	expect(getCaddyCompileSettings).toHaveBeenCalledWith();
-	expect(compileAndWriteCaddyConfig).toHaveBeenCalledWith({
+	expect(compileWriteAndValidateCaddyConfigSafely).toHaveBeenCalledWith({
 		letsEncryptEmail: "ops@example.com",
 		accessLogs: { enabled: true },
 	});
+	expect(compileAndWriteCaddyConfig).not.toHaveBeenCalled();
 	expect(writeMainConfig).not.toHaveBeenCalled();
 	expect(requestLogsEnabled).toBe(true);
 });
@@ -278,7 +287,7 @@ test("preserves Caddy request-log settings when rewriting web-server setup", asy
 test("restores Caddy request-log setting when generated config write fails", async () => {
 	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
 	requestLogsEnabled = true;
-	vi.mocked(compileAndWriteCaddyConfig).mockRejectedValueOnce(
+	vi.mocked(compileWriteAndValidateCaddyConfigSafely).mockRejectedValueOnce(
 		new Error("caddy write failed") as never,
 	);
 
@@ -294,6 +303,14 @@ test("restores Caddy request-log setting when generated config write fails", asy
 	});
 	expect(requestLogsEnabled).toBe(true);
 	expect(audit).not.toHaveBeenCalled();
+});
+
+test("does not allow generic web-server settings updates to toggle Caddy request logs", () => {
+	const parsed = apiUpdateWebServerSettings.parse({
+		requestLogsEnabled: true,
+	});
+
+	expect(parsed).not.toHaveProperty("requestLogsEnabled");
 });
 
 test("reads Caddy request stats from the Caddy access-log path", async () => {
@@ -323,7 +340,7 @@ test("reads the latest Caddy request log entries for paginated stats", async () 
 	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
 	writeFileSync(
 		caddyAccessLogPath,
-		Array.from({ length: 501 }, (_, index) =>
+		Array.from({ length: 1001 }, (_, index) =>
 			JSON.stringify({ caddy: true, index }),
 		).join("\n"),
 	);
@@ -333,7 +350,29 @@ test("reads the latest Caddy request log entries for paginated stats", async () 
 	});
 
 	const rawLog = vi.mocked(parseRawConfig).mock.calls[0]?.[0] as string;
-	expect(rawLog.split("\n").filter(Boolean)).toHaveLength(500);
+	expect(rawLog.split("\n").filter(Boolean)).toHaveLength(1000);
 	expect(rawLog).not.toContain('"index":0');
-	expect(rawLog).toContain('"index":500');
+	expect(rawLog).toContain('"index":1000');
+});
+
+test("bounds Caddy date-range request stats reads to the retained line window", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+	writeFileSync(
+		caddyAccessLogPath,
+		Array.from({ length: 1001 }, (_, index) =>
+			JSON.stringify({ caddy: true, index }),
+		).join("\n"),
+	);
+
+	await caller.readStats({
+		dateRange: {
+			start: "2026-06-02T00:00:00.000Z",
+			end: "2026-06-02T23:59:59.999Z",
+		},
+	});
+
+	const rawLog = vi.mocked(processLogs).mock.calls[0]?.[0] as string;
+	expect(rawLog.split("\n").filter(Boolean)).toHaveLength(1000);
+	expect(rawLog).not.toContain('"index":0');
+	expect(rawLog).toContain('"index":1000');
 });

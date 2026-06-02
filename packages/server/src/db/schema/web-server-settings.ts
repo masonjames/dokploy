@@ -131,56 +131,58 @@ const createSchema = createInsertSchema(webServerSettings, {
 	id: z.string().min(1),
 });
 
-export const apiUpdateWebServerSettings = createSchema.partial().extend({
-	webServerProvider: z.enum(["traefik", "caddy"]).optional(),
-	caddyTrustedProxyConfig: z
-		.object({
-			mode: z.enum(["disabled", "cloudflare", "static"]),
-			ranges: z.array(z.string()).optional().nullable(),
-			clientIpHeaders: z.array(z.string()).optional().nullable(),
-			strict: z.boolean().optional().nullable(),
-		})
-		.optional()
-		.nullable(),
-	serverIp: z.string().optional(),
-	certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
-	https: z.boolean().optional(),
-	host: z.string().optional(),
-	letsEncryptEmail: z.string().email().optional().nullable(),
-	sshPrivateKey: z.string().optional(),
-	enableDockerCleanup: z.boolean().optional(),
-	requestLogsEnabled: z.boolean().optional(),
-	logCleanupCron: z.string().optional().nullable(),
-	metricsConfig: z
-		.object({
-			server: z.object({
-				type: z.enum(["Dokploy", "Remote"]),
-				refreshRate: z.number(),
-				port: z.number(),
-				token: z.string(),
-				urlCallback: z.string(),
-				retentionDays: z.number(),
-				cronJob: z.string(),
-				thresholds: z.object({
-					cpu: z.number(),
-					memory: z.number(),
+export const apiUpdateWebServerSettings = createSchema
+	.omit({ requestLogsEnabled: true })
+	.partial()
+	.extend({
+		webServerProvider: z.enum(["traefik", "caddy"]).optional(),
+		caddyTrustedProxyConfig: z
+			.object({
+				mode: z.enum(["disabled", "cloudflare", "static"]),
+				ranges: z.array(z.string()).optional().nullable(),
+				clientIpHeaders: z.array(z.string()).optional().nullable(),
+				strict: z.boolean().optional().nullable(),
+			})
+			.optional()
+			.nullable(),
+		serverIp: z.string().optional(),
+		certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
+		https: z.boolean().optional(),
+		host: z.string().optional(),
+		letsEncryptEmail: z.string().email().optional().nullable(),
+		sshPrivateKey: z.string().optional(),
+		enableDockerCleanup: z.boolean().optional(),
+		logCleanupCron: z.string().optional().nullable(),
+		metricsConfig: z
+			.object({
+				server: z.object({
+					type: z.enum(["Dokploy", "Remote"]),
+					refreshRate: z.number(),
+					port: z.number(),
+					token: z.string(),
+					urlCallback: z.string(),
+					retentionDays: z.number(),
+					cronJob: z.string(),
+					thresholds: z.object({
+						cpu: z.number(),
+						memory: z.number(),
+					}),
 				}),
-			}),
-			containers: z.object({
-				refreshRate: z.number(),
-				services: z.object({
-					include: z.array(z.string()),
-					exclude: z.array(z.string()),
+				containers: z.object({
+					refreshRate: z.number(),
+					services: z.object({
+						include: z.array(z.string()),
+						exclude: z.array(z.string()),
+					}),
 				}),
-			}),
-		})
-		.optional(),
-	cleanupCacheApplications: z.boolean().optional(),
-	cleanupCacheOnPreviews: z.boolean().optional(),
-	cleanupCacheOnCompose: z.boolean().optional(),
-	remoteServersOnly: z.boolean().optional(),
-	enforceSSO: z.boolean().optional(),
-});
+			})
+			.optional(),
+		cleanupCacheApplications: z.boolean().optional(),
+		cleanupCacheOnPreviews: z.boolean().optional(),
+		cleanupCacheOnCompose: z.boolean().optional(),
+		remoteServersOnly: z.boolean().optional(),
+		enforceSSO: z.boolean().optional(),
+	});
 
 export const apiAssignDomain = z
 	.object({

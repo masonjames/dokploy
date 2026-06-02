@@ -52,6 +52,22 @@ test("normalizes Caddy JSON access logs into the Requests table shape", () => {
 	});
 });
 
+test("normalizes Caddy user-agent headers case-insensitively", () => {
+	const result = parseRawConfig(
+		JSON.stringify({
+			...JSON.parse(caddyLogEntry),
+			request: {
+				...JSON.parse(caddyLogEntry).request,
+				headers: {
+					"user-agent": ["lowercase-agent"],
+				},
+			},
+		}),
+	);
+
+	expect(result.data[0]?.request_User_Agent).toBe("lowercase-agent");
+});
+
 test("filters and groups normalized Caddy request logs", () => {
 	const rawConfig = `${caddyLogEntry}\n${JSON.stringify({
 		...JSON.parse(caddyLogEntry),

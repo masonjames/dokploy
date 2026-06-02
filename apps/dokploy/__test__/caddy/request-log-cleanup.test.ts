@@ -22,6 +22,7 @@ vi.mock("node-schedule", () => ({
 }));
 
 vi.mock("@dokploy/server/constants", () => ({
+	ACCESS_LOG_RETAINED_LINES: 1000,
 	paths: () => ({
 		DYNAMIC_TRAEFIK_PATH: "/etc/dokploy/traefik/dynamic",
 		CADDY_ACCESS_LOG_PATH: "/etc/dokploy/caddy/access.log",
