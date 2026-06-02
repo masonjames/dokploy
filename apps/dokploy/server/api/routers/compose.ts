@@ -26,8 +26,8 @@ import {
 	randomizeIsolatedDeploymentComposeFile,
 	removeCompose,
 	removeComposeDirectory,
+	removeComposeDomainsForWebServer,
 	removeDeploymentsByComposeId,
-	removeDomainById,
 	startCompose,
 	stopCompose,
 	updateCompose,
@@ -964,9 +964,7 @@ export const composeRouter = createTRPCRouter({
 					await deleteMount(mount.mountId);
 				}
 
-				for (const domain of compose.domains) {
-					await removeDomainById(domain.domainId);
-				}
+				await removeComposeDomainsForWebServer(compose, compose.domains);
 
 				let serverIp = "127.0.0.1";
 

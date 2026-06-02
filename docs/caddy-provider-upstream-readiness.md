@@ -35,9 +35,9 @@ Local state observed before this document was added:
 | Application domain create under Caddy | `createDomain()` inserts the row, dispatches through `manageWebServerDomain()` for application domains, and removes the row if provider route creation fails. Focused service tests prove provider dispatch and cleanup when provider route creation fails. | Locally covered | Add router-level test only if maintainers want end-to-end TRPC proof. |
 | Application domain update under Caddy | `domainRouter.update` writes the next Caddy fragment before DB update and restores the old fragment on DB failure. `manageCaddyDomain()` also restores previous fragments when reload fails. | Locally covered | Add runtime proof after explicit approval. |
 | Application domain delete under Caddy | `domainRouter.delete` removes provider config before DB deletion and restores on DB failure. `removeCaddyDomain()` also restores previous fragments when reload fails. | Locally covered | Add runtime proof after explicit approval. |
-| Compose domain add/update/remove under Caddy | `createComposeDomain()` removes new rows if refresh fails. `domainRouter.update` restores previous compose domain fields and fragments if refresh fails. `domainRouter.delete` restores all compose routes if DB delete fails. | Locally covered | Add runtime proof after explicit approval. |
+| Compose domain add/update/remove under Caddy | `createComposeDomain()` removes new rows if refresh fails. `removeComposeDomainsForWebServer()` refreshes Caddy with remaining compose domains before non-router delete flows remove rows and restores old fragments if DB deletion fails. `domainRouter.update` restores previous compose domain fields and fragments if refresh fails. `domainRouter.delete` restores all compose routes if DB delete fails. | Locally covered | Add runtime proof after explicit approval. |
 | Domain added while creating/duplicating a new application service | `application.create` has no domain payload. The application new-service-with-domain path is project duplication: copied application domains call `createDomain()` with `applicationId`, which invokes provider dispatch. | Locally covered | Add router-level duplication proof only if maintainers want end-to-end TRPC coverage beyond the service contract. |
-| Domain added during new compose/template/AI/import creation | `createComposeDomain()` now creates compose domains and refreshes Caddy compose routes with rollback if refresh fails. Template create, template import, AI compose generation, project compose duplication, and `domainRouter.create` use it. | Locally covered | Add router-level or creation-flow tests if upstream reviewers want proof beyond the focused helper test. |
+| Domain added during new compose/template/AI/import creation | `createComposeDomain()` now creates compose domains and refreshes Caddy compose routes with rollback if refresh fails. Template create, template import, AI compose generation, project compose duplication, and `domainRouter.create` use it. Template import also removes prior compose domains through `removeComposeDomainsForWebServer()` so importing a template with zero replacement domains removes stale Caddy fragments. | Locally covered | Add router-level or creation-flow tests if upstream reviewers want proof beyond the focused helper test. |
 | Preview domains under Caddy | Preview deployment uses `manageWebServerDomain()` for create and requires `removeWebServerDomain()` cleanup before deleting a preview deployment row when a preview domain exists. Focused tests prove the preview app name is set before provider dispatch, cleanup removes by `uniqueConfigKey`, and route cleanup failures preserve the DB row. | Locally covered | Add runtime proof after explicit approval if preview deployments are included in the live validation pass. |
 | Custom SSL certificates | Caddy domains can now select uploaded certificates. Route intents reference certificate/key files and compiled Caddy JSON emits `apps.tls.certificates.load_files`. Backend guards require matching server/org context and readable `chain.crt` plus `privkey.key`; active Caddy domains block certificate file replacement/deletion until the domain is changed. | Locally covered | Add runtime proof after explicit approval. Consider a follow-up schema rename because Caddy currently stores the uploaded certificate path in the existing `customCertResolver` field. |
 | LetsEncrypt / automatic HTTPS | Caddy application and compose fragments set `https` from domain settings and pass local LetsEncrypt email where available. Config and route lifecycle tests cover the generated ACME paths. | Locally covered | Add runtime proof after explicit approval. |
@@ -124,13 +124,15 @@ Preferred design:
 - Move the router-local Caddy compose refresh behavior into a reusable helper.
 - Make it no-op for Traefik and refresh Caddy compose fragments when the active provider is Caddy.
 - Call it after compose domain creation in template create, template import, AI compose generation, and project duplication paths.
-- Keep rollback behavior local to the compose domain creation helper.
+- Keep rollback behavior local to shared compose domain create/delete helpers.
 
 Implemented:
 
-- `packages/server/src/services/domain.ts` exports `refreshCaddyComposeRoutes()` and `createComposeDomain()`.
+- `packages/server/src/services/domain.ts` exports `refreshCaddyComposeRoutes()`, `createComposeDomain()`, and `removeComposeDomainsForWebServer()`.
 - `domainRouter.create`, template create, template import, AI compose generation, and project compose duplication now use `createComposeDomain()`.
+- Template import removes old compose domain rows through `removeComposeDomainsForWebServer()` so Caddy fragments are refreshed even when the imported template has no replacement domains.
 - `apps/dokploy/__test__/caddy/compose/domain.test.ts` proves the helper writes Caddy fragments for domains created outside the domain router and skips refresh for Traefik.
+- `apps/dokploy/__test__/caddy/application/domain-service.test.ts` proves imported-template domain deletion refreshes Caddy with zero remaining domains, restores old routes if DB deletion fails, and skips Caddy refresh under Traefik.
 
 Required tests:
 
@@ -139,6 +141,7 @@ Required tests:
 - AI compose generation under active Caddy writes fragments.
 - Project compose duplication under active Caddy writes fragments.
 - Failure to write/reload Caddy leaves no orphaned domain rows or restores previous route fragments.
+- Template import with zero replacement domains removes stale Caddy fragments.
 
 ### 3. Make preview domains provider-aware
 
@@ -364,6 +367,10 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, and `git diff --check` | Passed | App/server typechecks and whitespace checks passed after the shared validation cleanup. Node v26 produced the expected engine warning. |
 | 2026-06-02 | Provider-neutral Caddy UI copy pass | Complete | Updated trusted-proxy Cloudflare SSL guidance, migration stale-settings safety copy, and provider-neutral additional port mapping text. |
 | 2026-06-02 | Upstream hygiene audit against `upstream/canary...HEAD` | Passed | 88 changed files. No `prompt-exports/`, `docs/plans/`, `docs/reviews/`, `AGENTS.md`, or `CLAUDE.md` in the PR surface. Private-string scan only found generic test values such as `private.registry.example` and HTTP cache header text. Commit subjects are generic. |
+| 2026-06-02 | RepoPrompt Deep Plan pass for remaining Caddy PR gaps | Complete | Identified template import domain deletion as the highest-value production correctness gap because direct row deletion could leave stale Caddy compose fragments when an imported template has no replacement domains. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/application/domain-service.test.ts` | Passed | 1 file, 6 tests. Covers provider-aware application create, compose create cleanup, imported-template compose domain delete refresh with zero remaining domains, DB-delete rollback restoration, and Traefik no-op behavior. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 19 files, 114 tests after template-import compose-domain deletion hardening. Covers focused Caddy config, certificates, domain lifecycle, validation, preview cleanup, migration prepare/apply/rollback, upstream preflight, and runtime migration tests. |
+| 2026-06-02 | `pnpm --filter=dokploy typecheck` and `pnpm --filter=@dokploy/server typecheck` | Passed | App and server package typechecks passed after template-import compose-domain deletion hardening. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
 
 ## Upstream Hygiene Checklist
 

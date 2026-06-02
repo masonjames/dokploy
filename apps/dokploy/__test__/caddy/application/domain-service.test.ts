@@ -36,6 +36,7 @@ import { findApplicationById } from "@dokploy/server/services/application";
 import {
 	createComposeDomain,
 	createDomain,
+	removeComposeDomainsForWebServer,
 } from "@dokploy/server/services/domain";
 import {
 	getCaddyComposeRouteTargetsForWebServer,
@@ -59,6 +60,13 @@ const composeDomain = {
 	domainType: "compose",
 };
 
+const retainedComposeDomain = {
+	...composeDomain,
+	domainId: "domain-2",
+	host: "retained.example.com",
+	uniqueConfigKey: 8,
+};
+
 const application = {
 	applicationId: "app-1",
 	appName: "my-app",
@@ -73,7 +81,7 @@ beforeEach(() => {
 		}),
 	});
 	transactionMock.mockImplementation(async (callback) => {
-		const tx = { insert: txInsertMock };
+		const tx = { delete: dbDeleteMock, insert: txInsertMock };
 		return callback(tx);
 	});
 	domainsFindFirstMock.mockResolvedValue(domain);
@@ -151,4 +159,83 @@ test("removes compose domain rows when Caddy compose route refresh fails after c
 
 	expect(dbDeleteMock).toHaveBeenCalled();
 	expect(writeCaddyComposeRoutesForTargets).toHaveBeenCalledTimes(2);
+});
+
+test("refreshes Caddy compose routes with zero remaining domains before deleting imported template domains", async () => {
+	domainsFindManyMock.mockResolvedValueOnce([composeDomain]);
+
+	const removed = await removeComposeDomainsForWebServer(
+		{
+			composeId: "compose-1",
+			appName: "my-compose",
+			serverId: null,
+		} as never,
+		[composeDomain] as never,
+		"caddy",
+	);
+
+	expect(removed).toEqual([composeDomain]);
+	expect(getCaddyComposeRouteTargetsForWebServer).toHaveBeenCalledWith(
+		expect.objectContaining({ composeId: "compose-1" }),
+		[],
+		"caddy",
+	);
+	expect(dbDeleteMock).toHaveBeenCalled();
+	expect(writeCaddyComposeRoutesForTargets).toHaveBeenCalledTimes(1);
+});
+
+test("restores Caddy compose routes if imported template domain deletion fails", async () => {
+	domainsFindManyMock.mockResolvedValueOnce([
+		composeDomain,
+		retainedComposeDomain,
+	]);
+	dbDeleteMock.mockReturnValueOnce({
+		where: vi.fn().mockReturnValue({
+			returning: vi.fn().mockRejectedValue(new Error("db delete failed")),
+		}),
+	});
+
+	await expect(
+		removeComposeDomainsForWebServer(
+			{
+				composeId: "compose-1",
+				appName: "my-compose",
+				serverId: null,
+			} as never,
+			[composeDomain] as never,
+			"caddy",
+		),
+	).rejects.toThrow("db delete failed");
+
+	expect(getCaddyComposeRouteTargetsForWebServer).toHaveBeenNthCalledWith(
+		1,
+		expect.objectContaining({ composeId: "compose-1" }),
+		[retainedComposeDomain],
+		"caddy",
+	);
+	expect(getCaddyComposeRouteTargetsForWebServer).toHaveBeenNthCalledWith(
+		2,
+		expect.objectContaining({ composeId: "compose-1" }),
+		[composeDomain, retainedComposeDomain],
+		"caddy",
+	);
+	expect(writeCaddyComposeRoutesForTargets).toHaveBeenCalledTimes(2);
+});
+
+test("deletes imported template compose domains without Caddy refresh under Traefik", async () => {
+	domainsFindManyMock.mockResolvedValueOnce([composeDomain]);
+
+	await removeComposeDomainsForWebServer(
+		{
+			composeId: "compose-1",
+			appName: "my-compose",
+			serverId: null,
+		} as never,
+		[composeDomain] as never,
+		"traefik",
+	);
+
+	expect(getCaddyComposeRouteTargetsForWebServer).not.toHaveBeenCalled();
+	expect(writeCaddyComposeRoutesForTargets).not.toHaveBeenCalled();
+	expect(dbDeleteMock).toHaveBeenCalled();
 });
