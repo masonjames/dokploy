@@ -18,16 +18,19 @@ Observed with `gh pr view 4534 --repo Dokploy/dokploy`:
 
 - State: open
 - Base: `canary`
+- Base SHA: `6a0acd9cad0a00f2ef09a10124d2d40f57e220f6`
 - Head: `codex/caddy-web-server-v0296-clean-pr`
 - Mergeable: mergeable
 - Review decision: review required
-- Visible check: `anti-slop` succeeded
+- Visible checks: none reported immediately after the rebased branch push
 
-Local state observed before this document was added:
+Local state observed after the rebased branch push:
 
 - Repo: local Dokploy checkout
 - Branch: `codex/caddy-web-server-v0296-clean-pr`
-- Working tree: clean except the RepoPrompt export generated during planning, which must not be kept in the PR surface
+- Working tree: clean
+- Upstream base: `upstream/canary`
+- Remote branch: `origin/codex/caddy-web-server-v0296-clean-pr` matched local `HEAD`
 
 ## Readiness Matrix
 
@@ -490,6 +493,11 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/provider-neutral-ui-contract.test.ts __test__/caddy/certificate-guard.test.ts __test__/caddy/compose-domain-call-sites.test.ts __test__/caddy/compose/domain.test.ts __test__/caddy/application/domain-service.test.ts __test__/caddy/domain-router-lifecycle.test.ts` | Passed | 6 files, 37 tests. Covers provider-neutral env UI contracts, custom certificate org-context guards, compose-domain source contracts, compose helper behavior, service-level rollback, and router lifecycle rollback with organization context threaded through refresh calls. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 29 files, 193 tests after provider-neutral env-editor and compose certificate org-context hardening. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, compose-domain call-site contracts, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, dashboard rewrite rollback/settings compensation, provider-aware application config cache invalidation, provider-neutral UI contracts, remote web-server file-system inspection, direct dashboard toggle rejection, and concurrent dashboard-fragment preservation. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, `pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true <touched files>`, and `git diff --check` | Passed | App/server typechecks, formatter/import checks, and whitespace checks passed after provider-neutral env-editor and compose certificate org-context hardening. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
+| 2026-06-02 | RepoPrompt review mode over git compare `back:3` before PR push | Complete | Review findings incorporated locally: concurrent dashboard-fragment updates now trigger a second compile/reload from the preserved fragment store, and compose deploy/rebuild route-refresh org context is protected by a source-contract test tied to `findComposeById()` loading `environment.project`. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/config.test.ts __test__/caddy/compose-domain-call-sites.test.ts` | Passed | 2 files, 30 tests. Covers concurrent dashboard-fragment active-config resync and compose deploy/rebuild route-refresh org-context source contracts. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 29 files, 194 tests after the final RepoPrompt `back:3` review follow-up. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, compose-domain call-site contracts, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, dashboard rewrite rollback/settings compensation, provider-aware application web-server config cache invalidation, provider-neutral UI contracts, remote web-server file-system inspection, direct dashboard toggle rejection, concurrent dashboard-fragment preservation, and active-config resync after a concurrent dashboard update. |
+| 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, `pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true <PR file set>`, `git diff --check`, and `git merge-tree --write-tree HEAD upstream/canary` | Passed | App/server typechecks, formatter/import checks over 109 recognized PR files, whitespace checks, and clean merge-tree verification passed after rebasing onto `upstream/canary`. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
+| 2026-06-02 | `git push --force-with-lease origin codex/caddy-web-server-v0296-clean-pr` and `gh pr view 4534 --repo Dokploy/dokploy` | Passed | PR branch updated after rebasing onto current `upstream/canary`; GitHub reported PR `#4534` open, non-draft, mergeable, review required, and no checks reported immediately after push. |
 
 ## Upstream Hygiene Checklist
 
