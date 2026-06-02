@@ -5,6 +5,7 @@ import {
 	reloadCaddyAfterValidation,
 	validateCaddyConfigWithContainer,
 } from "../utils/caddy/config";
+import type { CaddyTrustedProxyConfig } from "../utils/caddy/types";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 
 export const CADDY_SSL_PORT =
@@ -24,12 +25,14 @@ export interface CaddyOptions {
 		protocol?: string;
 	}[];
 	letsEncryptEmail?: string | null;
+	trustedProxies?: CaddyTrustedProxyConfig | null;
 }
 
 const getCaddyMounts = (serverId?: string) => {
 	const { CADDY_CONFIG_DIR_PATH, CADDY_DATA_PATH, MAIN_CADDY_PATH } = paths(
 		!!serverId,
 	);
+	const { CERTIFICATES_PATH } = paths(!!serverId);
 
 	return {
 		MAIN_CADDY_PATH,
@@ -37,6 +40,7 @@ const getCaddyMounts = (serverId?: string) => {
 			`${MAIN_CADDY_PATH}:/etc/caddy`,
 			`${CADDY_DATA_PATH}:/data`,
 			`${CADDY_CONFIG_DIR_PATH}:/config`,
+			`${CERTIFICATES_PATH}:${CERTIFICATES_PATH}:ro`,
 		],
 		serviceMounts: [
 			{
@@ -53,6 +57,12 @@ const getCaddyMounts = (serverId?: string) => {
 				Type: "bind" as const,
 				Source: CADDY_CONFIG_DIR_PATH,
 				Target: "/config",
+			},
+			{
+				Type: "bind" as const,
+				Source: CERTIFICATES_PATH,
+				Target: CERTIFICATES_PATH,
+				ReadOnly: true,
 			},
 		],
 	};
@@ -144,8 +154,13 @@ export const initializeStandaloneCaddy = async ({
 	serverId,
 	additionalPorts = [],
 	letsEncryptEmail,
+	trustedProxies,
 }: CaddyOptions = {}) => {
-	await ensureDefaultCaddyConfig({ serverId, letsEncryptEmail });
+	await ensureDefaultCaddyConfig({
+		serverId,
+		letsEncryptEmail,
+		trustedProxies,
+	});
 	const imageName = `caddy:${CADDY_VERSION}`;
 	const containerName = "dokploy-caddy";
 	const { binds } = getCaddyMounts(serverId);
@@ -196,8 +211,13 @@ export const initializeCaddyService = async ({
 	additionalPorts = [],
 	serverId,
 	letsEncryptEmail,
+	trustedProxies,
 }: CaddyOptions) => {
-	await ensureDefaultCaddyConfig({ serverId, letsEncryptEmail });
+	await ensureDefaultCaddyConfig({
+		serverId,
+		letsEncryptEmail,
+		trustedProxies,
+	});
 	const imageName = `caddy:${CADDY_VERSION}`;
 	const appName = "dokploy-caddy";
 	const { serviceMounts } = getCaddyMounts(serverId);

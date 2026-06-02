@@ -779,6 +779,7 @@ export const writeCaddySetup = async (input: CaddyOptions) => {
 			additionalPorts: input.additionalPorts,
 			serverId: input.serverId,
 			letsEncryptEmail: input.letsEncryptEmail,
+			trustedProxies: input.trustedProxies,
 		});
 		await reconnectServicesToWebServer("dokploy-caddy", input.serverId);
 	} else {
@@ -787,6 +788,7 @@ export const writeCaddySetup = async (input: CaddyOptions) => {
 			additionalPorts: input.additionalPorts,
 			serverId: input.serverId,
 			letsEncryptEmail: input.letsEncryptEmail,
+			trustedProxies: input.trustedProxies,
 		});
 
 		await reconnectServicesToWebServer("dokploy-caddy", input.serverId);

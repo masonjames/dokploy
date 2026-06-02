@@ -17,13 +17,17 @@ import {
 	type ApplicationNested,
 	type CaddyRouteFragment,
 	type CaddyRouteIntent,
+	CLOUDFLARE_TRUSTED_PROXY_RANGES,
+	caddyTrustedProxySettingsToConfig,
 	compileAndWriteCaddyConfig,
 	compileCaddyConfig,
 	type Domain,
 	getCaddyMigrationArtifactPaths,
 	manageCaddyDomain,
+	normalizeCaddyTrustedProxySettings,
 	paths,
 	readCaddyRouteFragments,
+	removeCaddyDomain,
 	validateCaddyConfigFileWithImage,
 	writeCaddyRouteFragment,
 } from "@dokploy/server";
@@ -76,6 +80,96 @@ test("compiles explicit http and https servers with managed HTTPS redirect", () 
 	expect((config.apps as any).tls.automation.policies[0].issuers[0].email).toBe(
 		"ops@example.com",
 	);
+	expect(servers.http.trusted_proxies).toBeUndefined();
+	expect(servers.https.trusted_proxies).toBeUndefined();
+	expect(servers.http.client_ip_headers).toBeUndefined();
+	expect(servers.https.client_ip_headers).toBeUndefined();
+});
+
+test("compiles Cloudflare trusted proxy settings with safe client IP headers", () => {
+	const config = compileCaddyConfig({
+		routes: [route({ https: true })],
+		trustedProxies: {
+			source: "cloudflare",
+		},
+	});
+
+	const servers = getServers(config);
+	for (const server of [servers.http, servers.https]) {
+		expect(server.trusted_proxies).toEqual({
+			source: "static",
+			ranges: [...CLOUDFLARE_TRUSTED_PROXY_RANGES],
+		});
+		expect(server.client_ip_headers).toEqual([
+			"CF-Connecting-IP",
+			"X-Forwarded-For",
+		]);
+		expect(server.trusted_proxies_strict).toBe(1);
+	}
+});
+
+test("compiles custom static trusted proxy ranges", () => {
+	const config = compileCaddyConfig({
+		routes: [route()],
+		trustedProxies: {
+			source: "static",
+			ranges: ["192.0.2.0/24", "2001:db8::/32"],
+			clientIpHeaders: ["X-Forwarded-For"],
+			strict: false,
+		},
+	});
+
+	const servers = getServers(config);
+	expect(servers.http).toMatchObject({
+		trusted_proxies: {
+			source: "static",
+			ranges: ["192.0.2.0/24", "2001:db8::/32"],
+		},
+		client_ip_headers: ["X-Forwarded-For"],
+	});
+	expect(servers.http.trusted_proxies_strict).toBeUndefined();
+	expect(servers.https.trusted_proxies).toEqual(servers.http.trusted_proxies);
+});
+
+test("normalizes persisted Caddy trusted proxy settings", () => {
+	const settings = normalizeCaddyTrustedProxySettings({
+		mode: "static",
+		ranges: [" 192.0.2.0/24 ", "192.0.2.0/24"],
+		clientIpHeaders: [" X-Forwarded-For ", ""],
+		strict: null,
+	});
+
+	expect(settings).toEqual({
+		mode: "static",
+		ranges: ["192.0.2.0/24"],
+		clientIpHeaders: ["X-Forwarded-For"],
+		strict: true,
+	});
+	expect(caddyTrustedProxySettingsToConfig(settings)).toEqual({
+		source: "static",
+		ranges: ["192.0.2.0/24"],
+		clientIpHeaders: ["X-Forwarded-For"],
+		strict: true,
+	});
+	expect(normalizeCaddyTrustedProxySettings({ mode: "disabled" })).toBeNull();
+});
+
+test("rejects invalid trusted proxy settings before writing Caddy config", () => {
+	expect(() =>
+		compileCaddyConfig({
+			trustedProxies: { source: "static", ranges: ["192.0.2.0/33"] },
+		}),
+	).toThrow("Invalid Caddy trusted proxy prefix");
+
+	expect(() =>
+		compileCaddyConfig({
+			trustedProxies: {
+				source: "static",
+				ranges: ["192.0.2.0/24"],
+				clientIpHeaders: ["X-Forwarded-For", "x-forwarded-for"],
+			},
+		}),
+	).toThrow("Duplicate Caddy trusted proxy client IP header");
 });
 
 test("sorts routes by priority before path specificity and stable id", () => {
@@ -305,6 +399,9 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 	expect(validateCommand).toContain(
 		"/etc/dokploy/caddy/migrations/test/.validate-runtime/config\\:/config",
 	);
+	expect(validateCommand).toContain(
+		`${paths().CERTIFICATES_PATH}\\:${paths().CERTIFICATES_PATH}\\:ro`,
+	);
 	expect(validateCommand).toContain(" caddy validate --config");
 	expect(validateCommand).not.toContain("caddy\\:2.11.3 validate --config");
 });
@@ -347,6 +444,31 @@ test("restores previous fragments when Caddy domain reload fails", async () => {
 				uniqueConfigKey: 7,
 				createdAt: "",
 			} as Domain,
+		),
+	).rejects.toThrow("validation failed");
+
+	expect(await readCaddyRouteFragments()).toEqual([existingFragment]);
+});
+
+test("restores removed fragments when Caddy domain removal reload fails", async () => {
+	const existingFragment: CaddyRouteFragment = {
+		version: 1,
+		id: "application.my-app.7",
+		source: "dokploy-application",
+		routes: [route({ id: "existing", hosts: ["old.example.com"] })],
+	};
+	await writeCaddyRouteFragment(existingFragment);
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(
+		removeCaddyDomain(
+			{ appName: "my-app", serverId: null } as ApplicationNested,
+			7,
 		),
 	).rejects.toThrow("validation failed");
 

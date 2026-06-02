@@ -2,6 +2,7 @@ import {
 	createApplication,
 	createBackup,
 	createCompose,
+	createComposeDomain,
 	createDomain,
 	createLibsql,
 	createMariadb,
@@ -977,7 +978,7 @@ export const projectRouter = createTRPCRouter({
 
 								for (const domain of domains) {
 									const { domainId, ...rest } = domain;
-									await createDomain({
+									await createComposeDomain(newCompose, {
 										...rest,
 										composeId: newCompose.composeId,
 										domainType: "compose",

@@ -185,6 +185,15 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 		);
 	const isCaddyProvider = activeProvider === "caddy";
 
+	const { data: certificates } = api.certificates.all.useQuery(undefined, {
+		enabled: isOpen && isCaddyProvider,
+	});
+	const caddyCertificates = (certificates ?? []).filter((certificate) =>
+		application?.serverId
+			? certificate.serverId === application.serverId
+			: !certificate.serverId,
+	);
+
 	const { data: canGenerateTraefikMeDomains } =
 		api.domain.canGenerateTraefikMeDomains.useQuery({
 			serverId: application?.serverId || "",
@@ -291,13 +300,6 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 	};
 
 	const onSubmit = async (data: Domain) => {
-		if (isCaddyProvider && data.certificateType === "custom") {
-			toast.error(
-				"Caddy does not support Traefik custom certificate resolvers. Choose Let's Encrypt or None.",
-			);
-			return;
-		}
-
 		await mutateAsync({
 			domainId,
 			...(data.domainType === "application" && {
@@ -360,9 +362,9 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 				{isCaddyProvider && (
 					<AlertBlock type="info" className="mb-4">
 						This server uses Caddy. Dokploy will generate Caddy route fragments,
-						Caddy will manage HTTPS certificates for public DNS names, and
-						Traefik-only custom entrypoints, middleware references, and custom
-						certificate resolvers are hidden.
+						Caddy can manage HTTPS certificates for public DNS names or load an
+						uploaded certificate, and Traefik-only custom entrypoints and
+						middleware references are hidden.
 					</AlertBlock>
 				)}
 
@@ -795,11 +797,11 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 																		? "Caddy-managed HTTPS (ACME)"
 																		: "Let's Encrypt"}
 																</SelectItem>
-																{!isCaddyProvider && (
-																	<SelectItem value={"custom"}>
-																		Custom
-																	</SelectItem>
-																)}
+																<SelectItem value={"custom"}>
+																	{isCaddyProvider
+																		? "Uploaded certificate"
+																		: "Custom"}
+																</SelectItem>
 															</SelectContent>
 														</Select>
 														<FormMessage />
@@ -809,11 +811,48 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 										/>
 
 										{isCaddyProvider && certificateType === "custom" && (
-											<AlertBlock type="warning">
-												This domain uses a Traefik custom certificate resolver.
-												Caddy does not use resolver names; choose Caddy-managed
-												HTTPS or None before saving.
-											</AlertBlock>
+											<FormField
+												control={form.control}
+												name="customCertResolver"
+												render={({ field }) => {
+													return (
+														<FormItem>
+															<FormLabel>Uploaded Certificate</FormLabel>
+															{caddyCertificates.length > 0 ? (
+																<Select
+																	onValueChange={(value) => {
+																		field.onChange(value);
+																		form.trigger("customCertResolver");
+																	}}
+																	value={field.value}
+																>
+																	<FormControl>
+																		<SelectTrigger>
+																			<SelectValue placeholder="Select an uploaded certificate" />
+																		</SelectTrigger>
+																	</FormControl>
+																	<SelectContent>
+																		{caddyCertificates.map((certificate) => (
+																			<SelectItem
+																				key={certificate.certificateId}
+																				value={certificate.certificatePath}
+																			>
+																				{certificate.name}
+																			</SelectItem>
+																		))}
+																	</SelectContent>
+																</Select>
+															) : (
+																<AlertBlock type="warning">
+																	Add an uploaded certificate for this server
+																	before selecting custom HTTPS.
+																</AlertBlock>
+															)}
+															<FormMessage />
+														</FormItem>
+													);
+												}}
+											/>
 										)}
 
 										{!isCaddyProvider && certificateType === "custom" && (

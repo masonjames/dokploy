@@ -1,6 +1,6 @@
 import type { Compose } from "@dokploy/server/services/compose";
 import type { Domain } from "@dokploy/server/services/domain";
-import { getWebServerSettings } from "@dokploy/server/services/web-server-settings";
+import { getCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import {
 	compileWriteAndReloadCaddyConfigSafely,
 	readCaddyRouteFragments,
@@ -8,7 +8,11 @@ import {
 	restoreCaddyRouteFragments,
 	writeCaddyRouteFragment,
 } from "./config";
-import { assertCaddyDomainSupported } from "./domain";
+import {
+	assertCaddyDomainCertificateAvailable,
+	assertCaddyDomainSupported,
+	getCaddyCustomCertificateFiles,
+} from "./domain";
 import type { CaddyRouteFragment, CaddyRouteIntent } from "./types";
 import { getCaddyComposeRuntimeTarget } from "./upstream-targets";
 
@@ -34,7 +38,10 @@ const createCaddyRouteId = (appName: string, uniqueConfigKey: number) =>
 	`${appName}-compose-route-${uniqueConfigKey}`;
 
 export const createCaddyComposeRouteIntent = (
-	compose: Pick<Compose, "appName" | "composeType" | "isolatedDeployment">,
+	compose: Pick<
+		Compose,
+		"appName" | "composeType" | "isolatedDeployment" | "serverId"
+	>,
 	domain: Domain,
 	finalServiceName: string,
 	options: {
@@ -62,6 +69,13 @@ export const createCaddyComposeRouteIntent = (
 		https: domain.https && !domain.customEntrypoint,
 		upstreams: [`http://${upstreamServiceName}:${domain.port || 80}`],
 		upstreamNetwork,
+		tlsCertificate:
+			domain.certificateType === "custom" && domain.customCertResolver
+				? getCaddyCustomCertificateFiles(
+						compose.serverId,
+						domain.customCertResolver,
+					)
+				: null,
 		transforms: {
 			stripPrefix: domain.stripPath ? publicPath : null,
 			addPrefix: internalPath,
@@ -70,7 +84,10 @@ export const createCaddyComposeRouteIntent = (
 };
 
 export const createCaddyComposeRouteFragment = (
-	compose: Pick<Compose, "appName" | "composeType" | "isolatedDeployment">,
+	compose: Pick<
+		Compose,
+		"appName" | "composeType" | "isolatedDeployment" | "serverId"
+	>,
 	domain: Domain,
 	finalServiceName: string,
 	options: {
@@ -87,17 +104,14 @@ export const createCaddyComposeRouteFragment = (
 	],
 });
 
-const getLocalLetsEncryptEmail = async (serverId?: string | null) => {
-	if (serverId) return null;
-	const settings = await getWebServerSettings();
-	return settings?.letsEncryptEmail;
-};
-
 export const writeCaddyComposeRouteFragments = async (
 	compose: Compose,
 	domains: Array<{ domain: Domain; finalServiceName: string }>,
 ) => {
 	const serverId = compose.serverId || undefined;
+	for (const { domain } of domains) {
+		await assertCaddyDomainCertificateAvailable(serverId, domain);
+	}
 	const options = { serverId };
 	const fragmentPrefix = getCaddyComposeFragmentPrefix(compose.appName);
 	const nextFragmentIds = new Set(
@@ -134,7 +148,7 @@ export const writeCaddyComposeRouteFragments = async (
 
 		await compileWriteAndReloadCaddyConfigSafely({
 			serverId,
-			letsEncryptEmail: await getLocalLetsEncryptEmail(serverId),
+			...(await getCaddyCompileSettings(serverId)),
 		});
 	} catch (error) {
 		await restoreCaddyRouteFragments(existingFragments, options);

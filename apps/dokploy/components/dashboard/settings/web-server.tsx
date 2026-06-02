@@ -14,6 +14,7 @@ import { ShowStorageActions } from "./servers/actions/show-storage-actions";
 import { ShowTraefikActions } from "./servers/actions/show-traefik-actions";
 import { ToggleDockerCleanup } from "./servers/actions/toggle-docker-cleanup";
 import { CaddyMigrationPanel } from "./web-server/caddy-migration-panel";
+import { CaddyTrustedProxySettings } from "./web-server/caddy-trusted-proxy-settings";
 import { UpdateServer } from "./web-server/update-server";
 import { WebServerProviderSelector } from "./web-server/web-server-provider-selector";
 
@@ -46,6 +47,7 @@ export const WebServer = () => {
 					<CardContent className="space-y-6 py-6 border-t">
 						<WebServerProviderSelector />
 						<CaddyMigrationPanel />
+						<CaddyTrustedProxySettings />
 
 						<div className="grid md:grid-cols-2 gap-4">
 							<ShowDokployActions />

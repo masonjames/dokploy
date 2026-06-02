@@ -27,6 +27,11 @@ export interface CaddyStaticResponse {
 	headers?: CaddyHeaderMap | null;
 }
 
+export interface CaddyTlsCertificateFile {
+	certificate: string;
+	key: string;
+}
+
 export interface CaddyBasicAuthAccount {
 	username: string;
 	hash: string;
@@ -45,6 +50,7 @@ export interface CaddyRouteIntent {
 	upstreamNetwork?: string | null;
 	transforms?: CaddyRouteTransform | null;
 	basicAuth?: CaddyBasicAuthAccount[] | null;
+	tlsCertificate?: CaddyTlsCertificateFile | null;
 	redirectScheme?: CaddyRouteRedirectScheme | null;
 	staticResponse?: CaddyStaticResponse | null;
 }
@@ -57,10 +63,25 @@ export interface CaddyRouteFragment {
 	routes: CaddyRouteIntent[];
 }
 
+export interface CaddyTrustedProxyConfig {
+	source: "static" | "cloudflare";
+	ranges?: string[] | null;
+	clientIpHeaders?: string[] | null;
+	strict?: boolean | null;
+}
+
+export interface CaddyTrustedProxySettings {
+	mode: "disabled" | "cloudflare" | "static";
+	ranges?: string[] | null;
+	clientIpHeaders?: string[] | null;
+	strict?: boolean | null;
+}
+
 export interface CaddyCompileOptions {
 	fragments?: CaddyRouteFragment[];
 	routes?: CaddyRouteIntent[];
 	letsEncryptEmail?: string | null;
+	trustedProxies?: CaddyTrustedProxyConfig | null;
 }
 
 export type CaddyJsonObject = Record<string, unknown>;

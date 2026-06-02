@@ -3,6 +3,7 @@ import {
 	compileCaddyConfig,
 	createCaddyApplicationRouteFragment,
 	getCaddyApplicationFragmentId,
+	paths,
 } from "@dokploy/server";
 import { expect, test } from "vitest";
 
@@ -103,6 +104,31 @@ test("HTTPS application routes redirect HTTP and proxy on HTTPS", () => {
 	});
 });
 
+test("loads uploaded certificates for custom Caddy HTTPS routes", () => {
+	const fragment = createCaddyApplicationRouteFragment(
+		app(),
+		domain({
+			https: true,
+			certificateType: "custom",
+			customCertResolver: "certificate-uploaded",
+		}),
+	);
+	const config = compileCaddyConfig({ fragments: [fragment] });
+	const tls = (config.apps as any).tls;
+	const certificatePath = `${paths(false).CERTIFICATES_PATH}/certificate-uploaded`;
+
+	expect(tls.certificates.load_files).toEqual([
+		{
+			certificate: `${certificatePath}/chain.crt`,
+			key: `${certificatePath}/privkey.key`,
+		},
+	]);
+	expect(getServers(config).https.routes[0].handle.at(-1)).toMatchObject({
+		handler: "reverse_proxy",
+		upstreams: [{ dial: "my-app:80" }],
+	});
+});
+
 test("punycodes internationalized hosts for Caddy routes", () => {
 	const fragment = createCaddyApplicationRouteFragment(
 		app(),
@@ -119,9 +145,21 @@ test("rejects Traefik-only domain features for Caddy routes", () => {
 			domain({
 				customEntrypoint: "admin",
 				customCertResolver: "internal",
-				certificateType: "custom",
 				middlewares: ["auth@file"],
 			}),
 		),
 	).toThrow("unsupported Caddy fields");
+});
+
+test("rejects Caddy custom certificate routes without an uploaded certificate", () => {
+	expect(() =>
+		createCaddyApplicationRouteFragment(
+			app(),
+			domain({
+				https: true,
+				certificateType: "custom",
+				customCertResolver: null,
+			}),
+		),
+	).toThrow("custom certificates require an uploaded certificate");
 });

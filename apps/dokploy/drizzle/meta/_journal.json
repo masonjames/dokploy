@@ -1198,6 +1198,13 @@
       "when": 1780337191309,
       "tag": "0170_web_server_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1780360688821,
+      "tag": "0171_caddy_trusted_proxy_config",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,14 @@ vi.mock("node:fs", () => ({
 	default: fs,
 }));
 
+const execAsyncMock = vi.hoisted(() => vi.fn());
+const execAsyncRemoteMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@dokploy/server/utils/process/execAsync", () => ({
+	execAsync: execAsyncMock,
+	execAsyncRemote: execAsyncRemoteMock,
+}));
+
 import {
 	addDomainToCompose,
 	addDomainToComposeForWebServer,
@@ -16,6 +24,8 @@ import {
 	createDomainLabels,
 	isDokployGeneratedTraefikLabel,
 	paths,
+	readCaddyRouteFragments,
+	refreshCaddyComposeRoutes,
 } from "@dokploy/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -77,6 +87,13 @@ const getServers = (config: ReturnType<typeof compileCaddyConfig>) => {
 
 beforeEach(() => {
 	vol.reset();
+	execAsyncMock.mockReset();
+	execAsyncRemoteMock.mockReset();
+	execAsyncMock.mockResolvedValue({ stdout: "dokploy-caddy\n", stderr: "" });
+	execAsyncRemoteMock.mockResolvedValue({
+		stdout: "dokploy-caddy\n",
+		stderr: "",
+	});
 });
 
 describe("Caddy compose route generation", () => {
@@ -110,6 +127,44 @@ describe("Caddy compose route generation", () => {
 			handler: "reverse_proxy",
 			upstreams: [{ dial: "my-compose_web-blue:8080" }],
 		});
+	});
+
+	test("refreshes Caddy compose route fragments for domains created outside the domain router", async () => {
+		const composeInput = compose();
+		const routeDomain = domain({ https: true });
+		writeComposeFile(composeInput, {
+			services: {
+				web: { image: "nginx" },
+			},
+		});
+
+		await refreshCaddyComposeRoutes(composeInput, [routeDomain], "caddy");
+
+		const fragments = await readCaddyRouteFragments();
+		expect(fragments).toHaveLength(1);
+		expect(fragments[0]).toMatchObject({
+			id: "compose.my-compose.3",
+			source: "dokploy-compose",
+		});
+		const config = compileCaddyConfig({ fragments });
+		expect(getServers(config).https.routes[0].handle.at(-1)).toMatchObject({
+			handler: "reverse_proxy",
+			upstreams: [{ dial: "my-compose-web:8080" }],
+		});
+	});
+
+	test("skips compose route refresh for Traefik provider", async () => {
+		const composeInput = compose();
+		writeComposeFile(composeInput, {
+			services: {
+				web: { image: "nginx" },
+			},
+		});
+
+		await refreshCaddyComposeRoutes(composeInput, [domain()], "traefik");
+
+		expect(await readCaddyRouteFragments()).toEqual([]);
+		expect(execAsyncMock).not.toHaveBeenCalled();
 	});
 
 	test("Traefik provider conversion delegates to the existing Traefik label path", async () => {

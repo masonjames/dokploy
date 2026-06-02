@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { paths } from "@dokploy/server/constants";
 import { db } from "@dokploy/server/db";
 import { applications, compose } from "@dokploy/server/db/schema";
-import { getWebServerSettings } from "@dokploy/server/services/web-server-settings";
+import { getCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import { createCaddyComposeRouteFragment } from "@dokploy/server/utils/caddy/compose";
 import {
 	compileCaddyConfig,
@@ -581,12 +581,6 @@ const readTraefikStaticConfig = async (serverId?: string) => {
 	return { path: configPath, content };
 };
 
-const getLetsEncryptEmail = async (serverId?: string) => {
-	if (serverId) return null;
-	const settings = await getWebServerSettings();
-	return settings?.letsEncryptEmail ?? null;
-};
-
 const renderReportMarkdown = (report: CaddyMigrationReport) => {
 	const blocking = report.warnings.filter((item) => item.blocking);
 	return [
@@ -934,7 +928,7 @@ export const prepareCaddyMigration = async (
 	try {
 		config = compileCaddyConfig({
 			fragments,
-			letsEncryptEmail: await getLetsEncryptEmail(serverId),
+			...(await getCaddyCompileSettings(serverId)),
 		});
 		validation = {
 			status: "passed",

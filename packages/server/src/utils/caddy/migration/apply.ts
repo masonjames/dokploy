@@ -9,6 +9,7 @@ import {
 	writeCaddySetup,
 } from "@dokploy/server/services/settings";
 import {
+	getCaddyCompileSettings,
 	resolveWebServerProvider,
 	updateLocalWebServerProvider,
 	updateRemoteWebServerProvider,
@@ -403,6 +404,7 @@ const applyCaddyMigrationUnlocked = async (input: {
 				report.artifactPaths.caddyJson,
 				serverId,
 			),
+			trustedProxies: (await getCaddyCompileSettings(serverId)).trustedProxies,
 		});
 		await copyMigrationFileInPlace(
 			report.artifactPaths.caddyJson,

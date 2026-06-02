@@ -13,9 +13,12 @@ import {
 	cleanupImages,
 	cleanupSystem,
 	cleanupVolumes,
+	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	execAsync,
 	findServerById,
+	getCaddyCompileSettings,
+	getCaddyTrustedProxySettings,
 	getDockerDiskUsage,
 	getDokployImageTag,
 	getLogCleanupStatus,
@@ -48,6 +51,7 @@ import {
 	spawnAsync,
 	startLogCleanup,
 	stopLogCleanup,
+	updateCaddyTrustedProxySettings,
 	updateLetsEncryptEmail,
 	updateLocalWebServerProvider,
 	updateRemoteWebServerProvider,
@@ -131,6 +135,14 @@ const apiWebServerPorts = z.object({
 			protocol: z.enum(["tcp", "udp", "sctp"]),
 		}),
 	),
+});
+
+const apiCaddyTrustedProxySettings = z.object({
+	serverId: z.string().optional(),
+	mode: z.enum(["disabled", "cloudflare", "static"]),
+	ranges: z.array(z.string()).optional().nullable(),
+	clientIpHeaders: z.array(z.string()).optional().nullable(),
+	strict: z.boolean().optional().nullable(),
 });
 
 const apiCaddyMigration = z.object({
@@ -327,13 +339,12 @@ const reloadWebServerProvider = async (
 	await reloadDockerResource(getWebServerResourceName(provider), serverId);
 };
 
-const getCaddyLetsEncryptEmailForSetup = async (
+const getCaddySetupOptions = async (
 	provider: WebServerProvider,
 	serverId?: string,
 ) => {
-	if (provider !== "caddy" || serverId) return undefined;
-	const settings = await getWebServerSettings();
-	return settings?.letsEncryptEmail;
+	if (provider !== "caddy") return {};
+	return getCaddyCompileSettings(serverId);
 };
 
 export const settingsRouter = createTRPCRouter({
@@ -424,6 +435,82 @@ export const settingsRouter = createTRPCRouter({
 		.query(async ({ input, ctx }) => {
 			await ensureServerAccess(ctx, input?.serverId);
 			return resolveWebServerProvider(input?.serverId);
+		}),
+	getCaddyTrustedProxySettings: adminProcedure
+		.input(apiServerSchema)
+		.query(async ({ input, ctx }) => {
+			await ensureServerAccess(ctx, input?.serverId);
+			if (IS_CLOUD && !input?.serverId) {
+				return {
+					mode: "disabled" as const,
+					ranges: [],
+					clientIpHeaders: [],
+					strict: true,
+				};
+			}
+
+			const settings = await getCaddyTrustedProxySettings(input?.serverId);
+			return (
+				settings ?? {
+					mode: "disabled" as const,
+					ranges: [],
+					clientIpHeaders: [],
+					strict: true,
+				}
+			);
+		}),
+	updateCaddyTrustedProxySettings: adminProcedure
+		.input(apiCaddyTrustedProxySettings)
+		.mutation(async ({ input, ctx }) => {
+			await ensureServerAccess(ctx, input.serverId);
+			if (IS_CLOUD && !input.serverId) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message:
+						"Caddy trusted proxy settings are only available for a local or remote web server.",
+				});
+			}
+
+			const previousSettings = await getCaddyTrustedProxySettings(
+				input.serverId,
+			);
+			const nextSettings =
+				input.mode === "disabled"
+					? null
+					: {
+							mode: input.mode,
+							ranges: input.ranges,
+							clientIpHeaders: input.clientIpHeaders,
+							strict: input.strict,
+						};
+
+			const provider = await resolveWebServerProvider(input.serverId);
+			await updateCaddyTrustedProxySettings(nextSettings, input.serverId);
+			try {
+				if (provider === "caddy") {
+					await compileWriteAndReloadCaddyConfigSafely({
+						serverId: input.serverId,
+						...(await getCaddyCompileSettings(input.serverId)),
+					});
+				}
+			} catch (error) {
+				await updateCaddyTrustedProxySettings(previousSettings, input.serverId);
+				throw error;
+			}
+
+			await audit(ctx, {
+				action: "update",
+				resourceType: "settings",
+				resourceName: "caddy-trusted-proxy",
+			});
+			return (
+				(await getCaddyTrustedProxySettings(input.serverId)) ?? {
+					mode: "disabled" as const,
+					ranges: [],
+					clientIpHeaders: [],
+					strict: true,
+				}
+			);
 		}),
 	updateActiveWebServerProvider: adminProcedure
 		.input(apiWebServerProvider)
@@ -1296,10 +1383,7 @@ export const settingsRouter = createTRPCRouter({
 				env: envs,
 				additionalPorts: ports,
 				serverId: input.serverId,
-				letsEncryptEmail: await getCaddyLetsEncryptEmailForSetup(
-					provider,
-					input.serverId,
-				),
+				...(await getCaddySetupOptions(provider, input.serverId)),
 			}).catch((err) => {
 				console.error("writeWebServerEnv background writeWebServerSetup:", err);
 			});
@@ -1659,10 +1743,7 @@ export const settingsRouter = createTRPCRouter({
 					env: preparedEnv,
 					additionalPorts: input.additionalPorts,
 					serverId: input.serverId,
-					letsEncryptEmail: await getCaddyLetsEncryptEmailForSetup(
-						provider,
-						input.serverId,
-					),
+					...(await getCaddySetupOptions(provider, input.serverId)),
 				}).catch((err) => {
 					console.error(
 						"updateWebServerPorts background writeWebServerSetup:",

@@ -5,7 +5,7 @@ import {
 	createCommand,
 	createCompose,
 	createComposeByTemplate,
-	createDomain,
+	createComposeDomain,
 	createMount,
 	deleteMount,
 	execAsync,
@@ -671,7 +671,7 @@ export const composeRouter = createTRPCRouter({
 
 			if (generate.domains && generate.domains?.length > 0) {
 				for (const domain of generate.domains) {
-					await createDomain({
+					await createComposeDomain(compose, {
 						...domain,
 						domainType: "compose",
 						certificateType: "none",
@@ -1027,7 +1027,7 @@ export const composeRouter = createTRPCRouter({
 
 				if (processedTemplate.domains && processedTemplate.domains.length > 0) {
 					for (const domain of processedTemplate.domains) {
-						await createDomain({
+						await createComposeDomain(compose, {
 							...domain,
 							domainType: "compose",
 							certificateType: "none",

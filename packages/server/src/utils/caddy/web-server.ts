@@ -1,4 +1,5 @@
 import type { webServerSettings } from "@dokploy/server/db/schema/web-server-settings";
+import { caddyTrustedProxySettingsToConfig } from "@dokploy/server/services/web-server-settings";
 import {
 	compileWriteAndReloadCaddyConfigSafely,
 	removeCaddyRouteFragment,
@@ -56,5 +57,8 @@ export const updateServerCaddy = async (
 
 	await compileWriteAndReloadCaddyConfigSafely({
 		letsEncryptEmail: settings.letsEncryptEmail,
+		trustedProxies: caddyTrustedProxySettingsToConfig(
+			settings.caddyTrustedProxyConfig,
+		),
 	});
 };

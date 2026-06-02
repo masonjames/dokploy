@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useHealthCheckAfterMutation } from "@/hooks/use-health-check-after-mutation";
 import { api } from "@/utils/api";
+import { CaddyTrustedProxySettings } from "../../web-server/caddy-trusted-proxy-settings";
 import { EditTraefikEnv } from "../../web-server/edit-traefik-env";
 import { ManageTraefikPorts } from "../../web-server/manage-traefik-ports";
 import { ShowModalLogs } from "../../web-server/show-modal-logs";
@@ -129,6 +130,17 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 							<span>Modify Environment</span>
 						</DropdownMenuItem>
 					</EditTraefikEnv>
+
+					{activeProvider === "caddy" && (
+						<CaddyTrustedProxySettings serverId={serverId}>
+							<DropdownMenuItem
+								onSelect={(e) => e.preventDefault()}
+								className="cursor-pointer"
+							>
+								<span>Trusted Proxies</span>
+							</DropdownMenuItem>
+						</CaddyTrustedProxySettings>
+					)}
 
 					{activeProvider === "traefik" && (
 						<DialogAction

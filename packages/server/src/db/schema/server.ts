@@ -10,6 +10,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import type { CaddyTrustedProxySettings } from "../../utils/caddy/types";
 import { organization } from "./account";
 import { applications } from "./application";
 import { certificates } from "./certificate";
@@ -45,6 +46,9 @@ export const server = pgTable("server", {
 	webServerProvider: webServerProvider("webServerProvider")
 		.notNull()
 		.default("traefik"),
+	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig")
+		.$type<CaddyTrustedProxySettings | null>()
+		.default(null),
 	createdAt: text("createdAt").notNull(),
 	organizationId: text("organizationId")
 		.notNull()

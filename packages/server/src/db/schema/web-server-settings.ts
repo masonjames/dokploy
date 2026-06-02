@@ -3,6 +3,7 @@ import { boolean, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import type { CaddyTrustedProxySettings } from "../../utils/caddy/types";
 import { certificateType, webServerProvider } from "./shared";
 
 export const webServerSettings = pgTable("webServerSettings", {
@@ -14,6 +15,9 @@ export const webServerSettings = pgTable("webServerSettings", {
 	webServerProvider: webServerProvider("webServerProvider")
 		.notNull()
 		.default("traefik"),
+	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig")
+		.$type<CaddyTrustedProxySettings | null>()
+		.default(null),
 	serverIp: text("serverIp"),
 	certificateType: certificateType("certificateType").notNull().default("none"),
 	https: boolean("https").notNull().default(false),
@@ -128,6 +132,15 @@ const createSchema = createInsertSchema(webServerSettings, {
 
 export const apiUpdateWebServerSettings = createSchema.partial().extend({
 	webServerProvider: z.enum(["traefik", "caddy"]).optional(),
+	caddyTrustedProxyConfig: z
+		.object({
+			mode: z.enum(["disabled", "cloudflare", "static"]),
+			ranges: z.array(z.string()).optional().nullable(),
+			clientIpHeaders: z.array(z.string()).optional().nullable(),
+			strict: z.boolean().optional().nullable(),
+		})
+		.optional()
+		.nullable(),
 	serverIp: z.string().optional(),
 	certificateType: z.enum(["letsencrypt", "none", "custom"]).optional(),
 	https: z.boolean().optional(),

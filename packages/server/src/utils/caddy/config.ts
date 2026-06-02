@@ -7,6 +7,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { isIP } from "node:net";
 import * as path from "node:path";
 import { paths } from "@dokploy/server/constants";
 import {
@@ -25,6 +26,33 @@ import type {
 
 const CADDY_FRAGMENT_VERSION = 1;
 const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
+export const CLOUDFLARE_TRUSTED_PROXY_RANGES = [
+	"173.245.48.0/20",
+	"103.21.244.0/22",
+	"103.22.200.0/22",
+	"103.31.4.0/22",
+	"141.101.64.0/18",
+	"108.162.192.0/18",
+	"190.93.240.0/20",
+	"188.114.96.0/20",
+	"197.234.240.0/22",
+	"198.41.128.0/17",
+	"162.158.0.0/15",
+	"104.16.0.0/13",
+	"104.24.0.0/14",
+	"172.64.0.0/13",
+	"131.0.72.0/22",
+	"2400:cb00::/32",
+	"2606:4700::/32",
+	"2803:f800::/32",
+	"2405:b500::/32",
+	"2405:8100::/32",
+	"2a06:98c0::/29",
+	"2c0f:f248::/32",
+] as const;
+
+const DEFAULT_CLIENT_IP_HEADERS = ["X-Forwarded-For"];
+const CLOUDFLARE_CLIENT_IP_HEADERS = ["CF-Connecting-IP", "X-Forwarded-For"];
 
 const assertSafeFragmentId = (id: string) => {
 	if (
@@ -194,6 +222,137 @@ const normalizeHeaderValues = (headers: CaddyHeaderMap) => {
 			Array.isArray(value) ? value : [value],
 		]),
 	);
+};
+
+const assertValidTrustedProxyRange = (range: string) => {
+	const [address, prefix, ...extra] = range.split("/");
+	if (!address || !prefix || extra.length > 0) {
+		throw new Error(`Invalid Caddy trusted proxy CIDR range "${range}"`);
+	}
+	const ipVersion = isIP(address);
+	if (!ipVersion) {
+		throw new Error(`Invalid Caddy trusted proxy address "${address}"`);
+	}
+	if (!/^\d+$/.test(prefix)) {
+		throw new Error(`Invalid Caddy trusted proxy prefix "${prefix}"`);
+	}
+	const prefixNumber = Number(prefix);
+	const maxPrefix = ipVersion === 4 ? 32 : 128;
+	if (prefixNumber < 0 || prefixNumber > maxPrefix) {
+		throw new Error(
+			`Invalid Caddy trusted proxy prefix "${prefix}" for ${address}`,
+		);
+	}
+};
+
+const normalizeClientIpHeaders = (headers: string[]) => {
+	if (!headers.length) {
+		throw new Error(
+			"Caddy trusted proxies require at least one client IP header",
+		);
+	}
+	const seen = new Set<string>();
+	return headers.map((header) => {
+		const normalized = header.trim();
+		if (!normalized) {
+			throw new Error("Caddy trusted proxy client IP header cannot be empty");
+		}
+		const key = normalized.toLowerCase();
+		if (seen.has(key)) {
+			throw new Error(
+				`Duplicate Caddy trusted proxy client IP header "${normalized}"`,
+			);
+		}
+		seen.add(key);
+		return normalized;
+	});
+};
+
+const createTrustedProxyServerOptions = (
+	trustedProxies: CaddyCompileOptions["trustedProxies"],
+) => {
+	if (!trustedProxies) {
+		return {};
+	}
+	const ranges =
+		trustedProxies.source === "cloudflare"
+			? [...CLOUDFLARE_TRUSTED_PROXY_RANGES]
+			: (trustedProxies.ranges ?? []);
+	if (!ranges.length) {
+		throw new Error("Caddy trusted proxies require at least one CIDR range");
+	}
+	for (const range of ranges) {
+		assertValidTrustedProxyRange(range);
+	}
+
+	const clientIpHeaders = normalizeClientIpHeaders(
+		trustedProxies.clientIpHeaders ??
+			(trustedProxies.source === "cloudflare"
+				? CLOUDFLARE_CLIENT_IP_HEADERS
+				: DEFAULT_CLIENT_IP_HEADERS),
+	);
+
+	return {
+		trusted_proxies: {
+			source: "static",
+			ranges,
+		},
+		client_ip_headers: clientIpHeaders,
+		...(trustedProxies.strict === false ? {} : { trusted_proxies_strict: 1 }),
+	};
+};
+
+export const assertValidCaddyTrustedProxyConfig = (
+	trustedProxies: CaddyCompileOptions["trustedProxies"],
+) => {
+	createTrustedProxyServerOptions(trustedProxies);
+};
+
+const collectManualTlsCertificates = (routes: CaddyRouteIntent[]) => {
+	const seen = new Set<string>();
+	const certificates = [];
+	for (const route of routes) {
+		if (!route.tlsCertificate) {
+			continue;
+		}
+		const key = `${route.tlsCertificate.certificate}\0${route.tlsCertificate.key}`;
+		if (seen.has(key)) {
+			continue;
+		}
+		seen.add(key);
+		certificates.push({
+			certificate: route.tlsCertificate.certificate,
+			key: route.tlsCertificate.key,
+		});
+	}
+	return certificates;
+};
+
+const createTlsAppConfig = (
+	letsEncryptEmail: string | null | undefined,
+	manualCertificates: Array<{ certificate: string; key: string }>,
+) => {
+	const tlsApp: CaddyJsonObject = {};
+	if (manualCertificates.length) {
+		tlsApp.certificates = {
+			load_files: manualCertificates,
+		};
+	}
+	if (letsEncryptEmail) {
+		tlsApp.automation = {
+			policies: [
+				{
+					issuers: [
+						{
+							module: "acme",
+							email: letsEncryptEmail,
+						},
+					],
+				},
+			],
+		};
+	}
+	return Object.keys(tlsApp).length ? { tls: tlsApp } : {};
 };
 
 const createHeaderHandler = (route: CaddyRouteIntent) => {
@@ -450,6 +609,7 @@ export const compileCaddyConfig = ({
 	fragments = [],
 	routes = [],
 	letsEncryptEmail,
+	trustedProxies,
 }: CaddyCompileOptions = {}) => {
 	const allRoutes = sortCaddyRouteIntents([
 		...flattenCaddyFragments(fragments),
@@ -480,36 +640,26 @@ export const compileCaddyConfig = ({
 				? [proxyRoute, createForbiddenRoute(route)]
 				: [proxyRoute];
 		});
+	const trustedProxyServerOptions =
+		createTrustedProxyServerOptions(trustedProxies);
+	const manualTlsCertificates = collectManualTlsCertificates(allRoutes);
 
 	return {
 		admin: {
 			listen: "localhost:2019",
 		},
 		apps: {
-			...(letsEncryptEmail && {
-				tls: {
-					automation: {
-						policies: [
-							{
-								issuers: [
-									{
-										module: "acme",
-										email: letsEncryptEmail,
-									},
-								],
-							},
-						],
-					},
-				},
-			}),
+			...createTlsAppConfig(letsEncryptEmail, manualTlsCertificates),
 			http: {
 				servers: {
 					http: {
 						listen: [":80"],
+						...trustedProxyServerOptions,
 						routes: httpRoutes,
 					},
 					https: {
 						listen: [":443"],
+						...trustedProxyServerOptions,
 						routes: httpsRoutes,
 					},
 				},
@@ -654,12 +804,14 @@ export const readCaddyRouteFragments = async (
 export const compileAndWriteCaddyConfig = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
+		trustedProxies?: CaddyCompileOptions["trustedProxies"];
 	} = {},
 ) => {
 	const fragments = await readCaddyRouteFragments(options);
 	const config = compileCaddyConfig({
 		fragments,
 		letsEncryptEmail: options.letsEncryptEmail,
+		trustedProxies: options.trustedProxies,
 	});
 	await writeCaddyConfigFile(config, options);
 	return config;
@@ -717,12 +869,14 @@ export const writeAndReloadCaddyConfigSafely = async (
 export const compileWriteAndReloadCaddyConfigSafely = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
+		trustedProxies?: CaddyCompileOptions["trustedProxies"];
 	} = {},
 ) => {
 	const fragments = await readCaddyRouteFragments(options);
 	const config = compileCaddyConfig({
 		fragments,
 		letsEncryptEmail: options.letsEncryptEmail,
+		trustedProxies: options.trustedProxies,
 	});
 	await writeAndReloadCaddyConfigSafely(config, options);
 	return config;
@@ -731,6 +885,7 @@ export const compileWriteAndReloadCaddyConfigSafely = async (
 export const ensureDefaultCaddyConfig = async (
 	options: CaddyFragmentStoreOptions & {
 		letsEncryptEmail?: string | null;
+		trustedProxies?: CaddyCompileOptions["trustedProxies"];
 	} = {},
 ) => {
 	const caddyPaths = paths(!!options.serverId);
@@ -792,9 +947,11 @@ export const validateCaddyConfigFileWithImage = async (
 	);
 	const validationDataPath = path.posix.join(validationRoot, "data");
 	const validationConfigPath = path.posix.join(validationRoot, "config");
+	const { CERTIFICATES_PATH } = paths(!!serverId);
 	const mkdirCommand = `mkdir -p ${quote([
 		validationDataPath,
 		validationConfigPath,
+		CERTIFICATES_PATH,
 	])}`;
 	const cleanupCommand = `rm -rf ${quote([validationRoot])}`;
 	const validateCommand = `docker run --rm --network none ${[
@@ -804,6 +961,8 @@ export const validateCaddyConfigFileWithImage = async (
 		`${validationDataPath}:/data`,
 		"-v",
 		`${validationConfigPath}:/config`,
+		"-v",
+		`${CERTIFICATES_PATH}:${CERTIFICATES_PATH}:ro`,
 		imageName,
 		"caddy",
 		"validate",

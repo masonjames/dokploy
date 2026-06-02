@@ -1,10 +1,79 @@
 import { db } from "@dokploy/server/db";
 import { server, webServerSettings } from "@dokploy/server/db/schema";
+import { assertValidCaddyTrustedProxyConfig } from "@dokploy/server/utils/caddy/config";
+import type {
+	CaddyTrustedProxyConfig,
+	CaddyTrustedProxySettings,
+} from "@dokploy/server/utils/caddy/types";
 import {
 	normalizeWebServerProvider,
 	type WebServerProvider,
 } from "@dokploy/server/utils/web-server/providers";
 import { eq } from "drizzle-orm";
+
+const normalizeStringList = (values: string[] | null | undefined) =>
+	Array.from(
+		new Set(
+			(values ?? [])
+				.map((value) => value.trim())
+				.filter((value) => value.length > 0),
+		),
+	);
+
+export const normalizeCaddyTrustedProxySettings = (
+	settings: CaddyTrustedProxySettings | null | undefined,
+): CaddyTrustedProxySettings | null => {
+	if (!settings || settings.mode === "disabled") {
+		return null;
+	}
+
+	const normalized: CaddyTrustedProxySettings =
+		settings.mode === "cloudflare"
+			? {
+					mode: "cloudflare",
+					clientIpHeaders: normalizeStringList(settings.clientIpHeaders),
+					strict: settings.strict !== false,
+				}
+			: {
+					mode: "static",
+					ranges: normalizeStringList(settings.ranges),
+					clientIpHeaders: normalizeStringList(settings.clientIpHeaders),
+					strict: settings.strict !== false,
+				};
+
+	assertValidCaddyTrustedProxyConfig(
+		caddyTrustedProxySettingsToConfig(normalized),
+	);
+
+	return normalized;
+};
+
+export const caddyTrustedProxySettingsToConfig = (
+	settings: CaddyTrustedProxySettings | null | undefined,
+): CaddyTrustedProxyConfig | null => {
+	if (!settings || settings.mode === "disabled") {
+		return null;
+	}
+
+	if (settings.mode === "cloudflare") {
+		return {
+			source: "cloudflare",
+			clientIpHeaders: settings.clientIpHeaders?.length
+				? settings.clientIpHeaders
+				: undefined,
+			strict: settings.strict,
+		};
+	}
+
+	return {
+		source: "static",
+		ranges: settings.ranges ?? [],
+		clientIpHeaders: settings.clientIpHeaders?.length
+			? settings.clientIpHeaders
+			: undefined,
+		strict: settings.strict,
+	};
+};
 
 /**
  * Get the web server settings (singleton - only one row should exist)
@@ -87,6 +156,77 @@ export const updateRemoteWebServerProvider = async (
 		.returning();
 
 	return updated;
+};
+
+export const getCaddyTrustedProxySettings = async (
+	serverId?: string | null,
+): Promise<CaddyTrustedProxySettings | null> => {
+	if (serverId) {
+		const remoteServer = await db.query.server.findFirst({
+			where: eq(server.serverId, serverId),
+			columns: {
+				caddyTrustedProxyConfig: true,
+			},
+		});
+
+		if (!remoteServer) {
+			throw new Error(`Server not found: ${serverId}`);
+		}
+
+		return normalizeCaddyTrustedProxySettings(
+			remoteServer.caddyTrustedProxyConfig,
+		);
+	}
+
+	const settings = await getWebServerSettings();
+	return normalizeCaddyTrustedProxySettings(settings?.caddyTrustedProxyConfig);
+};
+
+export const getCaddyTrustedProxyConfig = async (
+	serverId?: string | null,
+): Promise<CaddyTrustedProxyConfig | null> => {
+	return caddyTrustedProxySettingsToConfig(
+		await getCaddyTrustedProxySettings(serverId),
+	);
+};
+
+export const getCaddyCompileSettings = async (
+	serverId?: string | null,
+): Promise<{
+	letsEncryptEmail?: string | null;
+	trustedProxies?: CaddyTrustedProxyConfig | null;
+}> => {
+	if (serverId) {
+		return {
+			trustedProxies: await getCaddyTrustedProxyConfig(serverId),
+		};
+	}
+
+	const settings = await getWebServerSettings();
+	return {
+		letsEncryptEmail: settings?.letsEncryptEmail,
+		trustedProxies: caddyTrustedProxySettingsToConfig(
+			normalizeCaddyTrustedProxySettings(settings?.caddyTrustedProxyConfig),
+		),
+	};
+};
+
+export const updateCaddyTrustedProxySettings = async (
+	settings: CaddyTrustedProxySettings | null,
+	serverId?: string | null,
+) => {
+	const normalized = normalizeCaddyTrustedProxySettings(settings);
+	if (serverId) {
+		const [updated] = await db
+			.update(server)
+			.set({ caddyTrustedProxyConfig: normalized })
+			.where(eq(server.serverId, serverId))
+			.returning();
+
+		return updated;
+	}
+
+	return updateWebServerSettings({ caddyTrustedProxyConfig: normalized });
 };
 
 export const resolveWebServerProvider = async (

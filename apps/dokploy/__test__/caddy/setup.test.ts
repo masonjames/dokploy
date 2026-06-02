@@ -64,6 +64,7 @@ describe("Caddy runtime setup", () => {
 				HostConfig: expect.objectContaining({
 					Binds: expect.arrayContaining([
 						expect.stringMatching(/\/caddy:\/etc\/caddy$/),
+						expect.stringMatching(/\/certificates:.*\/certificates:ro$/),
 					]),
 				}),
 			}),

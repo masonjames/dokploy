@@ -31,6 +31,28 @@ export const findCertificateById = async (certificateId: string) => {
 	return certificate;
 };
 
+export const findCertificateByPath = async (certificatePath: string) => {
+	return db.query.certificates.findFirst({
+		where: eq(certificates.certificatePath, certificatePath),
+	});
+};
+
+export const assertCertificatePathAvailableForServer = async (
+	certificatePath: string,
+	serverId?: string | null,
+) => {
+	const certificate = await findCertificateByPath(certificatePath);
+	const expectedServerId = serverId ?? null;
+
+	if (!certificate || (certificate.serverId ?? null) !== expectedServerId) {
+		throw new Error(
+			`Caddy custom certificate "${certificatePath}" is not available for this server. Use an uploaded certificate assigned to the same server.`,
+		);
+	}
+
+	return certificate;
+};
+
 export const createCertificate = async (
 	certificateData: z.infer<typeof apiCreateCertificate>,
 	organizationId: string,

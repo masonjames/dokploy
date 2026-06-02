@@ -18,6 +18,7 @@ vi.mock("@dokploy/server/services/settings", () => ({
 }));
 
 vi.mock("@dokploy/server/services/web-server-settings", () => ({
+	getCaddyCompileSettings: vi.fn(),
 	resolveWebServerProvider: vi.fn(),
 	updateLocalWebServerProvider: vi.fn(),
 	updateRemoteWebServerProvider: vi.fn(),
@@ -111,6 +112,9 @@ describe("applyCaddyMigration", () => {
 		vi.mocked(providerService.resolveWebServerProvider).mockResolvedValue(
 			"traefik",
 		);
+		vi.mocked(providerService.getCaddyCompileSettings).mockResolvedValue({
+			trustedProxies: null,
+		});
 		vi.mocked(settingsService.getDockerResourceSnapshot).mockImplementation(
 			async (resourceName: string) => ({
 				resourceName,

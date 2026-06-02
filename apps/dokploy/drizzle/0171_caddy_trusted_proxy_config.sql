@@ -1,0 +1,2 @@
+ALTER TABLE "server" ADD COLUMN "caddyTrustedProxyConfig" jsonb DEFAULT 'null'::jsonb;--> statement-breakpoint
+ALTER TABLE "webServerSettings" ADD COLUMN "caddyTrustedProxyConfig" jsonb DEFAULT 'null'::jsonb;

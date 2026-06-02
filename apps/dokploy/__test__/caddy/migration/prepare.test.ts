@@ -16,6 +16,10 @@ vi.mock("@dokploy/server/db", () => ({
 }));
 
 vi.mock("@dokploy/server/services/web-server-settings", () => ({
+	getCaddyCompileSettings: vi.fn().mockResolvedValue({
+		letsEncryptEmail: "ops@example.com",
+		trustedProxies: null,
+	}),
 	getWebServerSettings: vi.fn().mockResolvedValue({
 		letsEncryptEmail: "ops@example.com",
 	}),

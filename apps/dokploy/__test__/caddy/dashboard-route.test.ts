@@ -11,6 +11,7 @@ const settings = (overrides: Partial<WebServerSettings> = {}) =>
 	({
 		id: "settings-1",
 		webServerProvider: "caddy",
+		caddyTrustedProxyConfig: null,
 		https: false,
 		certificateType: "none",
 		host: null,

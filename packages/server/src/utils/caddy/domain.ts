@@ -1,5 +1,8 @@
+import * as path from "node:path";
+import { paths } from "@dokploy/server/constants";
+import { assertCertificatePathAvailableForServer } from "@dokploy/server/services/certificate";
 import type { Domain } from "@dokploy/server/services/domain";
-import { getWebServerSettings } from "@dokploy/server/services/web-server-settings";
+import { getCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import type { ApplicationNested } from "../builders";
 import {
 	compileWriteAndReloadCaddyConfigSafely,
@@ -29,16 +32,44 @@ export const getCaddyApplicationFragmentId = (
 const createCaddyRouteId = (appName: string, uniqueConfigKey: number) =>
 	`${appName}-route-${uniqueConfigKey}`;
 
+const assertSafeCertificatePath = (certificatePath: string) => {
+	if (
+		!/^[a-zA-Z0-9_.-]+$/.test(certificatePath) ||
+		certificatePath === "." ||
+		certificatePath === ".." ||
+		certificatePath.split(".").some((segment) => segment === "")
+	) {
+		throw new Error(
+			`Invalid Caddy custom certificate path "${certificatePath}". Use an uploaded certificate from Dokploy.`,
+		);
+	}
+};
+
+export const getCaddyCustomCertificateFiles = (
+	serverId: string | null | undefined,
+	certificatePath: string,
+) => {
+	assertSafeCertificatePath(certificatePath);
+	const certDir = path.join(
+		paths(!!serverId).CERTIFICATES_PATH,
+		certificatePath,
+	);
+	return {
+		certificate: path.join(certDir, "chain.crt"),
+		key: path.join(certDir, "privkey.key"),
+	};
+};
+
 export const getUnsupportedCaddyDomainFieldMessages = (domain: Domain) => {
 	const messages: string[] = [];
 	if (domain.customEntrypoint) {
 		messages.push("custom entrypoints are not supported by Caddy routes");
 	}
-	if (domain.customCertResolver) {
+	if (domain.customCertResolver && domain.certificateType !== "custom") {
 		messages.push("custom certificate resolvers are Traefik-specific");
 	}
-	if (domain.certificateType === "custom") {
-		messages.push("custom certificates are not translated to Caddy yet");
+	if (domain.certificateType === "custom" && !domain.customCertResolver) {
+		messages.push("custom certificates require an uploaded certificate");
 	}
 	if (domain.middlewares?.length) {
 		messages.push("Traefik middlewares are not translated to Caddy yet");
@@ -51,6 +82,18 @@ export const assertCaddyDomainSupported = (domain: Domain) => {
 	if (messages.length) {
 		throw new Error(
 			`Domain "${domain.host}" uses unsupported Caddy fields: ${messages.join("; ")}`,
+		);
+	}
+};
+
+export const assertCaddyDomainCertificateAvailable = async (
+	serverId: string | null | undefined,
+	domain: Domain,
+) => {
+	if (domain.certificateType === "custom" && domain.customCertResolver) {
+		await assertCertificatePathAvailableForServer(
+			domain.customCertResolver,
+			serverId,
 		);
 	}
 };
@@ -76,6 +119,13 @@ export const createCaddyApplicationRouteIntent = (
 		https: domain.https && !domain.customEntrypoint,
 		upstreams: [`http://${app.appName}:${domain.port || 80}`],
 		upstreamNetwork: DOKPLOY_CADDY_NETWORK,
+		tlsCertificate:
+			domain.certificateType === "custom" && domain.customCertResolver
+				? getCaddyCustomCertificateFiles(
+						app.serverId,
+						domain.customCertResolver,
+					)
+				: null,
 		transforms: {
 			stripPrefix: domain.stripPath ? publicPath : null,
 			addPrefix: internalPath,
@@ -94,17 +144,12 @@ export const createCaddyApplicationRouteFragment = (
 	routes: [createCaddyApplicationRouteIntent(app, domain)],
 });
 
-const getLocalLetsEncryptEmail = async (serverId?: string | null) => {
-	if (serverId) return null;
-	const settings = await getWebServerSettings();
-	return settings?.letsEncryptEmail;
-};
-
 export const manageCaddyDomain = async (
 	app: ApplicationNested,
 	domain: Domain,
 ) => {
 	const serverId = app.serverId || undefined;
+	await assertCaddyDomainCertificateAvailable(serverId, domain);
 	const options = { serverId };
 	const previousFragments = await readCaddyRouteFragments(options);
 	try {
@@ -114,7 +159,7 @@ export const manageCaddyDomain = async (
 		);
 		await compileWriteAndReloadCaddyConfigSafely({
 			serverId,
-			letsEncryptEmail: await getLocalLetsEncryptEmail(serverId),
+			...(await getCaddyCompileSettings(serverId)),
 		});
 	} catch (error) {
 		await restoreCaddyRouteFragments(previousFragments, options);
@@ -136,7 +181,7 @@ export const removeCaddyDomain = async (
 		);
 		await compileWriteAndReloadCaddyConfigSafely({
 			serverId,
-			letsEncryptEmail: await getLocalLetsEncryptEmail(serverId),
+			...(await getCaddyCompileSettings(serverId)),
 		});
 	} catch (error) {
 		await restoreCaddyRouteFragments(previousFragments, options);

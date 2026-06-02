@@ -1,5 +1,6 @@
 import {
 	assertCaddyDomainSupported,
+	createComposeDomain,
 	createDomain,
 	findApplicationById,
 	findComposeById,
@@ -9,15 +10,14 @@ import {
 	findPreviewDeploymentById,
 	findServerById,
 	generateTraefikMeDomain,
-	getCaddyComposeRouteTargetsForWebServer,
 	getWebServerSettings,
 	manageWebServerDomain,
+	refreshCaddyComposeRoutes,
 	removeDomainById,
 	removeWebServerDomain,
 	resolveWebServerProvider,
 	updateDomainById,
 	validateDomain,
-	writeCaddyComposeRoutesForTargets,
 } from "@dokploy/server";
 import { checkServicePermissionAndAccess } from "@dokploy/server/services/permission";
 import { TRPCError } from "@trpc/server";
@@ -53,20 +53,6 @@ const toDomainUpdateFields = (
 	middlewares: domain.middlewares,
 });
 
-const refreshCaddyComposeRoutes = async (
-	compose: Awaited<ReturnType<typeof findComposeById>>,
-) => {
-	const domains = await findDomainsByComposeId(compose.composeId);
-	const routeTargets = await getCaddyComposeRouteTargetsForWebServer(
-		compose,
-		domains,
-		"caddy",
-	);
-	if (routeTargets) {
-		await writeCaddyComposeRoutesForTargets(compose, routeTargets);
-	}
-};
-
 export const domainRouter = createTRPCRouter({
 	create: protectedProcedure
 		.input(apiCreateDomain)
@@ -76,24 +62,23 @@ export const domainRouter = createTRPCRouter({
 					await checkServicePermissionAndAccess(ctx, input.composeId, {
 						domain: ["create"],
 					});
-				} else if (input.domainType === "application" && input.applicationId) {
+					const compose = await findComposeById(input.composeId);
+					const provider = await resolveWebServerProvider(compose.serverId);
+					const domain = await createComposeDomain(compose, input, provider);
+					await audit(ctx, {
+						action: "create",
+						resourceType: "domain",
+						resourceId: domain.domainId,
+						resourceName: domain.host,
+					});
+					return domain;
+				}
+				if (input.domainType === "application" && input.applicationId) {
 					await checkServicePermissionAndAccess(ctx, input.applicationId, {
 						domain: ["create"],
 					});
 				}
 				const domain = await createDomain(input);
-				if (domain.composeId) {
-					const compose = await findComposeById(domain.composeId);
-					if ((await resolveWebServerProvider(compose.serverId)) === "caddy") {
-						try {
-							await refreshCaddyComposeRoutes(compose);
-						} catch (error) {
-							await removeDomainById(domain.domainId);
-							await refreshCaddyComposeRoutes(compose);
-							throw error;
-						}
-					}
-				}
 				await audit(ctx, {
 					action: "create",
 					resourceType: "domain",
@@ -232,7 +217,7 @@ export const domainRouter = createTRPCRouter({
 						throw new Error("Error updating domain");
 					}
 					try {
-						await refreshCaddyComposeRoutes(compose);
+						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
 						await audit(ctx, {
 							action: "update",
 							resourceType: "domain",
@@ -245,7 +230,7 @@ export const domainRouter = createTRPCRouter({
 							input.domainId,
 							toDomainUpdateFields(currentDomain),
 						);
-						await refreshCaddyComposeRoutes(compose);
+						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
 						throw error;
 					}
 				}
@@ -362,15 +347,8 @@ export const domainRouter = createTRPCRouter({
 					const remainingDomains = domains.filter(
 						(item) => item.domainId !== domain.domainId,
 					);
-					const routeTargets = await getCaddyComposeRouteTargetsForWebServer(
-						compose,
-						remainingDomains,
-						"caddy",
-					);
 					try {
-						if (routeTargets) {
-							await writeCaddyComposeRoutesForTargets(compose, routeTargets);
-						}
+						await refreshCaddyComposeRoutes(compose, remainingDomains, "caddy");
 						const result = await removeDomainById(input.domainId);
 						await audit(ctx, {
 							action: "delete",
@@ -380,7 +358,7 @@ export const domainRouter = createTRPCRouter({
 						});
 						return result;
 					} catch (error) {
-						await refreshCaddyComposeRoutes(compose);
+						await refreshCaddyComposeRoutes(compose, undefined, "caddy");
 						throw error;
 					}
 				}
