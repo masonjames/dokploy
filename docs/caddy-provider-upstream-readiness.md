@@ -339,20 +339,21 @@ Forbidden without explicit approval:
 
 ## Live Mutation Approval Gate
 
-A current-session live validation was approved and executed for the exact
-`3c3de125a` candidate image after the evidence packet and DB gate were updated.
-The operational evidence, route manifest, hostnames, backups, and deployment
-logs are intentionally tracked outside this upstream PR surface.
+Production runtime evidence is intentionally tracked outside this upstream PR
+surface. For PR-facing notes, summarize only the generic gate classes that were
+covered: exact-image provenance, schema proof, rollback readiness, provider/task
+state, route expectations, health checks, and final readiness.
 
-Before any production mutation, fill this in:
+Before any production mutation, capture a platform-specific packet outside this
+repository with:
 
 ```text
-Approved by: current-session operator approval
-Approval time: 2026-06-02
-Mutation scope: additive DB reconcile for candidate runtime migrations plus exact-image Dokploy service update
-Rollback plan: immediate service image rollback on post-deploy verification failure; DB restore only by separate approval
-Expected read-only checks before mutation: exact image proof, schema preflight, route manifest, rollback CLI, readiness dry-run
-Expected post-mutation checks: schema proof, provider/task checks, route expectations, quick/full healthchecks, final readiness
+Approved by:
+Approval time:
+Mutation scope:
+Rollback plan:
+Expected read-only checks before mutation:
+Expected post-mutation checks:
 ```
 
 ## Proof Log
@@ -469,12 +470,7 @@ Expected post-mutation checks: schema proof, provider/task checks, route expecta
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/provider-neutral-ui-contract.test.ts` | Passed | 1 file, 4 tests. Covers provider-neutral account menu and custom-role file-browser labels while preserving legacy `/dashboard/traefik` and `traefikFiles` compatibility keys, plus unresolved-provider generic `Web Server` copy and positive Traefik-only edit gating for the application Advanced web-server config viewer. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 28 files, 180 tests after the application Advanced config viewer hardening. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, provider-aware application config cache invalidation, provider-neutral UI contracts, and remote web-server file-system inspection. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck` | Passed | App package typecheck passed after the application Advanced config viewer hardening. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
-| 2026-06-02 | Prior exact-image local build for `ad36a5d37` | Passed | Built `dokploy/dokploy:caddy-pr4534-ad36a5d37-20260602-local` for `linux/amd64`; image manifest list ID `sha256:342b5c049d46c78eb4a5609d336f59468f369e9e02bb51cb098deab5ce2b2f23`; container-safe rollback CLI help smoke passed. Later local UI hardening commits are not represented by this image, so current HEAD runtime provenance remains unproven. No PR update, service update, provider switch, config write, reload, apply, rollback, or production mutation was performed. |
-| 2026-06-02 | Prior exact-image production schema and image-update gates | Blocked as designed | Candidate schema preflight and image-update dry-run for the `ad36a5d37` image fail closed because the live runtime migration table is behind the candidate journal tail and the Caddy trusted-proxy/request-log columns are not present yet. Production proof for the current local HEAD still requires a fresh exact image plus the explicit database migration plan and approval before any live image update. Platform-specific evidence remains outside this upstream PR surface. |
-| 2026-06-02 | Current exact-image local build for `3c3de125a` | Passed | Built `dokploy/dokploy:caddy-pr4534-3c3de125a-20260602-local` for `linux/amd64`; image manifest list ID `sha256:f2c5713b717e50e073081a1d6da2afdd56b0d505ec197cd9c8b053d4c1871430`; image inspect reported `amd64/linux` and size `1352203663`; container-safe rollback CLI help smoke passed. The exact image journal tails at `0172_normal_gauntlet` with 173 entries and includes the expected `0171`/`0172` SQL hashes. |
-| 2026-06-02 | Current exact-image read-only production readiness gate | Blocked as designed | The approved read-only readiness wrapper for the `3c3de125a` image failed closed on the expected pending DB migration blocker before any image update path. No PR update, service update, provider switch, config write, reload, apply, rollback, or production mutation was performed. Platform-specific operational evidence remains outside this upstream PR surface. |
-| 2026-06-02 | Current exact-image live validation for `3c3de125a` | Passed | After current-session approval, the additive DB gate and exact-image runtime deployment were executed outside the upstream PR surface. Post-deploy schema proof, provider/task checks, route expectations, quick/full healthchecks, and final readiness passed. No PR update, Caddy migration apply, Caddy rollback execution, provider switch, or manual config write was performed. |
-| 2026-06-02 | Prior exact-image live validation for `40825c9c1` | Passed | After current-session approval, a docs-only branch-head image was deployed outside the upstream PR surface and passed schema proof, provider/task checks, route expectations, quick/full healthchecks, and final readiness. The production-code fix below makes that runtime provenance historical; current HEAD requires a fresh exact image before any new production-runtime claim. |
+| 2026-06-02 | External exact-image runtime validation packets | Passed | Earlier approved candidate deployments were recorded outside this upstream PR surface. They covered exact-image provenance, schema proof, provider/task checks, route expectations, health checks, and final readiness. Later local code commits make that runtime provenance historical; current HEAD requires fresh exact-image proof before any production-runtime claim. |
 | 2026-06-02 | RepoPrompt Deep Plan pass for remaining Caddy PR audit | Complete | Identified one production-code correctness gap: Dokploy dashboard route rewrites under Caddy could omit local request-log compile settings and leave stale dashboard route fragments if Caddy reload failed. |
 | 2026-06-02 | RepoPrompt review with current diff and `back:3` context | Complete | Review findings incorporated locally: dashboard rollback is scoped to the dashboard fragment instead of replacing unrelated fragments, active-Caddy dashboard-domain settings are restored if the Caddy rewrite fails, dashboard rewrites preserve ACME/trusted-proxy/request-log compile settings, and failure tests assert active config alignment. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/config.test.ts __test__/caddy/request-logs-router.test.ts __test__/caddy/trusted-proxy-settings-router.test.ts` | Passed | 3 files, 43 tests. Covers dashboard Caddy updates preserving request access logs, ACME email, and trusted proxy settings; dashboard-fragment restoration on failed reload without clobbering unrelated fragments; request analytics router behavior; and trusted-proxy/dashboard settings rollback behavior. |
@@ -484,6 +480,10 @@ Expected post-mutation checks: schema proof, provider/task checks, route expecta
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/trusted-proxy-settings-router.test.ts` | Passed | 1 file, 13 tests. Covers direct dashboard toggle rejection under active Caddy with no Traefik read/write side effects, plus the active-Traefik dashboard toggle success path. |
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 28 files, 185 tests after the direct dashboard toggle guard. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, dashboard rewrite rollback/settings compensation, provider-aware application config cache invalidation, provider-neutral UI contracts, remote web-server file-system inspection, and direct dashboard toggle rejection under active Caddy. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck` and `pnpm --filter=@dokploy/server typecheck` | Passed | App and server package typechecks passed after the direct dashboard toggle guard. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
+| 2026-06-02 | RepoPrompt review with git compare `back:3` | Complete | Latest review findings incorporated locally: dashboard fragment rollback now avoids clobbering concurrent dashboard updates, and dashboard-domain removal has focused restore-on-failure coverage. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/config.test.ts __test__/caddy/trusted-proxy-settings-router.test.ts` | Passed | 2 files, 38 tests. Covers dashboard route rollback, concurrent dashboard-fragment preservation, dashboard removal rollback, and direct Caddy dashboard toggle rejection. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 28 files, 187 tests after the dashboard rollback concurrency hardening. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, dashboard rewrite rollback/settings compensation, provider-aware application config cache invalidation, provider-neutral UI contracts, remote web-server file-system inspection, direct dashboard toggle rejection, and concurrent dashboard-fragment preservation. |
+| 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, and `pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true <touched files>` | Passed | App/server typechecks and formatter/import checks passed after the dashboard rollback concurrency hardening. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
 
 ## Upstream Hygiene Checklist
 

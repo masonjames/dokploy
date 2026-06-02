@@ -230,6 +230,73 @@ test("restores dashboard fragments when Caddy dashboard reload fails", async () 
 	);
 });
 
+test("does not overwrite a concurrent dashboard fragment update when dashboard reload fails", async () => {
+	const existingFragment = createCaddyDashboardRouteFragment(
+		settings(),
+		"old-dashboard.example.com",
+	);
+	const concurrentDashboardFragment = createCaddyDashboardRouteFragment(
+		settings(),
+		"concurrent-dashboard.example.com",
+	);
+	await writeCaddyRouteFragment(existingFragment);
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ fragments: [existingFragment] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			await writeCaddyRouteFragment(concurrentDashboardFragment);
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(
+		updateServerCaddy(settings(), "new-dashboard.example.com"),
+	).rejects.toThrow("validation failed");
+
+	expect(await readCaddyRouteFragments()).toEqual([
+		concurrentDashboardFragment,
+	]);
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
+});
+
+test("restores removed dashboard fragments when Caddy dashboard removal reload fails", async () => {
+	const existingFragment = createCaddyDashboardRouteFragment(
+		settings(),
+		"old-dashboard.example.com",
+	);
+	await writeCaddyRouteFragment(existingFragment);
+	const previousConfig = `${JSON.stringify(
+		compileCaddyConfig({ fragments: [existingFragment] }),
+		null,
+		2,
+	)}\n`;
+	vol.mkdirSync(paths().MAIN_CADDY_PATH, { recursive: true });
+	vol.writeFileSync(paths().CADDY_CONFIG_PATH, previousConfig);
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(updateServerCaddy(settings(), null)).rejects.toThrow(
+		"validation failed",
+	);
+
+	expect(await readCaddyRouteFragments()).toEqual([existingFragment]);
+	expect(vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8")).toBe(
+		previousConfig,
+	);
+});
+
 test("compiles Cloudflare trusted proxy settings with safe client IP headers", () => {
 	const config = compileCaddyConfig({
 		routes: [route({ https: true })],

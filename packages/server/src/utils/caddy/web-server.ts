@@ -12,6 +12,11 @@ import { DOKPLOY_CADDY_NETWORK } from "./upstream-targets";
 const CADDY_FRAGMENT_VERSION = 1;
 const DASHBOARD_FRAGMENT_ID = "dashboard.dokploy";
 
+const isSameFragment = (
+	first: CaddyRouteFragment | undefined,
+	second: CaddyRouteFragment | undefined,
+) => JSON.stringify(first) === JSON.stringify(second);
+
 const toPunycode = (host: string): string => {
 	try {
 		return new URL(`http://${host}`).hostname;
@@ -53,21 +58,33 @@ export const updateServerCaddy = async (
 	const previousDashboardFragment = (await readCaddyRouteFragments()).find(
 		(fragment) => fragment.id === DASHBOARD_FRAGMENT_ID,
 	);
+	let writtenDashboardFragment: CaddyRouteFragment | undefined;
 	try {
 		if (newHost) {
-			await writeCaddyRouteFragment(
-				createCaddyDashboardRouteFragment(settings, newHost),
+			writtenDashboardFragment = createCaddyDashboardRouteFragment(
+				settings,
+				newHost,
 			);
+			await writeCaddyRouteFragment(writtenDashboardFragment);
 		} else {
 			await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
 		}
 
 		await compileWriteAndReloadCaddyConfigSafely(compileSettings);
 	} catch (error) {
-		if (previousDashboardFragment) {
-			await writeCaddyRouteFragment(previousDashboardFragment);
-		} else {
-			await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
+		const currentDashboardFragment = (await readCaddyRouteFragments()).find(
+			(fragment) => fragment.id === DASHBOARD_FRAGMENT_ID,
+		);
+		const shouldRestorePrevious = newHost
+			? isSameFragment(currentDashboardFragment, writtenDashboardFragment)
+			: !currentDashboardFragment;
+
+		if (shouldRestorePrevious) {
+			if (previousDashboardFragment) {
+				await writeCaddyRouteFragment(previousDashboardFragment);
+			} else {
+				await removeCaddyRouteFragment(DASHBOARD_FRAGMENT_ID);
+			}
 		}
 		throw error;
 	}
