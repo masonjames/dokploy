@@ -27,7 +27,13 @@ export const ShowTraefikConfig = ({ applicationId }: Props) => {
 			{ serverId: application?.serverId || undefined },
 			{ enabled: canRead && !!application },
 		);
-	const providerLabel = activeProvider === "caddy" ? "Caddy" : "Traefik";
+	const isCaddy = activeProvider === "caddy";
+	const isTraefik = activeProvider === "traefik";
+	const providerLabel = isCaddy
+		? "Caddy"
+		: isTraefik
+			? "Traefik"
+			: "Web Server";
 	const { data, isPending } = api.application.readWebServerConfig.useQuery(
 		{
 			applicationId,
@@ -43,14 +49,16 @@ export const ShowTraefikConfig = ({ applicationId }: Props) => {
 				<div>
 					<CardTitle className="text-xl">{providerLabel}</CardTitle>
 					<CardDescription>
-						{activeProvider === "caddy"
+						{isCaddy
 							? "Review generated Caddy route fragments for this application. Caddy manages certificates for HTTPS domains; Traefik YAML and custom certificate resolvers do not apply."
-							: "Modify the Traefik config in rare cases. Be careful: invalid Traefik YAML can break the application route."}
+							: isTraefik
+								? "Modify the Traefik config in rare cases. Be careful: invalid Traefik YAML can break the application route."
+								: "Review the active web server configuration for this application. Provider-specific edit controls appear after Dokploy resolves the active provider."}
 					</CardDescription>
 				</div>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
-				{activeProvider === "caddy" && (
+				{isCaddy && (
 					<AlertBlock type="info">
 						For Caddy, domain changes generate JSON fragments and Caddy handles
 						ACME certificates automatically. Use Settings → Web Server for the
@@ -78,7 +86,7 @@ export const ShowTraefikConfig = ({ applicationId }: Props) => {
 								disabled
 								className="font-mono"
 							/>
-							{activeProvider !== "caddy" && (
+							{isTraefik && (
 								<div className="flex justify-end absolute z-50 right-6 top-6">
 									<UpdateTraefikConfig applicationId={applicationId} />
 								</div>

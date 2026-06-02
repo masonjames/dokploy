@@ -44,11 +44,33 @@ describe("provider-neutral Caddy UI contract", () => {
 		);
 
 		expect(actions).toContain(': "Web Server";');
-		expect(actions).toContain(": null;");
+		expect(actions).toMatch(
+			/const resourceName =[\s\S]*activeProvider === "caddy"[\s\S]*"dokploy-caddy"[\s\S]*activeProvider === "traefik"[\s\S]*"dokploy-traefik"[\s\S]*: null;/,
+		);
+		expect(actions).toContain("!activeProvider ||");
 		expect(actions).toContain("{resourceName && (");
+		expect(actions).toContain('activeProvider === "traefik" && (');
 		expect(fileSystem).toContain('const isTraefik = provider === "traefik";');
 		expect(fileSystem).toContain(
 			"Provider-specific edit controls appear after Dokploy resolves the active provider.",
+		);
+	});
+
+	test("keeps application advanced web-server config provider-neutral while provider is unresolved", () => {
+		const source = readSource(
+			"../../components/dashboard/application/advanced/traefik/show-traefik-config.tsx",
+		);
+
+		expect(source).toContain('const isCaddy = activeProvider === "caddy";');
+		expect(source).toContain('const isTraefik = activeProvider === "traefik";');
+		expect(source).toContain(': "Web Server";');
+		expect(source).toContain(
+			"Provider-specific edit controls appear after Dokploy resolves the active provider.",
+		);
+		expect(source).toContain("{isTraefik && (");
+		expect(source).not.toContain('activeProvider !== "caddy"');
+		expect(source).not.toContain(
+			'activeProvider === "caddy" ? "Caddy" : "Traefik"',
 		);
 	});
 });
