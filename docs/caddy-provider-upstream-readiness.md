@@ -336,17 +336,20 @@ Forbidden without explicit approval:
 
 ## Live Mutation Approval Gate
 
-No live mutation has been approved for this document.
+A current-session live validation was approved and executed for the exact
+`3c3de125a` candidate image after the evidence packet and DB gate were updated.
+The operational evidence, route manifest, hostnames, backups, and deployment
+logs are intentionally tracked outside this upstream PR surface.
 
 Before any production mutation, fill this in:
 
 ```text
-Approved by:
-Approval time:
-Mutation scope:
-Rollback plan:
-Expected read-only checks before mutation:
-Expected post-mutation checks:
+Approved by: current-session operator approval
+Approval time: 2026-06-02
+Mutation scope: additive DB reconcile for candidate runtime migrations plus exact-image Dokploy service update
+Rollback plan: immediate service image rollback on post-deploy verification failure; DB restore only by separate approval
+Expected read-only checks before mutation: exact image proof, schema preflight, route manifest, rollback CLI, readiness dry-run
+Expected post-mutation checks: schema proof, provider/task checks, route expectations, quick/full healthchecks, final readiness
 ```
 
 ## Proof Log
@@ -465,6 +468,9 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy typecheck` | Passed | App package typecheck passed after the application Advanced config viewer hardening. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
 | 2026-06-02 | Prior exact-image local build for `ad36a5d37` | Passed | Built `dokploy/dokploy:caddy-pr4534-ad36a5d37-20260602-local` for `linux/amd64`; image manifest list ID `sha256:342b5c049d46c78eb4a5609d336f59468f369e9e02bb51cb098deab5ce2b2f23`; container-safe rollback CLI help smoke passed. Later local UI hardening commits are not represented by this image, so current HEAD runtime provenance remains unproven. No PR update, service update, provider switch, config write, reload, apply, rollback, or production mutation was performed. |
 | 2026-06-02 | Prior exact-image production schema and image-update gates | Blocked as designed | Candidate schema preflight and image-update dry-run for the `ad36a5d37` image fail closed because the live runtime migration table is behind the candidate journal tail and the Caddy trusted-proxy/request-log columns are not present yet. Production proof for the current local HEAD still requires a fresh exact image plus the explicit database migration plan and approval before any live image update. Platform-specific evidence remains outside this upstream PR surface. |
+| 2026-06-02 | Current exact-image local build for `3c3de125a` | Passed | Built `dokploy/dokploy:caddy-pr4534-3c3de125a-20260602-local` for `linux/amd64`; image manifest list ID `sha256:f2c5713b717e50e073081a1d6da2afdd56b0d505ec197cd9c8b053d4c1871430`; image inspect reported `amd64/linux` and size `1352203663`; container-safe rollback CLI help smoke passed. The exact image journal tails at `0172_normal_gauntlet` with 173 entries and includes the expected `0171`/`0172` SQL hashes. |
+| 2026-06-02 | Current exact-image read-only production readiness gate | Blocked as designed | The approved read-only readiness wrapper for the `3c3de125a` image failed closed on the expected pending DB migration blocker before any image update path. No PR update, service update, provider switch, config write, reload, apply, rollback, or production mutation was performed. Platform-specific operational evidence remains outside this upstream PR surface. |
+| 2026-06-02 | Current exact-image live validation for `3c3de125a` | Passed | After current-session approval, the additive DB gate and exact-image runtime deployment were executed outside the upstream PR surface. Post-deploy schema proof, provider/task checks, route expectations, quick/full healthchecks, and final readiness passed. No PR update, Caddy migration apply, Caddy rollback execution, provider switch, or manual config write was performed. |
 
 ## Upstream Hygiene Checklist
 
