@@ -35,6 +35,12 @@ const getServers = (config: ReturnType<typeof compileCaddyConfig>) => {
 	return apps.http.servers as Record<string, any>;
 };
 
+test("keeps the Caddy admin API bound to localhost", () => {
+	const config = compileCaddyConfig();
+
+	expect(config.admin.listen).toBe("localhost:2019");
+});
+
 test("creates a Caddy dashboard route to the Dokploy container", () => {
 	const fragment = createCaddyDashboardRouteFragment(
 		settings(),

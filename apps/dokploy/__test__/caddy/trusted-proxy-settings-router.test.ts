@@ -97,6 +97,7 @@ import {
 	compileWriteAndReloadCaddyConfigSafely,
 	getCaddyCompileSettings,
 	getCaddyTrustedProxySettings,
+	readPorts,
 	resolveWebServerProvider,
 	updateCaddyTrustedProxySettings,
 } from "@dokploy/server";
@@ -205,4 +206,25 @@ test("restores previous trusted proxy settings when active Caddy rebuild fails",
 		undefined,
 	);
 	expect(audit).not.toHaveBeenCalled();
+});
+
+test("reports Caddy dashboard disabled instead of exposing the Caddy admin API", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("caddy");
+
+	const result = await caller.getWebServerDashboardState({});
+
+	expect(result).toEqual({ provider: "caddy", enabled: false });
+	expect(readPorts).not.toHaveBeenCalled();
+});
+
+test("keeps Traefik dashboard state based on the Traefik dashboard port", async () => {
+	vi.mocked(resolveWebServerProvider).mockResolvedValue("traefik");
+	vi.mocked(readPorts).mockResolvedValue([
+		{ targetPort: 8080, publishedPort: 8080, protocol: "tcp" },
+	] as never);
+
+	const result = await caller.getWebServerDashboardState({});
+
+	expect(readPorts).toHaveBeenCalledWith("dokploy-traefik", undefined);
+	expect(result).toEqual({ provider: "traefik", enabled: true });
 });
