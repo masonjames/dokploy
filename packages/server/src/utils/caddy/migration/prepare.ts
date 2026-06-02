@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 import * as path from "node:path";
 import { paths } from "@dokploy/server/constants";
 import { db } from "@dokploy/server/db";
-import { applications, compose } from "@dokploy/server/db/schema";
+import { applications, certificates, compose } from "@dokploy/server/db/schema";
 import { getCaddyCompileSettings } from "@dokploy/server/services/web-server-settings";
 import { createCaddyComposeRouteFragment } from "@dokploy/server/utils/caddy/compose";
 import {
@@ -469,6 +469,51 @@ const warnOnManualFragmentConflicts = (
 	}
 };
 
+const hasAvailableUploadedCertificate = async (
+	certificatePath: string,
+	serverId: string | null | undefined,
+) => {
+	const certificate = await db.query.certificates.findFirst({
+		where: eq(certificates.certificatePath, certificatePath),
+	});
+
+	return !!certificate && (certificate.serverId ?? null) === (serverId ?? null);
+};
+
+const warnIfCustomCertificateMissing = async (
+	domain: {
+		host: string;
+		certificateType: string;
+		customCertResolver?: string | null;
+	},
+	source: string,
+	serverId: string | null | undefined,
+	warnings: CaddyMigrationWarning[],
+	serviceName?: string | null,
+) => {
+	if (domain.certificateType !== "custom" || !domain.customCertResolver) {
+		return false;
+	}
+	if (
+		await hasAvailableUploadedCertificate(domain.customCertResolver, serverId)
+	) {
+		return false;
+	}
+
+	warnings.push(
+		warning(
+			`Domain "${domain.host}" references custom certificate "${domain.customCertResolver}" that is not an uploaded certificate for this server`,
+			{
+				blocking: true,
+				code: "missing-certificate",
+				source,
+				serviceName: serviceName ?? undefined,
+			},
+		),
+	);
+	return true;
+};
+
 const reconcileDbFallbackRoutes = (
 	fragments: CaddyRouteFragment[],
 	warnings: CaddyMigrationWarning[],
@@ -758,6 +803,16 @@ export const prepareCaddyMigration = async (
 				);
 				continue;
 			}
+			if (
+				await warnIfCustomCertificateMissing(
+					domain,
+					app.appName,
+					app.serverId,
+					warnings,
+				)
+			) {
+				continue;
+			}
 			addFragment(
 				fragments,
 				createCaddyApplicationRouteFragment(app as never, domain),
@@ -802,6 +857,17 @@ export const prepareCaddyMigration = async (
 						},
 					),
 				);
+				continue;
+			}
+			if (
+				await warnIfCustomCertificateMissing(
+					domain,
+					composeEntity.appName,
+					composeEntity.serverId,
+					warnings,
+					domain.serviceName,
+				)
+			) {
 				continue;
 			}
 			if (!domain.serviceName) {

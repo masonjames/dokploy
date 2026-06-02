@@ -20,6 +20,7 @@ export type CaddyMigrationWarningCode =
 	| "invalid-label"
 	| "invalid-config"
 	| "missing-input"
+	| "missing-certificate"
 	| "validation-failed"
 	| "health-check-failed"
 	| "backup-failed"

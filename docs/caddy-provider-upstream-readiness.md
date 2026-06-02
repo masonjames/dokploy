@@ -183,6 +183,7 @@ Implemented:
 - Caddy config compilation emits manual certificate file loaders while keeping automatic HTTPS available for other routes.
 - The Caddy domain UI labels the `custom` certificate provider as an uploaded certificate flow and restricts selection to certificates available to the current server.
 - Missing custom certificate references fail before writing Caddy config.
+- Migration dry-runs emit a blocking warning instead of generating DB fallback Caddy routes when a custom certificate reference does not map to an uploaded certificate for the same server.
 
 Tradeoff:
 
@@ -345,6 +346,7 @@ Expected post-mutation checks:
 | 2026-06-02 | Provider-neutral uploaded certificate UI copy | Complete | Replaced Traefik-only copy on the certificate settings page because uploaded certificates can now be selected by Caddy domains. |
 | 2026-06-02 | `git diff --check` | Passed | No whitespace errors in the current local diff. |
 | 2026-06-02 | RepoPrompt review with `back:3` diff artifacts | Complete | Incorporated production-code recommendations for Caddy certificate mounts, custom certificate availability checks, application domain creation compensation, preview route cleanup, and descriptive migration naming. |
+| 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy/migration/prepare.test.ts` | Passed | 1 file, 9 tests. Covers migration dry-run blocking warnings for missing uploaded custom certificate references. |
 
 ## Upstream Hygiene Checklist
 

@@ -10,6 +10,7 @@ vi.mock("@dokploy/server/db", () => ({
 	db: {
 		query: {
 			applications: { findMany: vi.fn() },
+			certificates: { findFirst: vi.fn() },
 			compose: { findMany: vi.fn() },
 		},
 	},
@@ -115,6 +116,7 @@ describe("prepareCaddyMigration", () => {
 			} as any,
 		]);
 		vi.mocked(db.query.compose.findMany).mockResolvedValue([]);
+		vi.mocked(db.query.certificates.findFirst).mockResolvedValue(undefined);
 	});
 
 	test("writes reviewable dry-run artifacts without touching live Caddy config", async () => {
@@ -167,6 +169,38 @@ describe("prepareCaddyMigration", () => {
 				"migration.traefik-dynamic.manual.json",
 			]),
 		);
+	});
+
+	test("blocks DB fallback routes with missing uploaded custom certificates", async () => {
+		vi.mocked(db.query.applications.findMany).mockResolvedValue([
+			{
+				applicationId: "app-1",
+				appName: "custom-cert-app",
+				serverId: null,
+				domains: [
+					{
+						...domain,
+						certificateType: "custom",
+						customCertResolver: "legacy-traefik-resolver",
+					},
+				],
+			} as any,
+		]);
+
+		const report = await prepareCaddyMigration();
+
+		expect(report.summary.blockingWarnings).toBe(1);
+		expect(report.warnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					blocking: true,
+					code: "missing-certificate",
+					source: "custom-cert-app",
+					message: expect.stringContaining("legacy-traefik-resolver"),
+				}),
+			]),
+		);
+		expect(report.summary.fragments).toBe(0);
 	});
 
 	test("carries existing manual Caddy fragments into the migration draft", async () => {
