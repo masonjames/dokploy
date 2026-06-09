@@ -610,7 +610,7 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 		.map(([command]) => command as string)
 		.find((command) => command.includes("docker run"));
 	expect(validateCommand).toContain("docker run --rm --network none");
-	expect(validateCommand).toContain("caddy\\:2.11.3");
+	expect(validateCommand).toContain("caddy\\:2.11.4");
 	expect(validateCommand).toContain(
 		"/etc/dokploy/caddy/migrations/test/caddy.json\\:/etc/caddy/caddy.json\\:ro",
 	);
@@ -621,7 +621,7 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 		`${paths().CERTIFICATES_PATH}\\:${paths().CERTIFICATES_PATH}\\:ro`,
 	);
 	expect(validateCommand).toContain(" caddy validate --config");
-	expect(validateCommand).not.toContain("caddy\\:2.11.3 validate --config");
+	expect(validateCommand).not.toContain("caddy\\:2.11.4 validate --config");
 });
 
 test("restores the previous Caddy config when safe validation fails without reloading", async () => {

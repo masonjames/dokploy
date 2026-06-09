@@ -27,10 +27,10 @@ afterEach(() => {
 });
 
 describe("Caddy runtime setup", () => {
-	test("defaults to the pinned Caddy 2.11.3 image tag", async () => {
+	test("defaults to the pinned Caddy 2.11.4 image tag", async () => {
 		const { CADDY_VERSION } = await loadCaddySetup();
 
-		expect(CADDY_VERSION).toBe("2.11.3");
+		expect(CADDY_VERSION).toBe("2.11.4");
 	});
 
 	test("uses the pinned default image for standalone Caddy", async () => {
@@ -55,12 +55,12 @@ describe("Caddy runtime setup", () => {
 		await initializeStandaloneCaddy();
 
 		expect(docker.pull).toHaveBeenCalledWith(
-			"caddy:2.11.3",
+			"caddy:2.11.4",
 			expect.any(Function),
 		);
 		expect(createContainer).toHaveBeenCalledWith(
 			expect.objectContaining({
-				Image: "caddy:2.11.3",
+				Image: "caddy:2.11.4",
 				HostConfig: expect.objectContaining({
 					Binds: expect.arrayContaining([
 						expect.stringMatching(/\/caddy:\/etc\/caddy$/),

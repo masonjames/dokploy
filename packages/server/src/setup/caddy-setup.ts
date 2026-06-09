@@ -23,7 +23,7 @@ const CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS = new Set([
 	8082,
 	CADDY_ADMIN_PORT,
 ]);
-export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
+export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
 
 export interface CaddyOptions {
 	env?: string[];

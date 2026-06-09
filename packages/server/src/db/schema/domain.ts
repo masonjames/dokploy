@@ -55,6 +55,7 @@ export const domains = pgTable("domain", {
 	internalPath: text("internalPath").default("/"),
 	stripPath: boolean("stripPath").notNull().default(false),
 	middlewares: text("middlewares").array().default(sql`ARRAY[]::text[]`),
+	forwardAuthEnabled: boolean("forwardAuthEnabled").notNull().default(false),
 });
 
 export const domainsRelations = relations(domains, ({ one }) => ({
@@ -95,6 +96,7 @@ export const apiCreateDomain = createSchema
 		internalPath: true,
 		stripPath: true,
 		middlewares: true,
+		forwardAuthEnabled: true,
 	})
 	.superRefine(validateDomainSettings);
 
@@ -128,6 +130,7 @@ export const apiUpdateDomain = createSchema
 		internalPath: true,
 		stripPath: true,
 		middlewares: true,
+		forwardAuthEnabled: true,
 	})
 	.merge(createSchema.pick({ domainId: true }).required())
 	.superRefine(validateDomainSettings);

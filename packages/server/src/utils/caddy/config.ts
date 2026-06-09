@@ -25,7 +25,7 @@ import type {
 } from "./types";
 
 const CADDY_FRAGMENT_VERSION = 1;
-const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.3";
+const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
 const CADDY_ACCESS_LOG_CONTAINER_PATH = "/etc/caddy/access.log";
 export const CLOUDFLARE_TRUSTED_PROXY_RANGES = [
 	"173.245.48.0/20",

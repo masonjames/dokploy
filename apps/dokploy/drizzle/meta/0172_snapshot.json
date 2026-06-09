@@ -1,6 +1,6 @@
 {
-  "id": "364132ca-1f0c-4dc5-8827-daf5f4c6cc2c",
-  "prevId": "99b3eb38-5993-4945-a6ae-46e791e23c57",
+  "id": "2d3a1f27-4d24-4216-8c1a-b2cbea27af11",
+  "prevId": "e4d9fc62-4bf9-483d-b2c1-13c704c773b8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3146,6 +3146,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": "ARRAY[]::text[]"
+        },
+        "forwardAuthEnabled": {
+          "name": "forwardAuthEnabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {},
@@ -3263,6 +3270,111 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.forward_auth_settings": {
+      "name": "forward_auth_settings",
+      "schema": "",
+      "columns": {
+        "forwardAuthSettingsId": {
+          "name": "forwardAuthSettingsId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "authDomain": {
+          "name": "authDomain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "baseDomain": {
+          "name": "baseDomain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "https": {
+          "name": "https",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "certificateType": {
+          "name": "certificateType",
+          "type": "certificateType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'letsencrypt'"
+        },
+        "customCertResolver": {
+          "name": "customCertResolver",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "providerId": {
+          "name": "providerId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "serverId": {
+          "name": "serverId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "forward_auth_settings_providerId_sso_provider_provider_id_fk": {
+          "name": "forward_auth_settings_providerId_sso_provider_provider_id_fk",
+          "tableFrom": "forward_auth_settings",
+          "tableTo": "sso_provider",
+          "columnsFrom": [
+            "providerId"
+          ],
+          "columnsTo": [
+            "provider_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "forward_auth_settings_serverId_server_serverId_fk": {
+          "name": "forward_auth_settings_serverId_server_serverId_fk",
+          "tableFrom": "forward_auth_settings",
+          "tableTo": "server",
+          "columnsFrom": [
+            "serverId"
+          ],
+          "columnsTo": [
+            "serverId"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "forward_auth_settings_serverId_unique": {
+          "name": "forward_auth_settings_serverId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "serverId"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -7333,7 +7445,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "sso_provider_organization_id_organization_id_fk": {

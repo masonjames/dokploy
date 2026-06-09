@@ -14,23 +14,22 @@ PR: https://github.com/Dokploy/dokploy/pull/4534
 
 ## Current PR State
 
-Observed with `gh pr view 4534 --repo Dokploy/dokploy`:
+Observed locally during the 2026-06-08 `v0.29.8` refresh:
 
 - State: open
 - Base: `canary`
-- Base SHA: `6a0acd9cad0a00f2ef09a10124d2d40f57e220f6`
+- Base SHA: `1f4f94042f1d874349c42d8ae7fee51346cd086e` (`v0.29.8`)
 - Head: `codex/caddy-web-server-v0296-clean-pr`
-- Mergeable: mergeable
-- Review decision: review required
-- Visible checks: none reported immediately after the rebased branch push
+- Merge conflicts: locally resolved against `upstream/canary`
+- Remote PR metadata: re-check after pushing the refreshed branch
 
-Local state observed after the rebased branch push:
+Local state observed after the `v0.29.8` merge:
 
 - Repo: local Dokploy checkout
 - Branch: `codex/caddy-web-server-v0296-clean-pr`
-- Working tree: clean
 - Upstream base: `upstream/canary`
-- Remote branch: `origin/codex/caddy-web-server-v0296-clean-pr` matched local `HEAD`
+- Caddy runtime/validation default: `caddy:2.11.4`
+- DB migration tail: upstream `0170_amusing_spot`, upstream `0171_lucky_echo`, then idempotent Caddy provider migration `0172_parched_ares`
 
 ## Readiness Matrix
 
@@ -58,8 +57,7 @@ Provider selection and resources:
 
 - `packages/server/src/utils/web-server/providers.ts`
 - `packages/server/src/services/web-server-settings.ts`
-- `apps/dokploy/drizzle/0170_web_server_provider.sql`
-- `apps/dokploy/drizzle/0171_caddy_trusted_proxy_config.sql`
+- `apps/dokploy/drizzle/0172_parched_ares.sql`
 
 Application domain Caddy routing:
 
@@ -498,6 +496,9 @@ Expected post-mutation checks:
 | 2026-06-02 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | 29 files, 194 tests after the final RepoPrompt `back:3` review follow-up. Covers focused Caddy config, setup, request analytics, trusted proxy settings, custom certificates, domain modal source contracts, domain validation, domain lifecycle, compose-domain call-site contracts, preview cleanup, migration prepare/apply/rollback, upstream preflight, runtime migration, active web-server health checks, dashboard local-only/admin-port behavior, dashboard rewrite rollback/settings compensation, provider-aware application web-server config cache invalidation, provider-neutral UI contracts, remote web-server file-system inspection, direct dashboard toggle rejection, concurrent dashboard-fragment preservation, and active-config resync after a concurrent dashboard update. |
 | 2026-06-02 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, `pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true <PR file set>`, `git diff --check`, and `git merge-tree --write-tree HEAD upstream/canary` | Passed | App/server typechecks, formatter/import checks over 109 recognized PR files, whitespace checks, and clean merge-tree verification passed after rebasing onto `upstream/canary`. Node v26 produced the expected engine warning because the repo wants Node `^24.4.0`. |
 | 2026-06-02 | `git push --force-with-lease origin codex/caddy-web-server-v0296-clean-pr` and `gh pr view 4534 --repo Dokploy/dokploy` | Passed | PR branch updated after rebasing onto current `upstream/canary`; GitHub reported PR `#4534` open, non-draft, mergeable, review required, and no checks reported immediately after push. |
+| 2026-06-08 | `git merge --no-ff upstream/canary` after fetching `v0.29.8` | Passed | Local Caddy branch merged upstream `1f4f94042` / `v0.29.8`. Conflicts were limited to Drizzle metadata and domain schema. The resolved migration tail keeps upstream forward-auth migrations and replaces the old Caddy migration-number collision with idempotent `0172_parched_ares.sql`. |
+| 2026-06-08 | `pnpm --filter=dokploy test --run __test__/caddy __test__/db/runtime-migration.test.ts` | Passed | Node `24.4.0`; 29 files, 196 tests. Covers the Caddy suite and runtime migration wrapper after the `v0.29.8` merge and Caddy `2.11.4` default update. |
+| 2026-06-08 | `pnpm --filter=dokploy typecheck`, `pnpm --filter=@dokploy/server typecheck`, `pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true <PR file set>`, and `git diff --check` | Passed | App/server typechecks, formatter/import checks over 74 recognized PR files, and whitespace checks passed under Node `24.4.0`. |
 
 ## Upstream Hygiene Checklist
 

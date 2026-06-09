@@ -1,1 +1,0 @@
-ALTER TABLE "webServerSettings" ADD COLUMN "requestLogsEnabled" boolean DEFAULT false NOT NULL;
