@@ -1,6 +1,7 @@
 import type { ContainerCreateOptions, CreateServiceOptions } from "dockerode";
 import { paths } from "../constants";
 import {
+	CADDY_METRICS_PORT,
 	ensureDefaultCaddyConfig,
 	reloadCaddyAfterValidation,
 	validateCaddyConfigWithContainer,
@@ -18,10 +19,14 @@ export const CADDY_PORT =
 export const CADDY_HTTP3_PORT =
 	Number.parseInt(process.env.CADDY_HTTP3_PORT ?? "", 10) || 443;
 export const CADDY_ADMIN_PORT = 2019;
+const CADDY_RESERVED_TCP_PORTS = new Set([
+	CADDY_ADMIN_PORT,
+	CADDY_METRICS_PORT,
+]);
 const CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS = new Set([
 	8080,
 	8082,
-	CADDY_ADMIN_PORT,
+	...CADDY_RESERVED_TCP_PORTS,
 ]);
 export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
 
@@ -40,21 +45,30 @@ export interface CaddyOptions {
 
 type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
 
+const usesTcp = (port: CaddyAdditionalPort) =>
+	(port.protocol ?? "tcp") === "tcp";
+
 export const isCaddyAdminAdditionalPort = (port: CaddyAdditionalPort) =>
-	port.targetPort === CADDY_ADMIN_PORT && (port.protocol ?? "tcp") === "tcp";
+	usesTcp(port) &&
+	(port.targetPort === CADDY_ADMIN_PORT ||
+		port.publishedPort === CADDY_ADMIN_PORT);
 
 export const isCaddyAdminPort = isCaddyAdminAdditionalPort;
-export const isCaddyReservedAdditionalPort = isCaddyAdminAdditionalPort;
+export const isCaddyReservedAdditionalPort = (port: CaddyAdditionalPort) =>
+	usesTcp(port) &&
+	(CADDY_RESERVED_TCP_PORTS.has(port.targetPort) ||
+		CADDY_RESERVED_TCP_PORTS.has(port.publishedPort));
 
 export const isTraefikCarryOverPortForCaddyMigration = (
 	port: CaddyAdditionalPort,
 ) =>
-	CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS.has(port.targetPort) &&
-	(port.protocol ?? "tcp") === "tcp";
+	usesTcp(port) &&
+	(CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS.has(port.targetPort) ||
+		CADDY_RESERVED_TCP_PORTS.has(port.publishedPort));
 
 export const filterCaddyAdditionalPorts = (
 	additionalPorts: CaddyOptions["additionalPorts"] = [],
-) => additionalPorts.filter((port) => !isCaddyAdminAdditionalPort(port));
+) => additionalPorts.filter((port) => !isCaddyReservedAdditionalPort(port));
 
 export const filterTraefikCarryOverPortsForCaddyMigration = (
 	additionalPorts: CaddyOptions["additionalPorts"] = [],

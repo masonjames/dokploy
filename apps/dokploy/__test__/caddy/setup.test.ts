@@ -5,6 +5,7 @@ const ensureDefaultCaddyConfigMock = vi.hoisted(() => vi.fn());
 const getRemoteDockerMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@dokploy/server/utils/caddy/config", () => ({
+	CADDY_METRICS_PORT: 2020,
 	ensureDefaultCaddyConfig: ensureDefaultCaddyConfigMock,
 	reloadCaddyAfterValidation: vi.fn(),
 	validateCaddyConfigWithContainer: validateCaddyConfigWithContainerMock,
@@ -104,6 +105,9 @@ describe("Caddy runtime setup", () => {
 		await initializeStandaloneCaddy({
 			additionalPorts: [
 				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 2020, publishedPort: 2020, protocol: "tcp" },
+				{ targetPort: 9001, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 9002, publishedPort: 2020, protocol: "tcp" },
 				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
 				{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
 				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
@@ -115,6 +119,14 @@ describe("Caddy runtime setup", () => {
 		expect(createOptions.HostConfig.PortBindings).not.toHaveProperty(
 			"2019/tcp",
 		);
+		expect(createOptions.ExposedPorts).not.toHaveProperty("2020/tcp");
+		expect(createOptions.HostConfig.PortBindings).not.toHaveProperty(
+			"2020/tcp",
+		);
+		expect(createOptions.ExposedPorts).not.toHaveProperty("9001/tcp");
+		expect(createOptions.HostConfig.PortBindings["9001/tcp"]).toBeUndefined();
+		expect(createOptions.ExposedPorts).not.toHaveProperty("9002/tcp");
+		expect(createOptions.HostConfig.PortBindings["9002/tcp"]).toBeUndefined();
 		expect(createOptions.ExposedPorts).toHaveProperty("8080/tcp");
 		expect(createOptions.HostConfig.PortBindings["8080/tcp"]).toEqual([
 			{ HostPort: "18080" },
@@ -183,6 +195,9 @@ describe("Caddy runtime setup", () => {
 			accessLogs: { enabled: true },
 			additionalPorts: [
 				{ targetPort: 2019, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 2020, publishedPort: 2020, protocol: "tcp" },
+				{ targetPort: 9001, publishedPort: 2019, protocol: "tcp" },
+				{ targetPort: 9002, publishedPort: 2020, protocol: "tcp" },
 				{ targetPort: 8080, publishedPort: 18080, protocol: "tcp" },
 				{ targetPort: 8082, publishedPort: 18082, protocol: "tcp" },
 				{ targetPort: 9000, publishedPort: 9000, protocol: "tcp" },
@@ -202,6 +217,21 @@ describe("Caddy runtime setup", () => {
 		expect(createOptions.EndpointSpec.Ports).not.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ TargetPort: 2019, Protocol: "tcp" }),
+			]),
+		);
+		expect(createOptions.EndpointSpec.Ports).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ TargetPort: 2020, Protocol: "tcp" }),
+			]),
+		);
+		expect(createOptions.EndpointSpec.Ports).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ PublishedPort: 2019, Protocol: "tcp" }),
+			]),
+		);
+		expect(createOptions.EndpointSpec.Ports).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ PublishedPort: 2020, Protocol: "tcp" }),
 			]),
 		);
 		expect(createOptions.EndpointSpec.Ports).toEqual(

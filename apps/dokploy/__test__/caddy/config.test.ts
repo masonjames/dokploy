@@ -102,6 +102,15 @@ test("compiles explicit http and https servers with managed HTTPS redirect", () 
 	const servers = getServers(config);
 	expect(servers.http.listen).toEqual([":80"]);
 	expect(servers.https.listen).toEqual([":443"]);
+	expect(servers.metrics).toEqual({
+		listen: [":2020"],
+		routes: [
+			{
+				handle: [{ handler: "metrics" }],
+				terminal: true,
+			},
+		],
+	});
 	expect(servers.http.routes[0].handle[0].handler).toBe("static_response");
 	expect(servers.http.routes[0].handle[0].headers.Location).toEqual([
 		"https://{http.request.host}{http.request.uri}",

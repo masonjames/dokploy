@@ -27,6 +27,7 @@ import type {
 const CADDY_FRAGMENT_VERSION = 1;
 const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
 const CADDY_ACCESS_LOG_CONTAINER_PATH = "/etc/caddy/access.log";
+export const CADDY_METRICS_PORT = 2020;
 export const CLOUDFLARE_TRUSTED_PROXY_RANGES = [
 	"173.245.48.0/20",
 	"103.21.244.0/22",
@@ -630,6 +631,20 @@ const createHttpsRedirectRoute = (route: CaddyRouteIntent) => {
 	});
 };
 
+const createCaddyMetricsServer = () => ({
+	listen: [`:${CADDY_METRICS_PORT}`],
+	routes: [
+		{
+			handle: [
+				{
+					handler: "metrics",
+				},
+			],
+			terminal: true,
+		},
+	],
+});
+
 export const flattenCaddyFragments = (fragments: CaddyRouteFragment[] = []) => {
 	for (const fragment of fragments) {
 		validateCaddyRouteFragment(fragment);
@@ -698,6 +713,7 @@ export const compileCaddyConfig = ({
 						...trustedProxyServerOptions,
 						routes: httpsRoutes,
 					},
+					metrics: createCaddyMetricsServer(),
 				},
 			},
 		},
