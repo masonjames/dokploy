@@ -39,7 +39,7 @@ export const ShowTraefikFile = ({ path, serverId }: Props) => {
 		data,
 		refetch,
 		isLoading: isLoadingFile,
-	} = api.settings.readTraefikFile.useQuery(
+	} = api.webServer.readTraefikFile.useQuery(
 		{
 			path,
 			serverId,
@@ -52,7 +52,7 @@ export const ShowTraefikFile = ({ path, serverId }: Props) => {
 	const [skipYamlValidation, setSkipYamlValidation] = useState(false);
 
 	const { mutateAsync, isPending, error, isError } =
-		api.settings.updateTraefikFile.useMutation();
+		api.webServer.updateTraefikFile.useMutation();
 
 	const form = useForm<UpdateServerMiddlewareConfig>({
 		defaultValues: {

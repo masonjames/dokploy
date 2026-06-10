@@ -42,9 +42,9 @@ export type LogEntry = NonNullable<
 
 export const ShowRequests = () => {
 	const { data: isActive, refetch } =
-		api.settings.haveActivateRequests.useQuery();
+		api.webServer.haveActivateRequests.useQuery();
 	const { mutateAsync: toggleRequests } =
-		api.settings.toggleRequests.useMutation();
+		api.webServer.toggleRequests.useMutation();
 
 	const { data: logCleanupStatus } =
 		api.settings.getLogCleanupStatus.useQuery();

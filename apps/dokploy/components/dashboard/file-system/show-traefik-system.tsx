@@ -23,7 +23,7 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 		isLoading,
 		error,
 		isError,
-	} = api.settings.readDirectories.useQuery(
+	} = api.webServer.readDirectories.useQuery(
 		{
 			serverId,
 		},

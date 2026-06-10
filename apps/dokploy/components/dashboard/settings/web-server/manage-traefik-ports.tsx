@@ -70,12 +70,12 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 	});
 
 	const { data: currentPorts, refetch: refetchPorts } =
-		api.settings.getTraefikPorts.useQuery({
+		api.webServer.getTraefikPorts.useQuery({
 			serverId,
 		});
 
 	const { mutateAsync: updatePorts, isPending } =
-		api.settings.updateTraefikPorts.useMutation();
+		api.webServer.updateTraefikPorts.useMutation();
 
 	const {
 		execute: executeWithHealthCheck,

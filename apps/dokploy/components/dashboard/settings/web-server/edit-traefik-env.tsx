@@ -40,12 +40,12 @@ interface Props {
 export const EditTraefikEnv = ({ children, serverId }: Props) => {
 	const [canEdit, setCanEdit] = useState(true);
 
-	const { data } = api.settings.readTraefikEnv.useQuery({
+	const { data } = api.webServer.readTraefikEnv.useQuery({
 		serverId,
 	});
 
 	const { mutateAsync, isPending, error, isError } =
-		api.settings.writeTraefikEnv.useMutation();
+		api.webServer.writeTraefikEnv.useMutation();
 
 	const {
 		execute: executeWithHealthCheck,
