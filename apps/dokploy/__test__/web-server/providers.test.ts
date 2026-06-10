@@ -20,14 +20,14 @@ import {
 	WEB_SERVER_PROVIDERS,
 } from "@dokploy/server/utils/web-server/providers";
 
-test("traefik is the only registered provider and the default", () => {
-	expect(WEB_SERVER_PROVIDERS).toEqual(["traefik"]);
+test("traefik and caddy are the registered providers; traefik is the default", () => {
+	expect(WEB_SERVER_PROVIDERS).toEqual(["traefik", "caddy"]);
 	expect(DEFAULT_WEB_SERVER_PROVIDER).toBe("traefik");
 });
 
 test("recognizes registered providers", () => {
 	expect(isWebServerProvider("traefik")).toBe(true);
-	expect(isWebServerProvider("caddy")).toBe(false);
+	expect(isWebServerProvider("caddy")).toBe(true);
 	expect(isWebServerProvider(undefined)).toBe(false);
 	expect(isWebServerProvider(42)).toBe(false);
 });
@@ -40,6 +40,7 @@ test("normalizes unknown values to the default provider", () => {
 
 test("maps the provider to its docker resource name", () => {
 	expect(getWebServerResourceName("traefik")).toBe("dokploy-traefik");
+	expect(getWebServerResourceName("caddy")).toBe("dokploy-caddy");
 });
 
 test("exposes the Traefik filesystem layout for the local host", () => {

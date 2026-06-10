@@ -31,12 +31,9 @@ type HealthResult = {
 	postgres: ServiceStatus;
 	redis: ServiceStatus;
 	webServer: ServiceStatus & {
-		provider: "traefik";
+		provider: "traefik" | "caddy";
 	};
-};
-
-const webServerLabels: Record<HealthResult["webServer"]["provider"], string> = {
-	traefik: "Traefik",
+	traefik?: ServiceStatus;
 };
 
 type ModalState = "idle" | "checking" | "results" | "updating";
@@ -60,6 +57,11 @@ const ServiceStatusItem = ({
 		)}
 	</div>
 );
+
+const webServerLabels: Record<HealthResult["webServer"]["provider"], string> = {
+	traefik: "Traefik",
+	caddy: "Caddy",
+};
 
 export const UpdateWebServer = () => {
 	const [modalState, setModalState] = useState<ModalState>("idle");

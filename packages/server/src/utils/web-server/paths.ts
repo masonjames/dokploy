@@ -1,27 +1,23 @@
 import { paths } from "@dokploy/server/constants";
 import type { WebServerProvider } from "./providers";
 
-export type WebServerPaths = {
-	provider: WebServerProvider;
-	/** Root directory owned by the active web server. */
-	basePath: string;
-	/** Main (static) configuration file of the web server. */
-	activeConfigPath: string;
-	/** Directory containing the per-app generated route fragments. */
-	fragmentsPath: string;
-	/** Directory containing user-provided certificates. */
-	certificatesPath: string;
-};
-
-/**
- * Filesystem layout of the active web server. Centralizes the Traefik
- * directory knowledge that is currently spread across call sites.
- */
 export const getWebServerPaths = (
 	provider: WebServerProvider,
 	isServer = false,
-): WebServerPaths => {
+) => {
 	const resolvedPaths = paths(isServer);
+
+	if (provider === "caddy") {
+		return {
+			provider,
+			basePath: resolvedPaths.MAIN_CADDY_PATH,
+			activeConfigPath: resolvedPaths.CADDY_CONFIG_PATH,
+			fragmentsPath: resolvedPaths.CADDY_FRAGMENTS_PATH,
+			dataPath: resolvedPaths.CADDY_DATA_PATH,
+			configDirPath: resolvedPaths.CADDY_CONFIG_DIR_PATH,
+			migrationsPath: resolvedPaths.CADDY_MIGRATIONS_PATH,
+		};
+	}
 
 	return {
 		provider,
