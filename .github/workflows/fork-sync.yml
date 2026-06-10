@@ -1,0 +1,102 @@
+name: Fork sync (upstream weekly)
+
+# 2026-06-10 platform program M3.6 (R4.5): weekly merge of the newest upstream
+# release tag into the production branch, gated by the caddy + db test suites
+# and typecheck; ntfy alert on conflict or test failure. Never pushes upstream.
+
+on:
+  schedule:
+    - cron: '0 7 * * 2' # Tuesdays 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PROD_BRANCH: codex/caddy-web-server-v0296-clean-pr
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PROD_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch newest upstream release tag
+        id: tag
+        run: |
+          git remote add upstream https://github.com/Dokploy/dokploy.git
+          git fetch upstream --tags --quiet
+          TAG=$(git tag --list 'v*' --sort=-version:refname | head -1)
+          echo "Newest upstream tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$TAG" HEAD; then
+            echo "already_merged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_merged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream tag
+        id: merge
+        if: steps.tag.outputs.already_merged == 'false'
+        run: |
+          git config user.name "fork-sync[bot]"
+          git config user.email "noreply@masonjames.com"
+          if git merge --no-edit "${{ steps.tag.outputs.tag }}"; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            git merge --abort
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.merge.outputs.conflict == 'false' && steps.tag.outputs.already_merged == 'false'
+      - uses: actions/setup-node@v4
+        if: steps.merge.outputs.conflict == 'false' && steps.tag.outputs.already_merged == 'false'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Tests + typecheck
+        id: tests
+        if: steps.merge.outputs.conflict == 'false' && steps.tag.outputs.already_merged == 'false'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter dokploy run typecheck || { echo "result=fail" >> "$GITHUB_OUTPUT"; exit 1; }
+          pnpm --filter dokploy run test -- __test__/caddy || { echo "result=fail" >> "$GITHUB_OUTPUT"; exit 1; }
+          echo "result=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Push merged branch + fork tag
+        if: steps.tests.outputs.result == 'pass'
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          git push origin "HEAD:${PROD_BRANCH}"
+          git tag "fork-${TAG}-$(date +%Y%m%d)"
+          git push origin "fork-${TAG}-$(date +%Y%m%d)"
+
+      - name: Notify outcome
+        if: always()
+        env:
+          NTFY_BASE_URL: ${{ secrets.NTFY_BASE_URL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: |
+          [ -n "$NTFY_BASE_URL" ] || { echo "ntfy not configured"; exit 0; }
+          TAG="${{ steps.tag.outputs.tag }}"
+          if [ "${{ steps.tag.outputs.already_merged }}" = "true" ]; then
+            MSG="Fork sync: $TAG already merged — nothing to do."; PRIO=min; TAGS=white_check_mark
+          elif [ "${{ steps.merge.outputs.conflict }}" = "true" ]; then
+            MSG="Fork sync: MERGE CONFLICT with $TAG — manual merge needed."; PRIO=high; TAGS=warning
+          elif [ "${{ steps.tests.outputs.result }}" = "pass" ]; then
+            MSG="Fork sync: merged $TAG, tests green, fork tag pushed."; PRIO=default; TAGS=white_check_mark
+          else
+            MSG="Fork sync: $TAG merge OK but tests/typecheck FAILED — branch not pushed."; PRIO=high; TAGS=warning
+          fi
+          curl -sS -X POST "${NTFY_BASE_URL}/platform-alerts" \
+            -H "Authorization: Bearer ${NTFY_TOKEN}" \
+            -H "Title: Dokploy fork sync" -H "Priority: $PRIO" -H "Tags: $TAGS" \
+            --data-raw "$MSG
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" || true
