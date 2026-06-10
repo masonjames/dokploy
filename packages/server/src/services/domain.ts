@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { db } from "@dokploy/server/db";
 import { getWebServerSettings } from "@dokploy/server/services/web-server-settings";
 import { generateRandomDomain } from "@dokploy/server/templates";
-import { manageDomain } from "@dokploy/server/utils/traefik/domain";
+import { manageWebServerDomain } from "@dokploy/server/utils/web-server/domain";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import type { z } from "zod";
@@ -15,7 +15,7 @@ import { findServerById } from "./server";
 export type Domain = typeof domains.$inferSelect;
 
 export const createDomain = async (input: z.infer<typeof apiCreateDomain>) => {
-	const result = await db.transaction(async (tx) => {
+	const domain = await db.transaction(async (tx) => {
 		const domain = await tx
 			.insert(domains)
 			.values({
@@ -32,15 +32,23 @@ export const createDomain = async (input: z.infer<typeof apiCreateDomain>) => {
 			});
 		}
 
-		if (domain.applicationId) {
-			const application = await findApplicationById(domain.applicationId);
-			await manageDomain(application, domain);
-		}
-
 		return domain;
 	});
 
-	return result;
+	// Write the edge route outside the DB transaction (it performs file and
+	// network IO). If the route cannot be created, remove the row again so a
+	// failed create does not leave a domain that is not actually routed.
+	if (domain.applicationId) {
+		const application = await findApplicationById(domain.applicationId);
+		try {
+			await manageWebServerDomain(application, domain);
+		} catch (error) {
+			await removeDomainById(domain.domainId).catch(() => undefined);
+			throw error;
+		}
+	}
+
+	return domain;
 };
 
 export const generateTraefikMeDomain = async (

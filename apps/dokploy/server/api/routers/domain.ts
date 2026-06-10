@@ -8,9 +8,9 @@ import {
 	findServerById,
 	generateTraefikMeDomain,
 	getWebServerSettings,
-	manageDomain,
-	removeDomain,
+	manageWebServerDomain,
 	removeDomainById,
+	removeWebServerDomain,
 	updateDomainById,
 	validateDomain,
 } from "@dokploy/server";
@@ -128,7 +128,7 @@ export const domainRouter = createTRPCRouter({
 			});
 			if (domain.applicationId) {
 				const application = await findApplicationById(domain.applicationId);
-				await manageDomain(application, domain);
+				await manageWebServerDomain(application, domain);
 			} else if (domain.previewDeploymentId) {
 				const previewDeployment = await findPreviewDeploymentById(
 					domain.previewDeploymentId,
@@ -137,7 +137,7 @@ export const domainRouter = createTRPCRouter({
 					previewDeployment.applicationId,
 				);
 				application.appName = previewDeployment.appName;
-				await manageDomain(application, domain);
+				await manageWebServerDomain(application, domain);
 			}
 			return result;
 		}),
@@ -186,7 +186,7 @@ export const domainRouter = createTRPCRouter({
 
 			if (domain.applicationId) {
 				const application = await findApplicationById(domain.applicationId);
-				await removeDomain(application, domain.uniqueConfigKey);
+				await removeWebServerDomain(application, domain.uniqueConfigKey);
 			}
 
 			return result;
