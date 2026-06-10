@@ -3,6 +3,11 @@ name: Fork sync (upstream weekly)
 # 2026-06-10 platform program M3.6 (R4.5): weekly merge of the newest upstream
 # release tag into the production branch, gated by the caddy + db test suites
 # and typecheck; ntfy alert on conflict or test failure. Never pushes upstream.
+#
+# Hardening (zizmor findings on #1): SHA-pinned actions, no credential
+# persistence from checkout (push authenticates explicitly), and all step
+# outputs reach run blocks via env — never template expansion (the upstream
+# tag name is third-party-controlled input).
 
 on:
   schedule:
@@ -20,11 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ env.PROD_BRANCH }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Fetch newest upstream release tag
         id: tag
@@ -32,6 +37,11 @@ jobs:
           git remote add upstream https://github.com/Dokploy/dokploy.git
           git fetch upstream --tags --quiet
           TAG=$(git tag --list 'v*' --sort=-version:refname | head -1)
+          # Third-party input: accept strict release-tag shape only.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected upstream tag format '$TAG'"
+            exit 1
+          fi
           echo "Newest upstream tag: $TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           if git merge-base --is-ancestor "$TAG" HEAD; then
@@ -43,19 +53,21 @@ jobs:
       - name: Merge upstream tag
         id: merge
         if: steps.tag.outputs.already_merged == 'false'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           git config user.name "fork-sync[bot]"
           git config user.email "noreply@masonjames.com"
-          if git merge --no-edit "${{ steps.tag.outputs.tag }}"; then
+          if git merge --no-edit "$TAG"; then
             echo "conflict=false" >> "$GITHUB_OUTPUT"
           else
             echo "conflict=true" >> "$GITHUB_OUTPUT"
             git merge --abort
           fi
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         if: steps.merge.outputs.conflict == 'false' && steps.tag.outputs.already_merged == 'false'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.merge.outputs.conflict == 'false' && steps.tag.outputs.already_merged == 'false'
         with:
           node-version: 20
@@ -72,25 +84,32 @@ jobs:
 
       - name: Push merged branch + fork tag
         if: steps.tests.outputs.result == 'pass'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "HEAD:${PROD_BRANCH}"
-          git tag "fork-${TAG}-$(date +%Y%m%d)"
-          git push origin "fork-${TAG}-$(date +%Y%m%d)"
+          FORK_TAG="fork-${TAG}-$(date +%Y%m%d)"
+          git tag "$FORK_TAG"
+          git push origin "$FORK_TAG"
 
       - name: Notify outcome
         if: always()
         env:
           NTFY_BASE_URL: ${{ secrets.NTFY_BASE_URL }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          ALREADY: ${{ steps.tag.outputs.already_merged }}
+          CONFLICT: ${{ steps.merge.outputs.conflict }}
+          TESTS: ${{ steps.tests.outputs.result }}
         run: |
           [ -n "$NTFY_BASE_URL" ] || { echo "ntfy not configured"; exit 0; }
-          TAG="${{ steps.tag.outputs.tag }}"
-          if [ "${{ steps.tag.outputs.already_merged }}" = "true" ]; then
+          if [ "$ALREADY" = "true" ]; then
             MSG="Fork sync: $TAG already merged — nothing to do."; PRIO=min; TAGS=white_check_mark
-          elif [ "${{ steps.merge.outputs.conflict }}" = "true" ]; then
+          elif [ "$CONFLICT" = "true" ]; then
             MSG="Fork sync: MERGE CONFLICT with $TAG — manual merge needed."; PRIO=high; TAGS=warning
-          elif [ "${{ steps.tests.outputs.result }}" = "pass" ]; then
+          elif [ "$TESTS" = "pass" ]; then
             MSG="Fork sync: merged $TAG, tests green, fork tag pushed."; PRIO=default; TAGS=white_check_mark
           else
             MSG="Fork sync: $TAG merge OK but tests/typecheck FAILED — branch not pushed."; PRIO=high; TAGS=warning
