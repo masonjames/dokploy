@@ -20,31 +20,8 @@ import {
 	initializeTraefikService,
 	type TraefikOptions,
 } from "../setup/traefik-setup";
+import type { CaddyMigrationResourceSnapshot } from "../utils/caddy/migration/types";
 import type { WebServerProvider } from "../utils/web-server/providers";
-
-// TODO(caddy-migration): replace with the shared type from
-// `../utils/caddy/migration/types` once the migration tooling lands.
-export interface CaddyMigrationResourceSnapshot {
-	resourceName: string;
-	resourceType: "service" | "standalone" | "unknown";
-	running: boolean;
-	replicas?: number;
-	env?: string;
-	additionalPorts?: {
-		targetPort: number;
-		publishedPort: number;
-		protocol?: string;
-	}[];
-	image?: string;
-	binds?: string[];
-	mounts?: Array<Record<string, unknown>>;
-	networks?: Array<string | Record<string, unknown>>;
-	labels?: Record<string, string>;
-	containerLabels?: Record<string, string>;
-	placement?: Record<string, unknown>;
-	endpointPorts?: Array<Record<string, unknown>>;
-	restartPolicy?: Record<string, unknown>;
-}
 export interface IUpdateData {
 	latestVersion: string | null;
 	updateAvailable: boolean;
