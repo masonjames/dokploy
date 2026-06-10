@@ -137,5 +137,8 @@ export * from "./utils/traefik/types";
 export * from "./utils/traefik/web-server";
 export * from "./utils/volume-backups/index";
 export * from "./utils/watch-paths/should-deploy";
+export * from "./utils/web-server/domain";
+export * from "./utils/web-server/paths";
+export * from "./utils/web-server/providers";
 export * from "./verification/send-verification-email";
 export * from "./wss/utils";
