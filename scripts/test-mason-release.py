@@ -14,6 +14,8 @@ assert "ghcr.io/masonjames/dokploy:latest" not in workflow
 assert "provenance: mode=max" in workflow
 assert "sbom: true" in workflow
 assert "severity: CRITICAL" in workflow
+assert workflow.index("Enforce critical vulnerability threshold before publication") < workflow.index("Build and push immutable image")
+assert "image-ref: local/mason-dokploy:${{ github.sha }}" in workflow
 assert "CADDY_IMAGE" in caddy_setup
 
 assert re.search(
