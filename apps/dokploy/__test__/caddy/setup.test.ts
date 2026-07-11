@@ -117,6 +117,9 @@ const createServiceDockerMock = () => {
 		createService,
 		getService: vi.fn(() => existingService),
 		getImage: vi.fn(() => ({ inspect: inspectImage })),
+		getNetwork: vi.fn(() => ({
+			inspect: vi.fn().mockResolvedValue({ Id: "dokploy-network-id" }),
+		})),
 		listTasks: vi.fn().mockResolvedValue([
 			{
 				Status: { State: "running" },
@@ -677,7 +680,7 @@ describe("Caddy runtime setup", () => {
 		const candidateUpdate = existingService.update.mock.calls[0]?.[0] as any;
 		expect(candidateUpdate.TaskTemplate.Networks).toEqual([
 			{ Target: "existing-app-network" },
-			{ Target: "dokploy-network" },
+			{ Target: "dokploy-network-id" },
 		]);
 		expect(existingService.update).toHaveBeenCalledTimes(2);
 		expect(existingService.update.mock.calls[1]?.[0]).toEqual(
@@ -686,5 +689,32 @@ describe("Caddy runtime setup", () => {
 		expect(writeCaddyConfigContentMock).toHaveBeenCalledWith('{"old":true}\n', {
 			serverId: undefined,
 		});
+	});
+
+	test("deduplicates an inspected Caddy network ID during service update", async () => {
+		const { docker, existingService } = createServiceDockerMock();
+		existingService.inspect.mockResolvedValue({
+			ID: "caddy-service",
+			Version: { Index: 7 },
+			Spec: {
+				Name: "dokploy-caddy",
+				TaskTemplate: {
+					ContainerSpec: { Image: "caddy:2.11.3" },
+					Networks: [{ Target: "dokploy-network-id" }],
+				},
+			},
+		});
+		getRemoteDockerMock.mockResolvedValue(docker);
+		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
+		validateCaddyConfigFileWithImageMock.mockResolvedValue(undefined);
+		validateCaddyConfigWithContainerMock.mockResolvedValue(undefined);
+		const { initializeCaddyService } = await loadCaddySetup();
+
+		await initializeCaddyService({});
+
+		const candidateUpdate = existingService.update.mock.calls[0]?.[0] as any;
+		expect(candidateUpdate.TaskTemplate.Networks).toEqual([
+			{ Target: "dokploy-network-id" },
+		]);
 	});
 });

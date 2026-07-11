@@ -46,6 +46,7 @@ jobs:
           __test__/caddy
           __test__/deploy/application-image-cas.test.ts
           __test__/deploy/application-release-api.test.ts
+          __test__/deploy/application-release-cloud-api.test.ts
           __test__/deploy/application-runtime-status.test.ts
           __test__/deploy/deployment-job-status.test.ts
           __test__/queues/in-memory-queue.test.ts

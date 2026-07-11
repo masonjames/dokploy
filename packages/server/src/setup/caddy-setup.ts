@@ -352,12 +352,30 @@ const getExistingService = async (
 };
 
 const mergeServiceNetworks = (
-	existingNetworks: Array<{ Target: string; Aliases?: string[] }> = [],
+	existingNetworks: Array<{ Target: string; Aliases?: string[] }>,
+	caddyNetworkTarget: string,
 ) => {
-	const networks = [...existingNetworks, { Target: DOKPLOY_CADDY_NETWORK }];
+	const hasCaddyNetwork = existingNetworks.some(
+		(network) =>
+			network.Target === caddyNetworkTarget ||
+			network.Target === DOKPLOY_CADDY_NETWORK,
+	);
+	const networks = hasCaddyNetwork
+		? existingNetworks
+		: [...existingNetworks, { Target: caddyNetworkTarget }];
 	return [
 		...new Map(networks.map((network) => [network.Target, network])).values(),
 	];
+};
+
+const resolveCaddyNetworkTarget = async (docker: DockerClient) => {
+	const network = await docker.getNetwork(DOKPLOY_CADDY_NETWORK).inspect();
+	if (!network.Id) {
+		throw new Error(
+			`Docker network ${DOKPLOY_CADDY_NETWORK} has no inspectable ID`,
+		);
+	}
+	return network.Id;
 };
 
 const serviceTaskUsesImage = (taskImage: unknown, expectedImage: string) =>
@@ -666,10 +684,12 @@ const initializeCaddyServiceLockHeld = async (
 		console.log("Caddy service candidate pulled and validated ✅");
 
 		existing = await getExistingService(docker, appName);
+		const caddyNetworkTarget = await resolveCaddyNetworkTarget(docker);
 		settings.TaskTemplate = {
 			...settings.TaskTemplate,
 			Networks: mergeServiceNetworks(
 				existing?.inspect.Spec?.TaskTemplate?.Networks ?? [],
+				caddyNetworkTarget,
 			),
 		};
 
