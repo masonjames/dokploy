@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { DeploymentJob } from "./queue-types";
 
 /**
@@ -24,7 +25,7 @@ import type { DeploymentJob } from "./queue-types";
 
 export const LOCAL_PARTITION = "__local__";
 
-export type JobState = "waiting" | "active";
+export type JobState = "waiting" | "active" | "completed" | "failed";
 
 export interface InMemoryJob {
 	id: string;
@@ -70,6 +71,7 @@ interface Partition {
 	/** Groups currently running in this partition. */
 	activeGroups: Set<string>;
 	active: InternalJob[];
+	terminal: InternalJob[];
 }
 
 export interface InMemoryQueueOptions {
@@ -81,25 +83,37 @@ export interface InMemoryQueueOptions {
 	resolveConcurrency: (partition: string) => Promise<number> | number;
 	/** Monotonic clock; injectable for tests. Defaults to Date.now. */
 	now?: () => number;
+	/** Retain terminal status long enough for exact deployment polling. */
+	terminalRetentionMs?: number;
+	/** Per-partition terminal history bound. */
+	maxTerminalJobs?: number;
 }
 
 export class InMemoryQueue {
 	private partitions = new Map<string, Partition>();
 	private processor: Processor | null = null;
 	private running = false;
-	private seq = 0;
 	private readonly resolveConcurrency: InMemoryQueueOptions["resolveConcurrency"];
 	private readonly now: () => number;
+	private readonly terminalRetentionMs: number;
+	private readonly maxTerminalJobs: number;
 
 	constructor(options: InMemoryQueueOptions) {
 		this.resolveConcurrency = options.resolveConcurrency;
 		this.now = options.now ?? (() => Date.now());
+		this.terminalRetentionMs = options.terminalRetentionMs ?? 86_400_000;
+		this.maxTerminalJobs = options.maxTerminalJobs ?? 1000;
 	}
 
 	private getPartitionState(key: string): Partition {
 		let partition = this.partitions.get(key);
 		if (!partition) {
-			partition = { waiting: [], activeGroups: new Set(), active: [] };
+			partition = {
+				waiting: [],
+				activeGroups: new Set(),
+				active: [],
+				terminal: [],
+			};
 			this.partitions.set(key, partition);
 		}
 		return partition;
@@ -124,7 +138,7 @@ export class InMemoryQueue {
 	}
 
 	async add(data: DeploymentJob): Promise<{ id: string }> {
-		const id = `job-${++this.seq}`;
+		const id = `job-${randomUUID()}`;
 		const partitionKey = getPartition(data);
 		const job: InternalJob = {
 			id,
@@ -148,33 +162,71 @@ export class InMemoryQueue {
 			timestamp: job.timestamp,
 			processedOn: job.processedOn,
 			finishedOn: job.finishedOn,
+			failedReason: job.failedReason,
 			getState: () => Promise.resolve(job.state),
 			remove: () => this.remove(job.id),
 		};
+	}
+
+	private pruneTerminal(partition: Partition) {
+		const cutoff = this.now() - this.terminalRetentionMs;
+		partition.terminal = partition.terminal
+			.filter((job) => (job.finishedOn ?? job.timestamp) >= cutoff)
+			.slice(-this.maxTerminalJobs);
 	}
 
 	/** Snapshot of jobs in the requested states (defaults to waiting + active). */
 	getJobs(states?: JobState[]): Promise<InMemoryJob[]> {
 		const wantWaiting = !states || states.includes("waiting");
 		const wantActive = !states || states.includes("active");
+		const wantCompleted = states?.includes("completed") ?? false;
+		const wantFailed = states?.includes("failed") ?? false;
 		const jobs: InMemoryJob[] = [];
 		for (const partition of this.partitions.values()) {
+			this.pruneTerminal(partition);
 			if (wantWaiting) {
 				jobs.push(...partition.waiting.map((job) => this.toPublic(job)));
 			}
 			if (wantActive) {
 				jobs.push(...partition.active.map((job) => this.toPublic(job)));
 			}
+			if (wantCompleted || wantFailed) {
+				jobs.push(
+					...partition.terminal
+						.filter(
+							(job) =>
+								(wantCompleted && job.state === "completed") ||
+								(wantFailed && job.state === "failed"),
+						)
+						.map((job) => this.toPublic(job)),
+				);
+			}
 		}
 		return Promise.resolve(jobs);
 	}
 
-	/** Remove a single waiting job by id. Active jobs cannot be removed. */
+	getJob(id: string): Promise<InMemoryJob | null> {
+		for (const partition of this.partitions.values()) {
+			this.pruneTerminal(partition);
+			const job = [
+				...partition.waiting,
+				...partition.active,
+				...partition.terminal,
+			].find((candidate) => candidate.id === id);
+			if (job) return Promise.resolve(this.toPublic(job));
+		}
+		return Promise.resolve(null);
+	}
+
+	/** Remove a single waiting or terminal job by id. Active jobs cannot be removed. */
 	remove(id: string): Promise<void> {
 		for (const partition of this.partitions.values()) {
 			const before = partition.waiting.length;
 			partition.waiting = partition.waiting.filter((job) => job.id !== id);
 			if (partition.waiting.length !== before) break;
+			const terminalBefore = partition.terminal.length;
+			partition.terminal = partition.terminal.filter((job) => job.id !== id);
+			if (partition.terminal.length !== terminalBefore) break;
 		}
 		return Promise.resolve();
 	}
@@ -245,8 +297,10 @@ export class InMemoryQueue {
 	private async runJob(job: InternalJob) {
 		try {
 			await this.processor?.(this.toPublic(job));
+			job.state = "completed";
 		} catch (error) {
 			job.failedReason = error instanceof Error ? error.message : String(error);
+			job.state = "failed";
 			console.error("In-memory deployment job failed", error);
 		} finally {
 			job.finishedOn = this.now();
@@ -254,6 +308,8 @@ export class InMemoryQueue {
 			if (partition) {
 				partition.active = partition.active.filter((j) => j.id !== job.id);
 				partition.activeGroups.delete(job.group);
+				partition.terminal.push(job);
+				this.pruneTerminal(partition);
 			}
 			// A slot (and possibly the group) freed up — try to schedule more.
 			void this.drainPartition(job.partition);

@@ -503,6 +503,15 @@ export const apiSaveDockerProvider = createSchema
 	})
 	.required();
 
+export const apiPrepareImmutableImage = z.object({
+	applicationId: z.string().min(1),
+	expectedCurrentImage: z.string().min(1),
+	candidateImage: z
+		.string()
+		.min(1)
+		.regex(/@sha256:[a-f0-9]{64}$/, "candidateImage must be digest-pinned"),
+});
+
 export const apiSaveGitProvider = createSchema
 	.pick({
 		applicationId: true,
