@@ -38,6 +38,8 @@ assert re.search(
 assert "sh get-docker.sh --version 29.6.1" in dockerfile
 assert "ARG RAILPACK_VERSION=0.30.1" in dockerfile
 assert 'org.opencontainers.image.revision="$SOURCE_REVISION"' in dockerfile
+assert dockerfile.index("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./") < dockerfile.index("pnpm install --frozen-lockfile")
+assert dockerfile.index("pnpm install --frozen-lockfile") < dockerfile.index("COPY . .")
 
 for match in re.finditer(r"uses:\s+[^\s@]+@([^\s#]+)", workflow):
     ref = match.group(1)
