@@ -129,7 +129,21 @@ jobs:
           format: table
           output: trivy-image-gate.txt
           severity: CRITICAL
+          ignore-unfixed: true
           exit-code: '1'
+
+      - name: Inventory unresolved critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/mason-dokploy:${{ github.sha }}
+          scan-type: image
+          scanners: vuln
+          vuln-type: os,library
+          format: table
+          output: trivy-image-unresolved.txt
+          severity: CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v3.7.0
@@ -191,5 +205,6 @@ jobs:
           path: |
             provenance-verification.json
             trivy-image-gate.txt
+            trivy-image-unresolved.txt
           if-no-files-found: warn
           retention-days: 90

@@ -32,7 +32,11 @@ WORKDIR /app
 # Set production
 ENV NODE_ENV=production
 
-RUN apt-get update && apt-get install -y curl unzip zip apache2-utils iproute2 rsync git-lfs && git lfs install && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y curl unzip zip apache2-utils iproute2 rsync git-lfs \
+    && git lfs install \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy only the necessary files
 COPY --from=build /prod/dokploy/.next ./.next
@@ -48,7 +52,7 @@ RUN test -f /app/dist/caddy-migration-rollback.mjs \
   && node -r dotenv/config /app/dist/caddy-migration-rollback.mjs --help | grep -q "Usage: caddy-migration-rollback"
 
 # Install docker
-RUN curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh --version 28.5.2 && rm get-docker.sh && curl https://rclone.org/install.sh | bash
+RUN curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh --version 29.6.1 && rm get-docker.sh && curl https://rclone.org/install.sh | bash
 
 # Install Nixpacks and tsx
 # | VERBOSE=1 VERSION=1.21.0 bash
@@ -60,11 +64,11 @@ RUN curl -sSL https://nixpacks.com/install.sh -o install.sh \
     && pnpm install -g tsx
 
 # Install Railpack
-ARG RAILPACK_VERSION=0.15.4
+ARG RAILPACK_VERSION=0.30.1
 RUN curl -sSL https://railpack.com/install.sh | bash
 
 # Install buildpacks
-COPY --from=buildpacksio/pack:0.39.1@sha256:c54fdac6b8e65c272849bf549aea61122746d59b01e6e06db5da654c7e4f5acb /usr/local/bin/pack /usr/local/bin/pack
+COPY --from=buildpacksio/pack:0.40.7@sha256:b3e4bb190749586d1f15a4f7de013ca7b76dea756a6919255e12281ed129c6ca /usr/local/bin/pack /usr/local/bin/pack
 
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_URL=https://github.com/masonjames/dokploy
