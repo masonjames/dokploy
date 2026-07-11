@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.4.0-slim AS base
+FROM node:24.4.0-slim@sha256:1b044a60874f1b57ac8c4e708ddb3a00e55b34586ebbacce09a48796dafcc799 AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -28,6 +28,11 @@ RUN cp -R /usr/src/app/apps/dokploy/dist /prod/dokploy/dist
 
 FROM base AS dokploy
 WORKDIR /app
+
+ARG SOURCE_REVISION=unknown
+ARG SOURCE_URL=https://github.com/masonjames/dokploy
+LABEL org.opencontainers.image.source="$SOURCE_URL" \
+  org.opencontainers.image.revision="$SOURCE_REVISION"
 
 # Set production
 ENV NODE_ENV=production
@@ -64,7 +69,7 @@ ARG RAILPACK_VERSION=0.15.4
 RUN curl -sSL https://railpack.com/install.sh | bash
 
 # Install buildpacks
-COPY --from=buildpacksio/pack:0.39.1 /usr/local/bin/pack /usr/local/bin/pack
+COPY --from=buildpacksio/pack:0.39.1@sha256:c54fdac6b8e65c272849bf549aea61122746d59b01e6e06db5da654c7e4f5acb /usr/local/bin/pack /usr/local/bin/pack
 
 EXPOSE 3000
 
