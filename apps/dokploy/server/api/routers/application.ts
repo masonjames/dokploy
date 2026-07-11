@@ -351,6 +351,12 @@ export const applicationRouter = createTRPCRouter({
 
 			if (IS_CLOUD && application.serverId) {
 				const queued = await deploy(jobData);
+				if (!queued?.jobId) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Cloud deployment was not queued with a job ID",
+					});
+				}
 				await audit(ctx, {
 					action: "rebuild",
 					resourceType: "application",
@@ -360,7 +366,7 @@ export const applicationRouter = createTRPCRouter({
 				return {
 					queued: true,
 					queue: "inngest" as const,
-					jobId: queued?.jobId ? String(queued.jobId) : null,
+					jobId: String(queued.jobId),
 				};
 			}
 			const job = await myQueue.add("deployments", { ...jobData });
