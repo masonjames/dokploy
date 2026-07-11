@@ -17,6 +17,8 @@ assert "severity: CRITICAL" in workflow
 assert "ignore-unfixed: true" in workflow
 assert "Inventory unresolved critical vulnerabilities" in workflow
 assert "trivy-image-unresolved.txt" in workflow
+assert "pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9" in workflow
+assert "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e" in workflow
 assert workflow.index("Enforce critical vulnerability threshold before publication") < workflow.index("Build and push immutable image")
 assert "image-ref: local/mason-dokploy:${{ github.sha }}" in workflow
 assert "CADDY_IMAGE" in caddy_setup
