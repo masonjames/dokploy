@@ -128,7 +128,7 @@ jobs:
           vuln-type: os,library
           format: table
           output: trivy-image-gate.txt
-shou          severity: CRITICAL
+          severity: CRITICAL
           ignore-unfixed: true
           exit-code: '1'
 
