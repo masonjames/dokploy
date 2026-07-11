@@ -102,7 +102,7 @@ app.post("/deploy", zValidator("json", deployJobSchema), async (c) => {
 
 	try {
 		// Send event to Inngest instead of adding to Redis queue
-		await inngest.send({
+		const queued = await inngest.send({
 			name: "deployment/requested",
 			data,
 		});
@@ -115,6 +115,7 @@ app.post("/deploy", zValidator("json", deployJobSchema), async (c) => {
 			{
 				message: "Deployment Added to Inngest Queue",
 				serverId: data.serverId,
+				jobId: queued.ids[0] ?? null,
 			},
 			200,
 		);

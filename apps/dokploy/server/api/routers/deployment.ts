@@ -124,6 +124,61 @@ export const deploymentRouter = createTRPCRouter({
 		);
 	}),
 
+	queueJobStatus: protectedProcedure
+		.input(z.object({ jobId: z.string().min(1) }))
+		.query(async ({ input, ctx }) => {
+			if (IS_CLOUD) {
+				throw new TRPCError({
+					code: "NOT_IMPLEMENTED",
+					message: "Exact queue job polling is not available in cloud mode",
+				});
+			}
+			const job = await myQueue.getJob(input.jobId);
+			if (!job) {
+				return {
+					jobId: input.jobId,
+					found: false as const,
+					state: "unknown" as const,
+					terminal: false,
+					succeeded: false,
+					failed: false,
+					timestamp: null,
+					processedOn: null,
+					finishedOn: null,
+				};
+			}
+
+			const data = job.data as {
+				applicationId?: string;
+				composeId?: string;
+			};
+			const serviceId = data.applicationId ?? data.composeId;
+			if (!serviceId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Deployment job is not associated with a service",
+				});
+			}
+			await checkServicePermissionAndAccess(ctx, serviceId, {
+				deployment: ["read"],
+			});
+
+			const state = await job.getState();
+			const succeeded = state === "completed";
+			const failed = state === "failed";
+			return {
+				jobId: String(job.id),
+				found: true as const,
+				state,
+				terminal: succeeded || failed,
+				succeeded,
+				failed,
+				timestamp: job.timestamp ?? null,
+				processedOn: job.processedOn ?? null,
+				finishedOn: job.finishedOn ?? null,
+			};
+		}),
+
 	allByType: protectedProcedure
 		.input(apiFindAllByType)
 		.query(async ({ input, ctx }) => {

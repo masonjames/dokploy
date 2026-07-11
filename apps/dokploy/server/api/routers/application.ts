@@ -8,11 +8,13 @@ import {
 	findEnvironmentById,
 	findProjectById,
 	getAccessibleServerIds,
+	getApplicationRuntimeStatus,
 	getApplicationStats,
 	getContainerLogs,
 	getWebServerSettings,
 	IS_CLOUD,
 	mechanizeDockerContainer,
+	prepareImmutableApplicationImage,
 	readConfig,
 	readRemoteConfig,
 	removeDeployments,
@@ -56,6 +58,7 @@ import {
 	apiDeployApplication,
 	apiFindMonitoringStats,
 	apiFindOneApplication,
+	apiPrepareImmutableImage,
 	apiRedeployApplication,
 	apiReloadApplication,
 	apiSaveBitbucketProvider,
@@ -276,6 +279,14 @@ export const applicationRouter = createTRPCRouter({
 			});
 			return application;
 		}),
+	runtimeStatus: protectedProcedure
+		.input(apiFindOneApplication)
+		.query(async ({ input, ctx }) => {
+			await checkServicePermissionAndAccess(ctx, input.applicationId, {
+				deployment: ["read"],
+			});
+			return getApplicationRuntimeStatus(input.applicationId);
+		}),
 
 	stop: protectedProcedure
 		.input(apiFindOneApplication)
@@ -339,31 +350,37 @@ export const applicationRouter = createTRPCRouter({
 			};
 
 			if (IS_CLOUD && application.serverId) {
-				deploy(jobData).catch((error) => {
-					console.error("Background deployment failed:", error);
-				});
+				const queued = await deploy(jobData);
 				await audit(ctx, {
 					action: "rebuild",
 					resourceType: "application",
 					resourceId: application.applicationId,
 					resourceName: application.appName,
 				});
-				return true;
+				return {
+					queued: true,
+					queue: "inngest" as const,
+					jobId: queued?.jobId ? String(queued.jobId) : null,
+				};
 			}
-			await myQueue.add(
-				"deployments",
-				{ ...jobData },
-				{
-					removeOnComplete: true,
-					removeOnFail: true,
-				},
-			);
+			const job = await myQueue.add("deployments", { ...jobData });
 			await audit(ctx, {
 				action: "rebuild",
 				resourceType: "application",
 				resourceId: application.applicationId,
 				resourceName: application.appName,
 			});
+			if (job.id === undefined) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Deployment was queued without a job ID",
+				});
+			}
+			return {
+				queued: true,
+				queue: "in-memory" as const,
+				jobId: String(job.id),
+			};
 		}),
 	saveEnvironment: protectedProcedure
 		.input(apiSaveEnvironmentVariables)
@@ -541,6 +558,22 @@ export const applicationRouter = createTRPCRouter({
 				resourceName: application.appName,
 			});
 			return true;
+		}),
+	prepareImmutableImage: protectedProcedure
+		.input(apiPrepareImmutableImage)
+		.mutation(async ({ input, ctx }) => {
+			await checkServicePermissionAndAccess(ctx, input.applicationId, {
+				service: ["create"],
+			});
+			const result = await prepareImmutableApplicationImage(input);
+			const application = await findApplicationById(input.applicationId);
+			await audit(ctx, {
+				action: "update",
+				resourceType: "application",
+				resourceId: application.applicationId,
+				resourceName: application.appName,
+			});
+			return result;
 		}),
 	saveGitProvider: protectedProcedure
 		.input(apiSaveGitProvider)

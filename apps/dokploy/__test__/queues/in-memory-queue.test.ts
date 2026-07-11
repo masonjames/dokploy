@@ -334,4 +334,49 @@ describe("InMemoryQueue job management", () => {
 
 		expect(started).toEqual(["a", "b"]);
 	});
+
+	it("retains exact completed and failed job states for bounded polling", async () => {
+		const queue = new InMemoryQueue({ resolveConcurrency: () => 1 });
+		queue.process(async (job) => {
+			if ((job.data as any).applicationId === "failed") {
+				throw new Error("private failure detail");
+			}
+		});
+		await queue.run();
+
+		const completed = await queue.add(appJob("completed"));
+		const failed = await queue.add(appJob("failed"));
+		await flush();
+		await flush();
+
+		await expect(queue.getJob(completed.id)).resolves.toMatchObject({
+			id: completed.id,
+			finishedOn: expect.any(Number),
+		});
+		await expect((await queue.getJob(completed.id))?.getState()).resolves.toBe(
+			"completed",
+		);
+		await expect((await queue.getJob(failed.id))?.getState()).resolves.toBe(
+			"failed",
+		);
+		expect((await queue.getJobs(["failed"])).map((job) => job.id)).toEqual([
+			failed.id,
+		]);
+	});
+
+	it("expires terminal job history after the configured retention", async () => {
+		let time = 0;
+		const queue = new InMemoryQueue({
+			resolveConcurrency: () => 1,
+			now: () => time,
+			terminalRetentionMs: 50,
+		});
+		queue.process(async () => {});
+		const job = await queue.add(appJob("completed"));
+		await flush();
+		await expect(queue.getJob(job.id)).resolves.not.toBeNull();
+
+		time = 51;
+		await expect(queue.getJob(job.id)).resolves.toBeNull();
+	});
 });

@@ -5,7 +5,11 @@ import {
 } from "@dokploy/server/utils/process/execAsync";
 import { resolveBuildsConcurrency } from "./concurrency";
 import { processDeploymentJob } from "./deployments-queue";
-import { type InMemoryJob, InMemoryQueue } from "./in-memory-queue";
+import {
+	type InMemoryJob,
+	InMemoryQueue,
+	type JobState,
+} from "./in-memory-queue";
 import type { DeploymentJob } from "./queue-types";
 
 /**
@@ -22,7 +26,8 @@ interface DeploymentQueue {
 		data: DeploymentJob,
 		opts?: Record<string, unknown>,
 	) => Promise<{ id: string }>;
-	getJobs: (states?: Array<"waiting" | "active">) => Promise<InMemoryJob[]>;
+	getJobs: (states?: JobState[]) => Promise<InMemoryJob[]>;
+	getJob: (id: string) => Promise<InMemoryJob | null>;
 	close: () => Promise<void>;
 	on: (...args: unknown[]) => void;
 	run: () => Promise<void>;
@@ -33,6 +38,7 @@ interface DeploymentQueue {
 const createNoopQueue = (): DeploymentQueue => ({
 	add: () => Promise.resolve({ id: "noop" }),
 	getJobs: () => Promise.resolve([]),
+	getJob: () => Promise.resolve(null),
 	close: () => Promise.resolve(),
 	on: () => {},
 	run: () => Promise.resolve(),
@@ -49,6 +55,7 @@ const createInMemoryQueue = (): DeploymentQueue => {
 	return {
 		add: (_name, data) => queue.add(data),
 		getJobs: (states) => queue.getJobs(states),
+		getJob: (id) => queue.getJob(id),
 		close: () => queue.close(),
 		on: () => {},
 		run: () => queue.run(),
