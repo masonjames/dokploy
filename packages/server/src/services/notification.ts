@@ -834,12 +834,113 @@ export const findNotificationById = async (notificationId: string) => {
 };
 
 export const removeNotificationById = async (notificationId: string) => {
-	const result = await db
-		.delete(notifications)
-		.where(eq(notifications.notificationId, notificationId))
-		.returning();
+	return db.transaction(async (tx) => {
+		const notification = await tx.query.notifications.findFirst({
+			where: eq(notifications.notificationId, notificationId),
+			columns: {
+				notificationId: true,
+				notificationType: true,
+				slackId: true,
+				telegramId: true,
+				discordId: true,
+				emailId: true,
+				resendId: true,
+				gotifyId: true,
+				ntfyId: true,
+				mattermostId: true,
+				customId: true,
+				larkId: true,
+				pushoverId: true,
+				teamsId: true,
+			},
+		});
+		if (!notification) return undefined;
 
-	return result[0];
+		const deleted = await tx
+			.delete(notifications)
+			.where(eq(notifications.notificationId, notificationId))
+			.returning()
+			.then((rows) => rows[0]);
+
+		switch (notification.notificationType) {
+			case "slack":
+				if (notification.slackId) {
+					await tx.delete(slack).where(eq(slack.slackId, notification.slackId));
+				}
+				break;
+			case "telegram":
+				if (notification.telegramId) {
+					await tx
+						.delete(telegram)
+						.where(eq(telegram.telegramId, notification.telegramId));
+				}
+				break;
+			case "discord":
+				if (notification.discordId) {
+					await tx
+						.delete(discord)
+						.where(eq(discord.discordId, notification.discordId));
+				}
+				break;
+			case "email":
+				if (notification.emailId) {
+					await tx.delete(email).where(eq(email.emailId, notification.emailId));
+				}
+				break;
+			case "resend":
+				if (notification.resendId) {
+					await tx
+						.delete(resend)
+						.where(eq(resend.resendId, notification.resendId));
+				}
+				break;
+			case "gotify":
+				if (notification.gotifyId) {
+					await tx
+						.delete(gotify)
+						.where(eq(gotify.gotifyId, notification.gotifyId));
+				}
+				break;
+			case "ntfy":
+				if (notification.ntfyId) {
+					await tx.delete(ntfy).where(eq(ntfy.ntfyId, notification.ntfyId));
+				}
+				break;
+			case "mattermost":
+				if (notification.mattermostId) {
+					await tx
+						.delete(mattermost)
+						.where(eq(mattermost.mattermostId, notification.mattermostId));
+				}
+				break;
+			case "custom":
+				if (notification.customId) {
+					await tx
+						.delete(custom)
+						.where(eq(custom.customId, notification.customId));
+				}
+				break;
+			case "lark":
+				if (notification.larkId) {
+					await tx.delete(lark).where(eq(lark.larkId, notification.larkId));
+				}
+				break;
+			case "pushover":
+				if (notification.pushoverId) {
+					await tx
+						.delete(pushover)
+						.where(eq(pushover.pushoverId, notification.pushoverId));
+				}
+				break;
+			case "teams":
+				if (notification.teamsId) {
+					await tx.delete(teams).where(eq(teams.teamsId, notification.teamsId));
+				}
+				break;
+		}
+
+		return deleted;
+	});
 };
 
 export const createLarkNotification = async (
