@@ -141,6 +141,7 @@ const inspectRunningContainers = async (
 ) => {
 	const health = emptyContainerHealth();
 	const imageIds: string[] = [];
+	let healthCheckConfigured = false;
 
 	await Promise.all(
 		runningTasks.map(async (task) => {
@@ -152,6 +153,7 @@ const inspectRunningContainers = async (
 			try {
 				const container = await docker.getContainer(containerId).inspect();
 				if (container.Image) imageIds.push(container.Image);
+				if (container.State.Health) healthCheckConfigured = true;
 				switch (container.State.Health?.Status) {
 					case "healthy":
 						health.healthy += 1;
@@ -177,7 +179,11 @@ const inspectRunningContainers = async (
 		}),
 	);
 
-	return { health, imageIds: uniqueSorted(imageIds) };
+	return {
+		health,
+		healthCheckConfigured,
+		imageIds: uniqueSorted(imageIds),
+	};
 };
 
 const determineServiceHealth = ({
@@ -295,8 +301,11 @@ export const getApplicationRuntimeStatus = async (applicationId: string) => {
 				: null;
 		const runtimeDesiredImage =
 			serviceSpec?.TaskTemplate?.ContainerSpec?.Image ?? null;
-		const { health: containerHealth, imageIds: runningImageIds } =
-			await inspectRunningContainers(docker, runningTasks);
+		const {
+			health: containerHealth,
+			healthCheckConfigured: containerHealthCheckConfigured,
+			imageIds: runningImageIds,
+		} = await inspectRunningContainers(docker, runningTasks);
 		const replicaConverged =
 			runningTasks.length === desiredReplicas &&
 			pendingReplicas === 0 &&
@@ -304,6 +313,16 @@ export const getApplicationRuntimeStatus = async (applicationId: string) => {
 		const updateState = inspected.UpdateStatus?.State ?? null;
 		const healthCheckTest =
 			serviceSpec?.TaskTemplate?.ContainerSpec?.HealthCheck?.Test;
+		const serviceHealthCheckConfigured = Boolean(
+			healthCheckTest?.length && healthCheckTest[0] !== "NONE",
+		);
+		const healthCheckEvidence = serviceHealthCheckConfigured
+			? "service-spec"
+			: containerHealthCheckConfigured
+				? "container-inspect"
+				: containerHealth.unavailable > 0
+					? "unavailable"
+					: "none";
 
 		return {
 			applicationId: application.applicationId,
@@ -341,9 +360,9 @@ export const getApplicationRuntimeStatus = async (applicationId: string) => {
 			pendingReplicas,
 			failedReplicas,
 			replicaConverged,
-			healthCheckConfigured: Boolean(
-				healthCheckTest?.length && healthCheckTest[0] !== "NONE",
-			),
+			healthCheckConfigured:
+				serviceHealthCheckConfigured || containerHealthCheckConfigured,
+			healthCheckEvidence,
 			containerHealth,
 			updateState,
 			health: determineServiceHealth({
