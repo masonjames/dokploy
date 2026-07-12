@@ -25,11 +25,14 @@ test("deletes a custom notification and its provider record atomically", async (
 	const deleteMock = vi.fn((table) => ({
 		where: table === notifications ? notificationWhere : providerWhere,
 	}));
-	const findFirst = vi.fn().mockResolvedValue({
-		notificationId: "notification-1",
-		notificationType: "custom",
-		customId: "custom-1",
-	});
+	const findFirst = vi
+		.fn()
+		.mockResolvedValueOnce({
+			notificationId: "notification-1",
+			notificationType: "custom",
+			customId: "custom-1",
+		})
+		.mockResolvedValueOnce(undefined);
 
 	transactionMock.mockImplementation(async (callback) =>
 		callback({
@@ -44,6 +47,34 @@ test("deletes a custom notification and its provider record atomically", async (
 	expect(deleteMock).toHaveBeenNthCalledWith(1, notifications);
 	expect(deleteMock).toHaveBeenNthCalledWith(2, custom);
 	expect(providerWhere).toHaveBeenCalledOnce();
+});
+
+test("preserves a provider record still referenced by another notification", async () => {
+	const notificationWhere = vi.fn(() => ({
+		returning: vi
+			.fn()
+			.mockResolvedValue([{ notificationId: "notification-1" }]),
+	}));
+	const deleteMock = vi.fn(() => ({ where: notificationWhere }));
+	const findFirst = vi
+		.fn()
+		.mockResolvedValueOnce({
+			notificationId: "notification-1",
+			notificationType: "custom",
+			customId: "shared-custom",
+		})
+		.mockResolvedValueOnce({ notificationId: "notification-2" });
+
+	transactionMock.mockImplementation(async (callback) =>
+		callback({
+			query: { notifications: { findFirst } },
+			delete: deleteMock,
+		}),
+	);
+
+	await removeNotificationById("notification-1");
+	expect(deleteMock).toHaveBeenCalledOnce();
+	expect(deleteMock).toHaveBeenCalledWith(notifications);
 });
 
 test("does not delete a provider when the notification is already absent", async () => {
