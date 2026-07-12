@@ -158,6 +158,52 @@ test("reports mixed running task digests during a rolling update", async () => {
 	expect(result.health).toBe("degraded");
 });
 
+test("recognizes an image-defined health check from the running container", async () => {
+	getRemoteDockerMock.mockResolvedValue({
+		getService: vi.fn(() => ({
+			inspect: vi.fn().mockResolvedValue({
+				ID: "service-1",
+				Spec: {
+					Mode: { Replicated: { Replicas: 1 } },
+					TaskTemplate: { ContainerSpec: { Image: candidateImage } },
+				},
+				UpdateStatus: { State: "completed" },
+			}),
+		})),
+		listTasks: vi.fn().mockResolvedValue([
+			{
+				DesiredState: "running",
+				Spec: { ContainerSpec: { Image: candidateImage } },
+				Status: {
+					State: "running",
+					ContainerStatus: { ContainerID: "container-1" },
+				},
+			},
+		]),
+		getContainer: vi.fn(() => ({
+			inspect: vi.fn().mockResolvedValue({
+				Image: `sha256:${"1".repeat(64)}`,
+				Config: { Image: candidateImage },
+				State: { Health: { Status: "healthy" } },
+			}),
+		})),
+	});
+
+	const result = await getApplicationRuntimeStatus("app-1");
+
+	expect(result).toMatchObject({
+		healthCheckConfigured: true,
+		containerHealth: {
+			healthy: 1,
+			unhealthy: 0,
+			starting: 0,
+			none: 0,
+			unavailable: 0,
+		},
+		health: "healthy",
+	});
+});
+
 test("falls back to an exact standalone container without exposing its config", async () => {
 	const containerInspect = vi.fn().mockResolvedValue({
 		Image: `sha256:${"c".repeat(64)}`,
