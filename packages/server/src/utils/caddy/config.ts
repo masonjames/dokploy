@@ -28,6 +28,10 @@ const CADDY_FRAGMENT_VERSION = 1;
 const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
 const CADDY_IMAGE = process.env.CADDY_IMAGE?.trim() || `caddy:${CADDY_VERSION}`;
 const CADDY_ACCESS_LOG_CONTAINER_PATH = "/etc/caddy/access.log";
+// Application and Compose webhook credentials are path segments. Query strings
+// are also omitted so access analytics never become a secondary secret store.
+const CADDY_DEPLOY_WEBHOOK_PATH_PATTERN = "^(/api/deploy/(compose/)?)[^/?]+";
+const CADDY_QUERY_STRING_PATTERN = "\\?.*$";
 export const CADDY_METRICS_PORT = 2020;
 export const CLOUDFLARE_TRUSTED_PROXY_RANGES = [
 	"173.245.48.0/20",
@@ -377,7 +381,28 @@ const createCaddyAccessLogConfig = (
 						filename: accessLogs.filename || CADDY_ACCESS_LOG_CONTAINER_PATH,
 					},
 					encoder: {
-						format: "json",
+						format: "filter",
+						fields: {
+							"request>headers>X-Api-Key": {
+								filter: "delete",
+							},
+							"request>uri": {
+								filter: "multi_regexp",
+								operations: [
+									{
+										regexp: CADDY_DEPLOY_WEBHOOK_PATH_PATTERN,
+										value: "${1}[REDACTED]",
+									},
+									{
+										regexp: CADDY_QUERY_STRING_PATTERN,
+										value: "",
+									},
+								],
+							},
+						},
+						wrap: {
+							format: "json",
+						},
 					},
 					include: ["http.log.access"],
 				},
