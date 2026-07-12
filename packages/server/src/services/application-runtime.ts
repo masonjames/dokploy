@@ -313,6 +313,16 @@ export const getApplicationRuntimeStatus = async (applicationId: string) => {
 		const updateState = inspected.UpdateStatus?.State ?? null;
 		const healthCheckTest =
 			serviceSpec?.TaskTemplate?.ContainerSpec?.HealthCheck?.Test;
+		const serviceHealthCheckConfigured = Boolean(
+			healthCheckTest?.length && healthCheckTest[0] !== "NONE",
+		);
+		const healthCheckEvidence = serviceHealthCheckConfigured
+			? "service-spec"
+			: containerHealthCheckConfigured
+				? "container-inspect"
+				: containerHealth.unavailable > 0
+					? "unavailable"
+					: "none";
 
 		return {
 			applicationId: application.applicationId,
@@ -351,8 +361,8 @@ export const getApplicationRuntimeStatus = async (applicationId: string) => {
 			failedReplicas,
 			replicaConverged,
 			healthCheckConfigured:
-				Boolean(healthCheckTest?.length && healthCheckTest[0] !== "NONE") ||
-				containerHealthCheckConfigured,
+				serviceHealthCheckConfigured || containerHealthCheckConfigured,
+			healthCheckEvidence,
 			containerHealth,
 			updateState,
 			health: determineServiceHealth({

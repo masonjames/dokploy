@@ -193,6 +193,7 @@ test("recognizes an image-defined health check from the running container", asyn
 
 	expect(result).toMatchObject({
 		healthCheckConfigured: true,
+		healthCheckEvidence: "container-inspect",
 		containerHealth: {
 			healthy: 1,
 			unhealthy: 0,
@@ -201,6 +202,48 @@ test("recognizes an image-defined health check from the running container", asyn
 			unavailable: 0,
 		},
 		health: "healthy",
+	});
+});
+
+test("reports remote health-check evidence as unavailable instead of absent", async () => {
+	getRemoteDockerMock.mockResolvedValue({
+		getService: vi.fn(() => ({
+			inspect: vi.fn().mockResolvedValue({
+				ID: "service-1",
+				Spec: {
+					Mode: { Replicated: { Replicas: 1 } },
+					TaskTemplate: { ContainerSpec: { Image: candidateImage } },
+				},
+				UpdateStatus: { State: "completed" },
+			}),
+		})),
+		listTasks: vi.fn().mockResolvedValue([
+			{
+				DesiredState: "running",
+				Spec: { ContainerSpec: { Image: candidateImage } },
+				Status: {
+					State: "running",
+					ContainerStatus: { ContainerID: "container-on-worker" },
+				},
+			},
+		]),
+		getContainer: vi.fn(() => ({
+			inspect: vi.fn().mockRejectedValue({ statusCode: 404 }),
+		})),
+	});
+
+	const result = await getApplicationRuntimeStatus("app-1");
+
+	expect(result).toMatchObject({
+		healthCheckConfigured: false,
+		healthCheckEvidence: "unavailable",
+		containerHealth: {
+			healthy: 0,
+			unhealthy: 0,
+			starting: 0,
+			none: 0,
+			unavailable: 1,
+		},
 	});
 });
 
