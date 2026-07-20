@@ -1,5 +1,5 @@
 {
-  "id": "ebb5b461-8810-4448-9faf-363fb3041ee8",
+  "id": "daaa9837-09f3-452c-b5ba-232c3d6eeca2",
   "prevId": "7ae5be64-aa73-428e-ac35-b322cdb37b68",
   "version": "7",
   "dialect": "postgresql",
@@ -1955,6 +1955,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "includeEncryptionKey": {
+          "name": "includeEncryptionKey",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
         },
         "backupType": {
           "name": "backupType",
@@ -7189,21 +7196,6 @@
           "notNull": true,
           "default": false
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
         "buildsConcurrency": {
           "name": "buildsConcurrency",
           "type": "integer",
@@ -8174,28 +8166,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
-        "requestLogsEnabled": {
-          "name": "requestLogsEnabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "serverIp": {
           "name": "serverIp",
           "type": "text",
@@ -8565,14 +8535,6 @@
       "values": [
         "push",
         "tag"
-      ]
-    },
-    "public.webServerProvider": {
-      "name": "webServerProvider",
-      "schema": "public",
-      "values": [
-        "traefik",
-        "caddy"
       ]
     }
   },
