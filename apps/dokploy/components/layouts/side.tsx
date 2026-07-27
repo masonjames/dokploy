@@ -25,6 +25,7 @@ import {
 	Loader2,
 	LogIn,
 	type LucideIcon,
+	Network,
 	Package,
 	Palette,
 	PieChart,
@@ -208,6 +209,20 @@ const MENU: Menu = {
 			icon: PieChart,
 			// Only enabled for users with access to Docker
 			isEnabled: ({ permissions }) => !!permissions?.docker.read,
+		},
+		{
+			isSingle: true,
+			title: "Networks",
+			url: "/dashboard/networks",
+			icon: Network,
+			// Only enabled for admins and users with access to Docker in non-cloud environments
+			isEnabled: ({ auth, isCloud }) =>
+				!!(
+					(auth?.role === "owner" ||
+						auth?.role === "admin" ||
+						auth?.canAccessToDocker) &&
+					!isCloud
+				),
 		},
 		{
 			isSingle: true,
@@ -648,7 +663,7 @@ function SidebarLogo() {
 								</SidebarMenuButton>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent
-								className="rounded-lg max-h-[min(70vh,28rem)] flex flex-col"
+								className="w-64 rounded-lg max-h-[min(70vh,28rem)] flex flex-col"
 								align="start"
 								side={isMobile ? "bottom" : "right"}
 								sideOffset={4}

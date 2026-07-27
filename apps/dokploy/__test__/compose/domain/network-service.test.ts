@@ -30,4 +30,19 @@ describe("addDokployNetworkToService", () => {
 		const result = addDokployNetworkToService(["default", "dokploy-network"]);
 		expect(result).toEqual(["default", "dokploy-network"]);
 	});
+
+	it("should add an assigned upstream network by name", () => {
+		const result = addDokployNetworkToService([], "shared-network");
+		expect(result).toEqual(["shared-network", "default"]);
+	});
+
+	it("should preserve Caddy aliases on the Dokploy network", () => {
+		const result = addDokployNetworkToService([], {
+			aliases: ["compose-web", "compose-web"],
+		});
+		expect(result).toEqual({
+			"dokploy-network": { aliases: ["compose-web"] },
+			default: {},
+		});
+	});
 });

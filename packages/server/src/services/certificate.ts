@@ -203,10 +203,10 @@ const createCertificateFiles = async (certificate: Certificate) => {
 		const certificateData = encodeBase64(certificate.certificateData);
 		const privateKey = encodeBase64(certificate.privateKey);
 		const command = `
-			mkdir -p ${certDir};
-			echo "${certificateData}" | base64 -d > "${crtPath}";
-			echo "${privateKey}" | base64 -d > "${keyPath}";
-			echo "${yamlConfig}" > "${configFile}";
+			mkdir -p ${quote([certDir])};
+			echo "${certificateData}" | base64 -d > ${quote([crtPath])};
+			echo "${privateKey}" | base64 -d > ${quote([keyPath])};
+			echo "${yamlConfig}" > ${quote([configFile])};
 		`;
 
 		await execAsyncRemote(certificate.serverId, command);
