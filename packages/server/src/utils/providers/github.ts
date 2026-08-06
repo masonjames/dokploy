@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { Octokit } from "octokit";
 import { quote } from "shell-quote";
 import type { z } from "zod";
+import { getAuthenticatedGitCloneCommand } from "./git-askpass";
 
 export const authGithub = (githubProvider: Github): Octokit => {
 	if (!haveGithubRequirements(githubProvider)) {
@@ -165,10 +166,17 @@ export const cloneGithubRepository = async ({
 	const repoclone = `github.com/${owner}/${repository}.git`;
 	command += `rm -rf ${outputPath};`;
 	command += `mkdir -p ${outputPath};`;
-	const cloneUrl = `https://oauth2:${token}@${repoclone}`;
+	const cloneUrl = `https://${repoclone}`;
 
 	command += `echo ${quote([`Cloning Repo ${repoclone} to ${outputPath}: ✅`])};`;
-	command += `git clone --branch ${quote([String(branch ?? "")])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} ${quote([String(cloneUrl ?? "")])} ${quote([String(outputPath ?? "")])} --progress;`;
+	command += getAuthenticatedGitCloneCommand({
+		branch: branch!,
+		cloneUrl,
+		enableSubmodules,
+		outputPath,
+		password: token,
+		username: "oauth2",
+	});
 
 	return command;
 };

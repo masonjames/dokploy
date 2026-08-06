@@ -31,6 +31,7 @@ import {
 	stopCompose,
 	updateCompose,
 	updateDeploymentStatus,
+	withHostBuildAdmission,
 } from "@dokploy/server";
 import { db } from "@dokploy/server/db";
 import { canEditDeployGitSource } from "@dokploy/server/services/git-provider";
@@ -344,11 +345,22 @@ export const composeRouter = createTRPCRouter({
 				const compose = await findComposeById(input.composeId);
 
 				const command = await cloneCompose(compose);
-				if (compose.serverId) {
-					await execAsyncRemote(compose.serverId, command);
-				} else {
-					await execAsync(command);
-				}
+				await withHostBuildAdmission(
+					{ serverId: compose.serverId, operation: "compose-source-fetch" },
+					async ({ prepareCommand, signal }) => {
+						const admittedCommand = await prepareCommand(command);
+						if (compose.serverId) {
+							await execAsyncRemote(
+								compose.serverId,
+								admittedCommand,
+								undefined,
+								signal,
+							);
+						} else {
+							await execAsync(admittedCommand, { signal });
+						}
+					},
+				);
 				return compose.sourceType;
 			} catch (err) {
 				throw new TRPCError({

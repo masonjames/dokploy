@@ -10,6 +10,7 @@ import {
 import { isIP } from "node:net";
 import * as path from "node:path";
 import { paths } from "@dokploy/server/constants";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import {
 	execAsync,
 	execAsyncRemote,
@@ -1082,29 +1083,55 @@ else
 	echo dokploy-caddy
 fi`;
 
-const execInCaddy = async (serverId: string | undefined, command: string) => {
-	const { stdout } = serverId
-		? await execAsyncRemote(serverId, getCaddyExecTargetCommand)
-		: await execAsync(getCaddyExecTargetCommand);
+const execInCaddy = async (
+	serverId: string | undefined,
+	command: string,
+	context?: BuildAdmissionContext,
+) => {
+	const runCommand = async (commandToRun: string) => {
+		const preparedCommand = context
+			? await context.prepareCommand(commandToRun)
+			: commandToRun;
+		if (serverId) {
+			return execAsyncRemote(
+				serverId,
+				preparedCommand,
+				undefined,
+				context?.signal,
+			);
+		}
+		return execAsync(preparedCommand, { signal: context?.signal });
+	};
+
+	context?.assertLockHeld();
+	const { stdout } = await runCommand(getCaddyExecTargetCommand);
+	context?.assertLockHeld();
 	const target = stdout.trim();
 	if (!target) {
 		throw new Error("Caddy resource is not running");
 	}
 	const dockerExecCommand = `docker exec ${quote([target])} ${command}`;
-	if (serverId) {
-		return execAsyncRemote(serverId, dockerExecCommand);
-	}
-	return execAsync(dockerExecCommand);
+	const result = await runCommand(dockerExecCommand);
+	context?.assertLockHeld();
+	return result;
 };
 
-export const validateCaddyConfigWithContainer = async (serverId?: string) => {
-	return execInCaddy(serverId, "caddy validate --config /etc/caddy/caddy.json");
+export const validateCaddyConfigWithContainer = async (
+	serverId?: string,
+	context?: BuildAdmissionContext,
+) => {
+	return execInCaddy(
+		serverId,
+		"caddy validate --config /etc/caddy/caddy.json",
+		context,
+	);
 };
 
 export const validateCaddyConfigFileWithImage = async (
 	configPath: string,
 	serverId?: string,
 	imageName = CADDY_IMAGE,
+	context?: BuildAdmissionContext,
 ) => {
 	const validationRoot = path.posix.join(
 		path.posix.dirname(configPath),
@@ -1119,7 +1146,7 @@ export const validateCaddyConfigFileWithImage = async (
 		CERTIFICATES_PATH,
 	])}`;
 	const cleanupCommand = `rm -rf ${quote([validationRoot])}`;
-	const validateCommand = `docker run --rm --network none ${[
+	const validateCommand = `docker run --pull=never --rm --network none ${[
 		"-v",
 		`${configPath}:/etc/caddy/caddy.json:ro`,
 		"-v",
@@ -1136,17 +1163,31 @@ export const validateCaddyConfigFileWithImage = async (
 	]
 		.map((part) => quote([part]))
 		.join(" ")}`;
+	const runPrimaryCommand = async (command: string) => {
+		const commandToRun = context
+			? await context.prepareCommand(command)
+			: command;
+		if (serverId) {
+			return execAsyncRemote(
+				serverId,
+				commandToRun,
+				undefined,
+				context?.signal,
+			);
+		}
+		return execAsync(commandToRun, { signal: context?.signal });
+	};
 	if (serverId) {
-		await execAsyncRemote(serverId, mkdirCommand);
+		await runPrimaryCommand(mkdirCommand);
 		try {
-			return await execAsyncRemote(serverId, validateCommand);
+			return await runPrimaryCommand(validateCommand);
 		} finally {
 			await execAsyncRemote(serverId, cleanupCommand).catch(() => undefined);
 		}
 	}
-	await execAsync(mkdirCommand);
+	await runPrimaryCommand(mkdirCommand);
 	try {
-		return await execAsync(validateCommand);
+		return await runPrimaryCommand(validateCommand);
 	} finally {
 		await execAsync(cleanupCommand).catch(() => undefined);
 	}

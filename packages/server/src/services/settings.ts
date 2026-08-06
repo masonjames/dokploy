@@ -21,6 +21,12 @@ import {
 	type TraefikOptions,
 } from "../setup/traefik-setup";
 import type { CaddyMigrationResourceSnapshot } from "../utils/caddy/migration/types";
+import { pullImageUnderBuildAdmission } from "../utils/docker/utils";
+import {
+	type BuildAdmissionContext,
+	withHostBuildAdmission,
+} from "../utils/process/build-admission";
+import { spawnAsync } from "../utils/process/spawnAsync";
 import type { WebServerProvider } from "../utils/web-server/providers";
 export interface IUpdateData {
 	latestVersion: string | null;
@@ -35,6 +41,64 @@ export const DEFAULT_UPDATE_DATA: IUpdateData = {
 /** Returns current Dokploy docker image tag or `latest` by default. */
 export const getDokployImageTag = () => {
 	return process.env.RELEASE_TAG || "latest";
+};
+
+const runBuildAdmittedCommand = async ({
+	command,
+	context,
+	operation,
+	serverId,
+}: {
+	command: string;
+	context?: BuildAdmissionContext;
+	operation: string;
+	serverId?: string;
+}) => {
+	const execute = async (activeContext: BuildAdmissionContext) => {
+		const admittedCommand = await activeContext.prepareCommand(command);
+		if (serverId) {
+			return execAsyncRemote(
+				serverId,
+				admittedCommand,
+				undefined,
+				activeContext.signal,
+			);
+		}
+		return execAsync(admittedCommand, { signal: activeContext.signal });
+	};
+
+	if (context) return execute(context);
+	return withHostBuildAdmission(
+		{ serverId: serverId || null, operation },
+		execute,
+	);
+};
+
+export const dispatchDokployUpdate = async (imageTag: string) => {
+	const image = `dokploy/dokploy:${imageTag}`;
+	await withHostBuildAdmission(
+		{ serverId: null, operation: "dokploy-self-update" },
+		async (context) => {
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: image,
+				serverId: null,
+			});
+		},
+	);
+
+	// Dispatch only after the admission holder has released its lock and cleaned
+	// its temporary directory; the service restart intentionally outlives this request.
+	void spawnAsync("docker", [
+		"service",
+		"update",
+		"--force",
+		"--image",
+		image,
+		"dokploy",
+	]).catch((error) => {
+		console.error("Failed to dispatch Dokploy self-update", error);
+	});
 };
 
 /** Returns Dokploy docker service image digest */
@@ -303,9 +367,27 @@ export const reloadDockerResource = async (
 				imageTag = currentImageTag;
 			}
 
-			command = `docker service update --force --image dokploy/dokploy:${imageTag} ${resourceName}`;
+			const image = `dokploy/dokploy:${imageTag}`;
+			await withHostBuildAdmission(
+				{ serverId: serverId || null, operation: "dokploy-resource-reload" },
+				async (context) => {
+					await pullImageUnderBuildAdmission({
+						context,
+						dockerImage: image,
+						serverId: serverId || null,
+					});
+				},
+			);
+			// The image write and admission cleanup finish before a self-restart can
+			// terminate the holder.
+			command = `docker service update --force --image ${image} ${resourceName}`;
 		} else {
-			command = `docker service update --force ${resourceName}`;
+			await runBuildAdmittedCommand({
+				command: `docker service update --force ${quote([resourceName])}`,
+				operation: "docker-resource-reload",
+				serverId,
+			});
+			return;
 		}
 	} else if (resourceType === "standalone") {
 		command = `docker restart ${resourceName}`;
@@ -477,10 +559,38 @@ export const startDockerResourceFromSnapshot = async (
 		return;
 	}
 	if (snapshot.resourceType === "service") {
-		await runDockerResourceCommand(
-			`docker service scale ${snapshot.resourceName}=${snapshot.replicas ?? 1}`,
-			serverId,
-		);
+		const replicas = snapshot.replicas ?? 1;
+		if (replicas > 0) {
+			await withHostBuildAdmission(
+				{
+					serverId: serverId || null,
+					operation: "snapshot-service-scale-up",
+				},
+				async ({ assertLockHeld, prepareCommand, signal }) => {
+					assertLockHeld();
+					const command = await prepareCommand(
+						quote([
+							"docker",
+							"service",
+							"scale",
+							`${snapshot.resourceName}=${replicas}`,
+						]),
+					);
+					assertLockHeld();
+					if (serverId) {
+						await execAsyncRemote(serverId, command, undefined, signal);
+					} else {
+						await execAsync(command, { signal });
+					}
+					assertLockHeld();
+				},
+			);
+		} else {
+			await runDockerResourceCommand(
+				`docker service scale ${snapshot.resourceName}=${replicas}`,
+				serverId,
+			);
+		}
 		return;
 	}
 	if (snapshot.resourceType === "standalone") {
@@ -738,10 +848,25 @@ export const checkPortInUse = async (
 		// Dokploy runs inside a container, so we spawn an ephemeral container
 		// with --net=host to share the host's network stack and use nc -z to
 		// check if something is listening on the port
-		const hostCommand = `docker run --rm --net=host busybox sh -c 'nc -z 0.0.0.0 ${port} 2>/dev/null && echo in_use || echo free'`;
-		const { stdout: hostOut } = serverId
-			? await execAsyncRemote(serverId, hostCommand)
-			: await execAsync(hostCommand);
+		const hostOut = await withHostBuildAdmission(
+			{ serverId: serverId || null, operation: "port-availability-probe" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: "busybox:1.36",
+					serverId: serverId || null,
+				});
+				const hostCommand = `docker run --pull=never --rm --net=host busybox:1.36 sh -c 'nc -z 0.0.0.0 ${port} 2>/dev/null && echo in_use || echo free'`;
+				return (
+					await runBuildAdmittedCommand({
+						command: hostCommand,
+						context,
+						operation: "port-availability-probe",
+						serverId,
+					})
+				).stdout;
+			},
+		);
 
 		if (hostOut.includes("in_use")) {
 			return {
@@ -753,7 +878,10 @@ export const checkPortInUse = async (
 		return { isInUse: false };
 	} catch (error) {
 		console.error("Error checking port availability:", error);
-		return { isInUse: false };
+		return {
+			isInUse: true,
+			conflictingContainer: "port availability could not be verified",
+		};
 	}
 };
 
@@ -783,7 +911,8 @@ export const writeCaddySetup = async (input: CaddyOptions) => {
 				trustedProxies: input.trustedProxies,
 				accessLogs: input.accessLogs,
 			},
-			() => reconnectServicesToWebServer("dokploy-caddy", input.serverId),
+			(context) =>
+				reconnectServicesToWebServer("dokploy-caddy", input.serverId, context),
 		);
 	} else {
 		await initializeStandaloneCaddy(
@@ -795,7 +924,8 @@ export const writeCaddySetup = async (input: CaddyOptions) => {
 				trustedProxies: input.trustedProxies,
 				accessLogs: input.accessLogs,
 			},
-			() => reconnectServicesToWebServer("dokploy-caddy", input.serverId),
+			(context) =>
+				reconnectServicesToWebServer("dokploy-caddy", input.serverId, context),
 		);
 	}
 };
@@ -836,6 +966,7 @@ export const writeTraefikSetup = async (input: TraefikOptions) => {
 export const reconnectServicesToWebServer = async (
 	resourceName: "dokploy-traefik" | "dokploy-caddy",
 	serverId?: string,
+	context?: BuildAdmissionContext,
 ) => {
 	const composeResult = await db.query.compose.findMany({
 		where: and(
@@ -870,11 +1001,12 @@ export const reconnectServicesToWebServer = async (
 		commands += "fi\n";
 	}
 
-	if (serverId) {
-		await execAsyncRemote(serverId, commands);
-	} else {
-		await execAsync(commands);
-	}
+	await runBuildAdmittedCommand({
+		command: commands,
+		context,
+		operation: `${resourceName}-network-reconnect`,
+		serverId,
+	});
 	return requiredNetworks;
 };
 

@@ -16,6 +16,37 @@ const withCaddyConfigLockMock = vi.hoisted(() =>
 	),
 );
 const getRemoteDockerMock = vi.hoisted(() => vi.fn());
+const buildAdmissionMocks = vi.hoisted(() => {
+	let controller = new AbortController();
+	const throwIfAborted = () => {
+		if (controller.signal.aborted) {
+			throw controller.signal.reason;
+		}
+	};
+	const context = {
+		assertLockHeld: vi.fn(throwIfAborted),
+		prepareCommand: vi.fn(async (command: string) => {
+			throwIfAborted();
+			return command;
+		}),
+		signal: controller.signal,
+	};
+	return {
+		abort: (reason: unknown) => controller.abort(reason),
+		context,
+		pullImage: vi.fn().mockResolvedValue(undefined),
+		resetSignal: () => {
+			controller = new AbortController();
+			context.signal = controller.signal;
+		},
+		withAdmission: vi.fn(
+			(
+				_options: { serverId: string | null; operation: string },
+				task: (admissionContext: typeof context) => Promise<unknown>,
+			) => task(context),
+		),
+	};
+});
 
 vi.mock("@dokploy/server/utils/caddy/config", () => ({
 	CADDY_METRICS_PORT: 2020,
@@ -34,6 +65,14 @@ vi.mock("@dokploy/server/utils/caddy/migration/upstream-preflight", () => ({
 
 vi.mock("@dokploy/server/utils/servers/remote-docker", () => ({
 	getRemoteDocker: getRemoteDockerMock,
+}));
+
+vi.mock("@dokploy/server/utils/docker/utils", () => ({
+	pullImageUnderBuildAdmission: buildAdmissionMocks.pullImage,
+}));
+
+vi.mock("@dokploy/server/utils/process/build-admission", () => ({
+	withHostBuildAdmission: buildAdmissionMocks.withAdmission,
 }));
 
 const loadCaddySetup = async (caddyImage = "") => {
@@ -139,6 +178,7 @@ const createServiceDockerMock = () => {
 
 afterEach(() => {
 	vi.unstubAllEnvs();
+	buildAdmissionMocks.resetSignal();
 	vi.clearAllMocks();
 });
 
@@ -160,9 +200,19 @@ describe("Caddy runtime setup", () => {
 
 		await initializeStandaloneCaddy();
 
-		expect(docker.pull).toHaveBeenCalledWith(
-			"caddy:2.11.4",
+		expect(buildAdmissionMocks.withAdmission).toHaveBeenCalledWith(
+			{ serverId: null, operation: "caddy-standalone-setup" },
 			expect.any(Function),
+		);
+		expect(buildAdmissionMocks.pullImage).toHaveBeenCalledWith({
+			context: buildAdmissionMocks.context,
+			dockerImage: "caddy:2.11.4",
+			serverId: null,
+		});
+		expect(docker.pull).not.toHaveBeenCalled();
+		expect(validateCaddyConfigWithContainerMock).toHaveBeenCalledWith(
+			undefined,
+			buildAdmissionMocks.context,
 		);
 		expect(createContainer).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -202,12 +252,18 @@ describe("Caddy runtime setup", () => {
 		await initializeStandaloneCaddy();
 
 		expect(CADDY_IMAGE).toBe(imageName);
-		expect(docker.pull).toHaveBeenCalledWith(imageName, expect.any(Function));
+		expect(buildAdmissionMocks.pullImage).toHaveBeenCalledWith({
+			context: buildAdmissionMocks.context,
+			dockerImage: imageName,
+			serverId: null,
+		});
+		expect(docker.pull).not.toHaveBeenCalled();
 		expect(docker.getImage).toHaveBeenCalledWith(imageName);
 		expect(validateCaddyConfigFileWithImageMock).toHaveBeenCalledWith(
 			expect.stringMatching(/\/caddy\/caddy\.json$/),
 			undefined,
 			imageName,
+			buildAdmissionMocks.context,
 		);
 		expect(createContainer).toHaveBeenCalledWith(
 			expect.objectContaining({ Image: imageName }),
@@ -284,10 +340,8 @@ describe("Caddy runtime setup", () => {
 
 	test("does not touch the running edge when the candidate pull fails", async () => {
 		const { createContainer, docker, previous } = createStandaloneDockerMock();
-		docker.pull.mockImplementation(
-			(_imageName: string, callback: (error: Error | null) => void) => {
-				callback(new Error("pull failed"));
-			},
+		buildAdmissionMocks.pullImage.mockRejectedValueOnce(
+			new Error("pull failed"),
 		);
 		previous.inspect.mockResolvedValue({ State: { Running: true } });
 		readCaddyConfigFileIfExistsMock.mockResolvedValueOnce('{"old":true}\n');
@@ -578,10 +632,8 @@ describe("Caddy runtime setup", () => {
 	test("does not inspect or mutate a Caddy service when its image pull fails", async () => {
 		const { createService, docker, existingService } =
 			createServiceDockerMock();
-		docker.pull.mockImplementation(
-			(_imageName: string, callback: (error: Error | null) => void) => {
-				callback(new Error("service pull failed"));
-			},
+		buildAdmissionMocks.pullImage.mockRejectedValueOnce(
+			new Error("service pull failed"),
 		);
 		getRemoteDockerMock.mockResolvedValue(docker);
 		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
@@ -594,6 +646,31 @@ describe("Caddy runtime setup", () => {
 		expect(existingService.inspect).not.toHaveBeenCalled();
 		expect(existingService.update).not.toHaveBeenCalled();
 		expect(createService).not.toHaveBeenCalled();
+		expect(buildAdmissionMocks.withAdmission).toHaveBeenCalledWith(
+			{ serverId: null, operation: "caddy-service-setup" },
+			expect.any(Function),
+		);
+	});
+
+	test("aborts Caddy service convergence promptly after admission ownership loss", async () => {
+		const lockLoss = new Error("fixture build admission ownership lost");
+		const { createdService, docker } = createServiceDockerMock();
+		docker.listTasks.mockImplementationOnce(async () => {
+			setTimeout(() => buildAdmissionMocks.abort(lockLoss), 10);
+			return [];
+		});
+		getRemoteDockerMock.mockResolvedValue(docker);
+		ensureDefaultCaddyConfigMock.mockResolvedValue(undefined);
+		validateCaddyConfigFileWithImageMock.mockResolvedValue(undefined);
+		validateCaddyConfigWithContainerMock.mockResolvedValue(undefined);
+		const { initializeCaddyService } = await loadCaddySetup();
+		const startedAt = Date.now();
+
+		await expect(initializeCaddyService({})).rejects.toBe(lockLoss);
+
+		expect(Date.now() - startedAt).toBeLessThan(500);
+		expect(createdService.remove).toHaveBeenCalledOnce();
+		expect(validateCaddyConfigWithContainerMock).not.toHaveBeenCalled();
 	});
 
 	test("does not misclassify a Caddy service inspection error as absence", async () => {

@@ -15,6 +15,7 @@ import {
 	generateVolumeMounts,
 	prepareEnvironmentVariables,
 } from "../utils/docker/utils";
+import { withHostBuildAdmission } from "../utils/process/build-admission";
 import { execAsync, execAsyncRemote } from "../utils/process/execAsync";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 import { type Application, findApplicationById } from "./application";
@@ -192,23 +193,6 @@ export const rollback = async (rollbackId: string) => {
 	);
 };
 
-const dockerLoginForRegistry = async (
-	registry: Registry,
-	serverId?: string | null,
-) => {
-	const loginCommand = safeDockerLoginCommand(
-		registry.registryUrl,
-		registry.username,
-		registry.password,
-	);
-
-	if (serverId) {
-		await execAsyncRemote(serverId, loginCommand);
-	} else {
-		await execAsync(loginCommand);
-	}
-};
-
 const rollbackApplication = async (
 	appName: string,
 	image: string,
@@ -227,16 +211,6 @@ const rollbackApplication = async (
 	}
 
 	const rollbackRegistry = fullContext.rollbackRegistry ?? undefined;
-
-	// Ensure Docker daemon is authenticated with the rollback registry
-	// before updating the swarm service. The authconfig in CreateServiceOptions
-	// alone is not sufficient — Docker Swarm also relies on the daemon's
-	// cached credentials (~/.docker/config.json) to distribute auth to nodes.
-	if (rollbackRegistry) {
-		await dockerLoginForRegistry(rollbackRegistry, serverId);
-	}
-
-	const docker = await getRemoteDocker(serverId);
 
 	const {
 		env,
@@ -328,20 +302,54 @@ const rollbackApplication = async (
 		UpdateConfig,
 	};
 
-	try {
-		const service = docker.getService(appName);
-		const inspect = await service.inspect();
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "application-rollback" },
+		async ({ assertLockHeld, prepareCommand, signal }) => {
+			assertLockHeld();
 
-		await service.update({
-			version: Number.parseInt(inspect.Version.Index),
-			...settings,
-			TaskTemplate: {
-				...settings.TaskTemplate,
-				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
-			},
-		});
-	} catch (error) {
-		console.error(error);
-		await docker.createService(settings);
-	}
+			// Swarm relies on the daemon's cached registry credentials in addition
+			// to authconfig. Stage the credential-bearing login through the private
+			// admission transport so the outer shell command and process argv stay
+			// secret-free while the same host lock covers login and service mutation.
+			if (rollbackRegistry) {
+				const loginCommand = await prepareCommand(
+					safeDockerLoginCommand(
+						rollbackRegistry.registryUrl,
+						rollbackRegistry.username,
+						rollbackRegistry.password,
+					),
+				);
+				assertLockHeld();
+				if (serverId) {
+					await execAsyncRemote(serverId, loginCommand, undefined, signal);
+				} else {
+					await execAsync(loginCommand, { signal });
+				}
+				assertLockHeld();
+			}
+
+			const docker = await getRemoteDocker(serverId);
+			assertLockHeld();
+			try {
+				const service = docker.getService(appName);
+				const inspect = await service.inspect();
+				assertLockHeld();
+
+				await service.update({
+					version: Number.parseInt(inspect.Version.Index),
+					...settings,
+					TaskTemplate: {
+						...settings.TaskTemplate,
+						ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
+					},
+				});
+				assertLockHeld();
+			} catch (error) {
+				assertLockHeld();
+				console.error(error);
+				await docker.createService(settings);
+				assertLockHeld();
+			}
+		},
+	);
 };

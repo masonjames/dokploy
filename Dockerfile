@@ -42,9 +42,14 @@ ENV NODE_ENV=production
 
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y curl unzip zip apache2-utils iproute2 rsync git-lfs \
+    && apt-get install -y curl unzip zip apache2-utils iproute2 rsync git-lfs python3 procps util-linux \
     && git lfs install \
     && rm -rf /var/lib/apt/lists/*
+
+COPY apps/dokploy/docker/build-admission/host-capacity-gate /usr/local/bin/dokploy-host-capacity-gate
+COPY apps/dokploy/docker/build-admission/df /usr/local/libexec/dokploy-build-admission/df
+COPY apps/dokploy/docker/build-admission/verify-builder-env-transport /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
+RUN chmod 0755 /usr/local/bin/dokploy-host-capacity-gate /usr/local/libexec/dokploy-build-admission/df /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
 
 # Copy only the necessary files
 COPY --from=build /prod/dokploy/.next ./.next
@@ -77,6 +82,7 @@ RUN curl -sSL https://railpack.com/install.sh | bash
 
 # Install buildpacks
 COPY --from=buildpacksio/pack:0.40.7@sha256:b3e4bb190749586d1f15a4f7de013ca7b76dea756a6919255e12281ed129c6ca /usr/local/bin/pack /usr/local/bin/pack
+RUN /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
 
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_URL=https://github.com/masonjames/dokploy

@@ -1,4 +1,5 @@
 import type { InferResultType } from "@dokploy/server/types/with";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions, PortConfig } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
 import {
@@ -18,7 +19,10 @@ export type LibsqlNested = InferResultType<
 		environment: { with: { project: true } };
 	}
 >;
-export const buildLibsql = async (libsql: LibsqlNested) => {
+export const buildLibsql = async (
+	libsql: LibsqlNested,
+	context: BuildAdmissionContext,
+) => {
 	const {
 		appName,
 		env,
@@ -149,13 +153,18 @@ export const buildLibsql = async (libsql: LibsqlNested) => {
 		},
 	};
 	try {
+		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
+		context.assertLockHeld();
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
 			...settings,
 		});
+		context.assertLockHeld();
 	} catch {
+		context.assertLockHeld();
 		await docker.createService(settings);
+		context.assertLockHeld();
 	}
 };

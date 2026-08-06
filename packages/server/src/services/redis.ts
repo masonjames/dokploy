@@ -6,11 +6,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildRedis } from "@dokploy/server/utils/databases/redis";
-import { pullImage } from "@dokploy/server/utils/docker/utils";
-import { execAsyncRemote } from "@dokploy/server/utils/process/execAsync";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
-import { quote } from "shell-quote";
 import type { z } from "zod";
 import { validUniqueServerAppName } from "./project";
 
@@ -108,17 +107,19 @@ export const deployRedis = async (
 		});
 
 		onData?.("Starting redis deployment...");
-		if (redis.serverId) {
-			await execAsyncRemote(
-				redis.serverId,
-				`docker pull ${quote([redis.dockerImage])}`,
-				onData,
-			);
-		} else {
-			await pullImage(redis.dockerImage, onData);
-		}
-
-		await buildRedis(redis);
+		await withHostBuildAdmission(
+			{ serverId: redis.serverId, operation: "redis-deploy" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: redis.dockerImage,
+					serverId: redis.serverId,
+					onData,
+				});
+				await buildRedis(redis, context);
+				context.assertLockHeld();
+			},
+		);
 		await updateRedisById(redisId, {
 			applicationStatus: "done",
 		});

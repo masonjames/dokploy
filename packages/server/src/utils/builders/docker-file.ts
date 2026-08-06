@@ -1,14 +1,15 @@
-import {
-	getEnvironmentVariablesObject,
-	prepareEnvironmentVariablesForShell,
-} from "@dokploy/server/utils/docker/utils";
+import { getEnvironmentVariablesObject } from "@dokploy/server/utils/docker/utils";
 import { quote } from "shell-quote";
 import {
 	getBuildAppDirectory,
 	getDockerContextPath,
 } from "../filesystem/directory";
 import type { ApplicationNested } from ".";
-import { createEnvFileCommand } from "./utils";
+import {
+	createEnvFileCommand,
+	createPrivateBuildValueFileCommand,
+	prepareBuildEnvironment,
+} from "./utils";
 
 export const getDockerCommand = (application: ApplicationNested) => {
 	const {
@@ -42,14 +43,16 @@ export const getDockerCommand = (application: ApplicationNested) => {
 			commandArgs.push("--no-cache");
 		}
 
-		const args = prepareEnvironmentVariablesForShell(
+		const buildEnvironment = prepareBuildEnvironment(
 			buildArgs,
 			application.environment.project.env,
 			application.environment.env,
 		);
 
-		for (const arg of args) {
-			commandArgs.push("--build-arg", arg);
+		for (const key of buildEnvironment.keys) {
+			// A value-less build arg inherits the value from the Docker CLI's
+			// environment, so the reversible value never appears in child argv.
+			commandArgs.push("--build-arg", key);
 		}
 
 		const secrets = getEnvironmentVariablesObject(
@@ -58,9 +61,15 @@ export const getDockerCommand = (application: ApplicationNested) => {
 			application.environment.env,
 		);
 
-		const joinedSecrets = Object.entries(secrets)
-			.map(([key, value]) => `${key}=${quote([value])}`)
-			.join(" ");
+		const secretFiles = Object.entries(secrets).map(([key, value]) => {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+				throw new Error(`Invalid build secret name: ${key}`);
+			}
+			return {
+				key,
+				...createPrivateBuildValueFileCommand(value, `docker-secret-${key}`),
+			};
+		});
 
 		/*
 			Do not generate an environment file when publishDirectory is specified,
@@ -77,11 +86,11 @@ export const getDockerCommand = (application: ApplicationNested) => {
 			);
 		}
 
-		for (const key in secrets) {
-			// Although buildx is smart enough to know we may be referring to an environment variable name,
-			// we still make sure it doesn't fall back to `type=file`.
-			// See: https://docs.docker.com/reference/cli/docker/buildx/build/#secret
-			commandArgs.push("--secret", `type=env,id=${key}`);
+		for (const secret of secretFiles) {
+			commandArgs.push(
+				"--secret",
+				`type=file,id=${secret.key},src=${secret.path}`,
+			);
 		}
 
 		command += `
@@ -91,10 +100,14 @@ cd ${quote([dockerContextPath])} || {
   exit 1;
 }
 
-${joinedSecrets} docker ${commandArgs.join(" ")} || {
+${buildEnvironment.exports.join("\n")}
+${secretFiles.map(({ setup }) => setup).join("\n")}
+docker ${commandArgs.join(" ")} || {
+  ${secretFiles.map(({ cleanup }) => cleanup).join("\n")}
   echo "❌ Docker build failed" ;
   exit 1;
 }
+${secretFiles.map(({ cleanup }) => cleanup).join("\n")}
 echo "✅ Docker build completed." ;
 		`;
 

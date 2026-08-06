@@ -1,13 +1,8 @@
 import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
-import { quote } from "shell-quote";
-import {
-	parseEnvironmentKeyValuePair,
-	prepareEnvironmentVariables,
-	prepareEnvironmentVariablesForShell,
-} from "../docker/utils";
 import { getBuildAppDirectory } from "../filesystem/directory";
 import type { ApplicationNested } from ".";
+import { prepareBuildEnvironment } from "./utils";
 
 const calculateSecretsHash = (envVariables: string[]): string => {
 	const hash = createHash("sha256");
@@ -20,7 +15,7 @@ const calculateSecretsHash = (envVariables: string[]): string => {
 export const getRailpackCommand = (application: ApplicationNested) => {
 	const { env, appName, cleanCache } = application;
 	const buildAppDirectory = getBuildAppDirectory(application);
-	const envVariables = prepareEnvironmentVariablesForShell(
+	const buildEnvironment = prepareBuildEnvironment(
 		env,
 		application.environment.project.env,
 		application.environment.env,
@@ -36,12 +31,12 @@ export const getRailpackCommand = (application: ApplicationNested) => {
 		`${buildAppDirectory}/railpack-info.json`,
 	];
 
-	for (const env of envVariables) {
-		prepareArgs.push("--env", env);
+	for (const key of buildEnvironment.keys) {
+		prepareArgs.push("--env", key);
 	}
 
 	// Calculate secrets hash for layer invalidation
-	const secretsHash = calculateSecretsHash(envVariables);
+	const secretsHash = calculateSecretsHash(buildEnvironment.variables);
 
 	const cacheKey = cleanCache ? nanoid(10) : undefined;
 	// Build command.
@@ -69,20 +64,10 @@ export const getRailpackCommand = (application: ApplicationNested) => {
 		`type=docker,name=${appName}`,
 	];
 
-	// Add secrets properly formatted
-	// Use prepareEnvironmentVariables (without ForShell) to get raw values for parsing
-	const rawEnvVariables = prepareEnvironmentVariables(
-		env,
-		application.environment.project.env,
-		application.environment.env,
-	);
-	const exportEnvs = [];
-	for (const pair of rawEnvVariables) {
-		const [key, value] = parseEnvironmentKeyValuePair(pair);
-		if (key && value) {
-			buildArgs.push("--secret", `id=${key},env=${key}`);
-			exportEnvs.push(`export ${key}=${quote([value])}`);
-		}
+	// The value-less prepare arguments and BuildKit env-secret identifiers read
+	// values from exports in the holder-owned private command script.
+	for (const key of buildEnvironment.keys) {
+		buildArgs.push("--secret", `id=${key},env=${key}`);
 	}
 
 	buildArgs.push(buildAppDirectory);
@@ -91,6 +76,7 @@ export const getRailpackCommand = (application: ApplicationNested) => {
 
 # Ensure we have a builder with containerd (isolated per build)
 
+${buildEnvironment.exports.join("\n")}
 export RAILPACK_VERSION=${application.railpackVersion}
 bash -c "$(curl -fsSL https://railpack.com/install.sh)"
 docker buildx create --name ${builderName} --driver docker-container || true
@@ -104,8 +90,6 @@ railpack ${prepareArgs.join(" ")} || {
 echo "✅ Railpack prepare completed." ;
 
 echo "Building with Railpack frontend..." ;
-# Export environment variables for secrets
-${exportEnvs.join("\n")}
 docker ${buildArgs.join(" ")} || {
 	echo "❌ Railpack build failed" ;
 	docker buildx rm ${builderName} || true

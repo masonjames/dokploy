@@ -10,6 +10,8 @@ import path from "node:path";
 import type { ContainerCreateOptions, CreateServiceOptions } from "dockerode";
 import { stringify } from "yaml";
 import { paths } from "../constants";
+import { pullImageUnderBuildAdmission } from "../utils/docker/utils";
+import { withHostBuildAdmission } from "../utils/process/build-admission";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 import type { FileConfig } from "../utils/traefik/file-types";
 import type { MainTraefikConfig } from "../utils/traefik/types";
@@ -133,27 +135,36 @@ export const initializeStandaloneTraefik = async ({
 	};
 
 	const docker = await getRemoteDocker(serverId);
-	try {
-		await docker.pull(imageName);
-		await new Promise((resolve) => setTimeout(resolve, 3000));
-		console.log("Traefik Image Pulled ✅");
-	} catch (error) {
-		console.log("Traefik Image Not Found: Pulling ", error);
-	}
-	try {
-		const container = docker.getContainer(containerName);
-		await container.remove({ force: true });
-		await new Promise((resolve) => setTimeout(resolve, 5000));
-	} catch {}
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "traefik-standalone-reconfigure" },
+		async (context) => {
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: imageName,
+				serverId: serverId || null,
+			});
+			console.log("Traefik Image Pulled ✅");
+			try {
+				const container = docker.getContainer(containerName);
+				await container.remove({ force: true });
+				context.assertLockHeld();
+				await new Promise((resolve) => setTimeout(resolve, 5000));
+			} catch {}
 
-	try {
-		await docker.createContainer(settings);
-		const newContainer = docker.getContainer(containerName);
-		await newContainer.start();
-		console.log("Traefik Started ✅");
-	} catch (error) {
-		console.log("Traefik Not Found: Starting ", error);
-	}
+			context.assertLockHeld();
+			try {
+				await docker.createContainer(settings);
+				context.assertLockHeld();
+				const newContainer = docker.getContainer(containerName);
+				await newContainer.start();
+				context.assertLockHeld();
+				console.log("Traefik Started ✅");
+			} catch (error) {
+				context.assertLockHeld();
+				console.log("Traefik Not Found: Starting ", error);
+			}
+		},
+	);
 };
 
 export const initializeTraefikService = async ({
@@ -240,23 +251,39 @@ export const initializeTraefikService = async ({
 		},
 	};
 	const docker = await getRemoteDocker(serverId);
-	try {
-		const service = docker.getService(appName);
-		const inspect = await service.inspect();
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "traefik-service-reconfigure" },
+		async (context) => {
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: imageName,
+				serverId: serverId || null,
+			});
+			const service = docker.getService(appName);
+			let inspect: Awaited<ReturnType<typeof service.inspect>>;
+			try {
+				inspect = await service.inspect();
+			} catch {
+				context.assertLockHeld();
+				await docker.createService(settings);
+				context.assertLockHeld();
+				console.log("Traefik Started ✅");
+				return;
+			}
 
-		await service.update({
-			version: Number.parseInt(inspect.Version.Index),
-			...settings,
-			TaskTemplate: {
-				...settings.TaskTemplate,
-				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
-			},
-		});
-		console.log("Traefik Updated ✅");
-	} catch {
-		await docker.createService(settings);
-		console.log("Traefik Started ✅");
-	}
+			context.assertLockHeld();
+			await service.update({
+				version: Number.parseInt(inspect.Version.Index),
+				...settings,
+				TaskTemplate: {
+					...settings.TaskTemplate,
+					ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
+				},
+			});
+			context.assertLockHeld();
+			console.log("Traefik Updated ✅");
+		},
+	);
 };
 
 export const createDefaultServerTraefikConfig = () => {

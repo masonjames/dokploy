@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+fixture_root=$(mktemp -d /tmp/dokploy-builder-env.XXXXXXXX)
+trap 'rm -rf -- "$fixture_root"' EXIT HUP INT TERM
+chmod 0700 "$fixture_root"
+mkdir "$fixture_root/app"
+cat > "$fixture_root/app/package.json" <<'JSON'
+{"name":"dokploy-builder-env-fixture","scripts":{"start":"node index.js"}}
+JSON
+printf '%s\n' 'console.log("fixture")' > "$fixture_root/app/index.js"
+
+DOKPLOY_ENV_TRANSPORT_FIXTURE=fixture-reversible-value
+export DOKPLOY_ENV_TRANSPORT_FIXTURE
+
+nixpacks plan "$fixture_root/app" \
+	--env DOKPLOY_ENV_TRANSPORT_FIXTURE \
+	--format json > "$fixture_root/nixpacks.json"
+python3 - "$fixture_root/nixpacks.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+plan = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected = os.environ["DOKPLOY_ENV_TRANSPORT_FIXTURE"]
+if plan.get("variables", {}).get("DOKPLOY_ENV_TRANSPORT_FIXTURE") != expected:
+    raise SystemExit("Nixpacks value-less env transport changed semantics")
+PY
+
+railpack prepare "$fixture_root/app" \
+	--env DOKPLOY_ENV_TRANSPORT_FIXTURE \
+	--show-plan \
+	--hide-pretty-plan > "$fixture_root/railpack.json"
+python3 - "$fixture_root/railpack.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+raw = Path(sys.argv[1]).read_text(encoding="utf-8")
+plan = json.loads(raw)
+name = "DOKPLOY_ENV_TRANSPORT_FIXTURE"
+if name not in plan.get("secrets", []):
+    raise SystemExit("Railpack value-less env transport changed semantics")
+if os.environ[name] in raw:
+    raise SystemExit("Railpack serialized a secret value into its plan")
+PY
+
+pack_help=$(pack build --help)
+printf '%s\n' "$pack_help" | grep -Fq -- "form 'VAR=VALUE' or 'VAR'"
+printf '%s\n' "$pack_help" | grep -Fq -- 'value-less form'
+printf '%s\n' 'builder environment transport verified'

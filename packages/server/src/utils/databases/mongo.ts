@@ -1,4 +1,5 @@
 import type { InferResultType } from "@dokploy/server/types/with";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
 import {
@@ -16,7 +17,10 @@ export type MongoNested = InferResultType<
 	{ mounts: true; environment: { with: { project: true } } }
 >;
 
-export const buildMongo = async (mongo: MongoNested) => {
+export const buildMongo = async (
+	mongo: MongoNested,
+	context: BuildAdmissionContext,
+) => {
 	const {
 		appName,
 		env,
@@ -177,8 +181,10 @@ ${command ?? "wait $MONGOD_PID"}`;
 	};
 
 	try {
+		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
+		context.assertLockHeld();
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
 			...settings,
@@ -187,7 +193,10 @@ ${command ?? "wait $MONGOD_PID"}`;
 				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
 			},
 		});
+		context.assertLockHeld();
 	} catch {
+		context.assertLockHeld();
 		await docker.createService(settings);
+		context.assertLockHeld();
 	}
 };

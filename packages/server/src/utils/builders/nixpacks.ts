@@ -2,16 +2,16 @@ import path from "node:path";
 import { getStaticCommand } from "@dokploy/server/utils/builders/static";
 import { nanoid } from "nanoid";
 import { quote } from "shell-quote";
-import { prepareEnvironmentVariablesForShell } from "../docker/utils";
 import { getBuildAppDirectory } from "../filesystem/directory";
 import type { ApplicationNested } from ".";
+import { prepareBuildEnvironment } from "./utils";
 
 export const getNixpacksCommand = (application: ApplicationNested) => {
 	const { env, appName, publishDirectory, cleanCache } = application;
 
 	const buildAppDirectory = getBuildAppDirectory(application);
 	const buildContainerId = `${appName}-${nanoid(10)}`;
-	const envVariables = prepareEnvironmentVariablesForShell(
+	const buildEnvironment = prepareBuildEnvironment(
 		env,
 		application.environment.project.env,
 		application.environment.env,
@@ -23,8 +23,10 @@ export const getNixpacksCommand = (application: ApplicationNested) => {
 		args.push("--no-cache");
 	}
 
-	for (const env of envVariables) {
-		args.push("--env", env);
+	for (const key of buildEnvironment.keys) {
+		// Value-less Nixpacks env arguments inherit from the private script's
+		// process environment, keeping values out of the child argv.
+		args.push("--env", key);
 	}
 
 	if (publishDirectory) {
@@ -33,6 +35,7 @@ export const getNixpacksCommand = (application: ApplicationNested) => {
 	}
 	const command = `nixpacks ${args.join(" ")}`;
 	let bashCommand = `
+		${buildEnvironment.exports.join("\n")}
 		echo "Starting nixpacks build..." ;
 		${command} || {
 			echo "❌ Nixpacks build failed" ;

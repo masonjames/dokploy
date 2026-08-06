@@ -31,6 +31,7 @@ import {
 	updateApplication,
 	updateApplicationStatus,
 	updateDeploymentStatus,
+	withHostBuildAdmission,
 	writeConfig,
 	writeConfigRemote,
 } from "@dokploy/server";
@@ -205,7 +206,13 @@ export const applicationRouter = createTRPCRouter({
 
 			try {
 				await updateApplicationStatus(input.applicationId, "idle");
-				await mechanizeDockerContainer(application);
+				await withHostBuildAdmission(
+					{ serverId: application.serverId, operation: "application-reload" },
+					async (context) => {
+						await mechanizeDockerContainer(application, context);
+						context.assertLockHeld();
+					},
+				);
 				await updateApplicationStatus(input.applicationId, "done");
 				await audit(ctx, {
 					action: "reload",

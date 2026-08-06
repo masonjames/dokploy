@@ -12,6 +12,7 @@ import type { InferResultType } from "@dokploy/server/types/with";
 import { TRPCError } from "@trpc/server";
 import { quote } from "shell-quote";
 import type { z } from "zod";
+import { getAuthenticatedGitCloneCommand } from "./git-askpass";
 
 export type ApplicationWithBitbucket = InferResultType<
 	"applications",
@@ -36,18 +37,30 @@ export const getBitbucketCloneUrl = (
 	if (!bitbucketProvider) {
 		throw new Error("Bitbucket provider is required");
 	}
+	return `https://${repoClone}`;
+};
 
+const getBitbucketCloneCredentials = (bitbucketProvider: {
+	apiToken?: string | null;
+	bitbucketUsername?: string | null;
+	appPassword?: string | null;
+}) => {
 	if (bitbucketProvider.apiToken) {
-		return `https://x-bitbucket-api-token-auth:${bitbucketProvider.apiToken}@${repoClone}`;
+		return {
+			password: bitbucketProvider.apiToken,
+			username: "x-bitbucket-api-token-auth",
+		};
 	}
 
-	// For app passwords, use username:app_password format
 	if (!bitbucketProvider.bitbucketUsername || !bitbucketProvider.appPassword) {
 		throw new Error(
 			"Username and app password are required when not using API token",
 		);
 	}
-	return `https://${bitbucketProvider.bitbucketUsername}:${bitbucketProvider.appPassword}@${repoClone}`;
+	return {
+		password: bitbucketProvider.appPassword,
+		username: bitbucketProvider.bitbucketUsername,
+	};
 };
 
 export const getBitbucketHeaders = (bitbucketProvider: Bitbucket) => {
@@ -125,8 +138,15 @@ export const cloneBitbucketRepository = async ({
 	const repoToUse = entity.bitbucketRepositorySlug || bitbucketRepository;
 	const repoclone = `bitbucket.org/${bitbucketOwner}/${repoToUse}.git`;
 	const cloneUrl = getBitbucketCloneUrl(bitbucket, repoclone);
+	const credentials = getBitbucketCloneCredentials(bitbucket);
 	command += `echo ${quote([`Cloning Repo ${repoclone} to ${outputPath}: ✅`])};`;
-	command += `git clone --branch ${quote([String(bitbucketBranch ?? "")])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} ${quote([String(cloneUrl ?? "")])} ${quote([String(outputPath ?? "")])} --progress;`;
+	command += getAuthenticatedGitCloneCommand({
+		branch: bitbucketBranch!,
+		cloneUrl,
+		enableSubmodules,
+		outputPath,
+		...credentials,
+	});
 	return command;
 };
 

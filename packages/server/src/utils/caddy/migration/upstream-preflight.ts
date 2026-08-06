@@ -1,3 +1,5 @@
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import {
 	execAsync,
 	execAsyncRemote,
@@ -14,15 +16,22 @@ import type {
 	CaddyMigrationRuntimePreflightRoute,
 } from "./types";
 
-const PROBE_IMAGE = "busybox:1.36";
+export const CADDY_UPSTREAM_PROBE_IMAGE = "busybox:1.36";
 const DEFAULT_PROBE_NETWORK = DOKPLOY_CADDY_NETWORK;
 type ProbeMode = "standalone" | "service";
 
-const runCommand = async (command: string, serverId?: string) => {
+const runCommand = async (
+	command: string,
+	serverId?: string,
+	context?: BuildAdmissionContext,
+) => {
+	const commandToRun = context
+		? await context.prepareCommand(command)
+		: command;
 	if (serverId) {
-		return execAsyncRemote(serverId, command);
+		return execAsyncRemote(serverId, commandToRun, undefined, context?.signal);
 	}
-	return execAsync(command);
+	return execAsync(commandToRun, { signal: context?.signal });
 };
 
 const splitDial = (dial: string) => {
@@ -162,11 +171,12 @@ const probeStandaloneUpstream = async (
 	port: number,
 	network: string,
 	serverId?: string,
+	context?: BuildAdmissionContext,
 ) => {
 	const command = [
-		"docker run --rm",
+		"docker run --pull=never --rm",
 		`--network ${quote([network])}`,
-		quote([PROBE_IMAGE]),
+		quote([CADDY_UPSTREAM_PROBE_IMAGE]),
 		"sh -c",
 		quote([probeScript]),
 		"sh",
@@ -175,7 +185,7 @@ const probeStandaloneUpstream = async (
 	].join(" ");
 
 	try {
-		const { stdout } = await runCommand(command, serverId);
+		const { stdout } = await runCommand(command, serverId, context);
 		return stdout.trim() === "passed"
 			? null
 			: stdout.trim() || "upstream probe did not report success";
@@ -191,6 +201,7 @@ const probeServiceUpstream = async (
 	port: number,
 	network: string,
 	serverId?: string,
+	context?: BuildAdmissionContext,
 ) => {
 	const serviceName = `dokploy-caddy-preflight-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 	const command = `
@@ -198,7 +209,7 @@ set -e
 SERVICE_NAME=${quote([serviceName])}
 docker service rm "$SERVICE_NAME" >/dev/null 2>&1 || true
 trap 'docker service rm "$SERVICE_NAME" >/dev/null 2>&1 || true' EXIT
-docker service create --detach=true --name "$SERVICE_NAME" --restart-condition none --network ${quote([network])} ${quote([PROBE_IMAGE])} sh -c ${quote([probeScript])} sh ${quote([host])} ${quote([String(port)])} >/dev/null
+docker service create --detach=true --name "$SERVICE_NAME" --constraint node.role==manager --restart-condition none --network ${quote([network])} ${quote([CADDY_UPSTREAM_PROBE_IMAGE])} sh -c ${quote([probeScript])} sh ${quote([host])} ${quote([String(port)])} >/dev/null
 for i in $(seq 1 30); do
 	LOGS=$(docker service logs --raw "$SERVICE_NAME" 2>&1 || true)
 	if echo "$LOGS" | grep -Eq '(^|[[:space:]])(passed|dns_failed|tcp_failed)([[:space:]]|$)'; then
@@ -218,7 +229,7 @@ exit 12
 `;
 
 	try {
-		const { stdout } = await runCommand(command, serverId);
+		const { stdout } = await runCommand(command, serverId, context);
 		return stdout.trim().includes("passed")
 			? null
 			: parseProbeFailure(new Error("upstream service probe failed"), stdout);
@@ -234,12 +245,14 @@ const probeUpstream = async (
 	port: number,
 	network: string,
 	serverId?: string,
+	context?: BuildAdmissionContext,
 ): Promise<{ failureReason: string | null; probeMode: ProbeMode }> => {
 	const standaloneFailure = await probeStandaloneUpstream(
 		host,
 		port,
 		network,
 		serverId,
+		context,
 	);
 	if (!standaloneFailure) {
 		return { failureReason: null, probeMode: "standalone" };
@@ -253,6 +266,7 @@ const probeUpstream = async (
 		port,
 		network,
 		serverId,
+		context,
 	);
 	if (!serviceFailure) {
 		return { failureReason: null, probeMode: "service" };
@@ -270,7 +284,7 @@ const failedFragmentReadPreflight = (
 	checkedAt: new Date().toISOString(),
 	network: DEFAULT_PROBE_NETWORK,
 	networks: [DEFAULT_PROBE_NETWORK],
-	probeImage: PROBE_IMAGE,
+	probeImage: CADDY_UPSTREAM_PROBE_IMAGE,
 	checks: [
 		{
 			dial: "fragment-read",
@@ -291,6 +305,7 @@ const runUpstreamPreflight = async (
 	refs: CaddyMigrationRuntimePreflightRoute[],
 	invalidChecks: CaddyMigrationRuntimePreflightCheck[],
 	serverId?: string,
+	context?: BuildAdmissionContext,
 ): Promise<CaddyMigrationRuntimePreflight> => {
 	const grouped = new Map<string, CaddyMigrationRuntimePreflightCheck>();
 	for (const ref of refs) {
@@ -315,6 +330,7 @@ const runUpstreamPreflight = async (
 			check.port,
 			check.network,
 			serverId,
+			context,
 		);
 		if (probeResult.probeMode === "service") {
 			probeMode = "service";
@@ -336,7 +352,7 @@ const runUpstreamPreflight = async (
 			networks.length <= 1 ? (networks[0] ?? DEFAULT_PROBE_NETWORK) : "mixed",
 		networks: networks.length > 0 ? networks : [DEFAULT_PROBE_NETWORK],
 		probeMode,
-		probeImage: PROBE_IMAGE,
+		probeImage: CADDY_UPSTREAM_PROBE_IMAGE,
 		checks,
 	};
 };
@@ -348,14 +364,26 @@ const runUpstreamPreflight = async (
  * or upstream is unreachable.
  */
 export const runActiveCaddyUpstreamPreflight = async (
-	input: { serverId?: string } = {},
+	input: { context?: BuildAdmissionContext; serverId?: string } = {},
 ): Promise<CaddyMigrationRuntimePreflight> => {
 	try {
+		if (input.context) {
+			await pullImageUnderBuildAdmission({
+				context: input.context,
+				dockerImage: CADDY_UPSTREAM_PROBE_IMAGE,
+				serverId: input.serverId || null,
+			});
+		}
 		const fragments = await readCaddyRouteFragments({
 			serverId: input.serverId,
 		});
 		const { refs, invalidChecks } = collectPreflightInputs(fragments);
-		return runUpstreamPreflight(refs, invalidChecks, input.serverId);
+		return runUpstreamPreflight(
+			refs,
+			invalidChecks,
+			input.serverId,
+			input.context,
+		);
 	} catch (error) {
 		return failedFragmentReadPreflight(error);
 	}
@@ -363,14 +391,26 @@ export const runActiveCaddyUpstreamPreflight = async (
 
 export const runCaddyMigrationUpstreamPreflight = async (
 	report: CaddyMigrationReport,
-	input: { serverId?: string } = {},
+	input: { context?: BuildAdmissionContext; serverId?: string } = {},
 ): Promise<CaddyMigrationRuntimePreflight> => {
 	try {
+		if (input.context) {
+			await pullImageUnderBuildAdmission({
+				context: input.context,
+				dockerImage: CADDY_UPSTREAM_PROBE_IMAGE,
+				serverId: input.serverId || null,
+			});
+		}
 		const { refs, invalidChecks } = await readPreflightInputs(
 			report,
 			input.serverId,
 		);
-		return runUpstreamPreflight(refs, invalidChecks, input.serverId);
+		return runUpstreamPreflight(
+			refs,
+			invalidChecks,
+			input.serverId,
+			input.context,
+		);
 	} catch (error) {
 		return failedFragmentReadPreflight(error);
 	}
