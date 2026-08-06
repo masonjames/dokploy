@@ -231,7 +231,7 @@ export function parseRawConfig(
 
 		if (search) {
 			parsedLogs = parsedLogs.filter((log) =>
-				log.RequestHost.toLowerCase().includes(search.toLowerCase()),
+				(log.RequestHost ?? "").toLowerCase().includes(search.toLowerCase()),
 			);
 		}
 

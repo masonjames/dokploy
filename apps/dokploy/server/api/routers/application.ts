@@ -6,6 +6,7 @@ import {
 	findApplicationById,
 	findDomainsByApplicationId,
 	findEnvironmentById,
+	findPreviewDeploymentsByApplicationId,
 	findProjectById,
 	getAccessibleServerIds,
 	getApplicationRuntimeStatus,
@@ -20,6 +21,7 @@ import {
 	removeDeployments,
 	removeDirectoryCode,
 	removeMonitoringDirectory,
+	removePreviewDeployment,
 	removeService,
 	removeTraefikConfig,
 	resolveWebServerProvider,
@@ -245,6 +247,15 @@ export const applicationRouter = createTRPCRouter({
 					code: "UNAUTHORIZED",
 					message: "You are not authorized to delete this application",
 				});
+			}
+
+			const previewDeploymentsList =
+				await findPreviewDeploymentsByApplicationId(input.applicationId);
+
+			for (const previewDeployment of previewDeploymentsList) {
+				try {
+					await removePreviewDeployment(previewDeployment.previewDeploymentId);
+				} catch (_) {}
 			}
 
 			const result = await db

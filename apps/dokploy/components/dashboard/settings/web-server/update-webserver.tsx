@@ -30,7 +30,6 @@ type ServiceStatus = {
 
 type HealthResult = {
 	postgres: ServiceStatus;
-	redis: ServiceStatus;
 	webServer: ServiceStatus & {
 		provider: "traefik" | "caddy";
 	};
@@ -97,7 +96,6 @@ export const UpdateWebServer = ({
 	const allHealthy =
 		healthResult &&
 		healthResult.postgres.status === "healthy" &&
-		healthResult.redis.status === "healthy" &&
 		healthResult.webServer.status === "healthy";
 
 	const checkIsUpdateFinished = async () => {
@@ -187,7 +185,7 @@ export const UpdateWebServer = ({
 							{modalState === "checking" && (
 								<span className="flex items-center gap-2">
 									<Loader2 className="animate-spin h-4 w-4" />
-									Checking PostgreSQL, Redis and the active web server...
+									Checking PostgreSQL and the active web server...
 								</span>
 							)}
 
@@ -197,10 +195,6 @@ export const UpdateWebServer = ({
 										<ServiceStatusItem
 											name="PostgreSQL"
 											service={healthResult.postgres}
-										/>
-										<ServiceStatusItem
-											name="Redis"
-											service={healthResult.redis}
 										/>
 										<ServiceStatusItem
 											name={`Web server (${webServerLabels[healthResult.webServer.provider]})`}

@@ -3,7 +3,6 @@ import {
 	checkGPUStatus,
 	checkPortInUse,
 	checkPostgresHealth,
-	checkRedisHealth,
 	checkWebServerHealth,
 	cleanupAll,
 	cleanupAllBackground,
@@ -15,7 +14,6 @@ import {
 	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	dispatchDokployUpdate,
-	execAsync,
 	findServerById,
 	getCaddyCompileSettings,
 	getDockerDiskUsage,
@@ -110,41 +108,6 @@ export const settingsRouter = createTRPCRouter({
 			action: "reload",
 			resourceType: "settings",
 			resourceName: "dokploy",
-		});
-		return true;
-	}),
-	cleanRedis: adminProcedure.mutation(async ({ ctx }) => {
-		if (IS_CLOUD) {
-			return true;
-		}
-
-		const { stdout: containerId } = await execAsync(
-			`docker ps --filter "name=dokploy-redis" --filter "status=running" -q | head -n 1`,
-		);
-
-		if (!containerId) {
-			throw new Error("Redis container not found");
-		}
-
-		const redisContainerId = containerId.trim();
-
-		await execAsync(`docker exec -i ${redisContainerId} redis-cli flushall`);
-		await audit(ctx, {
-			action: "update",
-			resourceType: "settings",
-			resourceName: "clean-redis",
-		});
-		return true;
-	}),
-	reloadRedis: adminProcedure.mutation(async ({ ctx }) => {
-		if (IS_CLOUD) {
-			return true;
-		}
-		await reloadDockerResource("dokploy-redis");
-		await audit(ctx, {
-			action: "reload",
-			resourceType: "settings",
-			resourceName: "dokploy-redis",
 		});
 		return true;
 	}),
@@ -1010,21 +973,18 @@ export const settingsRouter = createTRPCRouter({
 			const webServer = { provider, status: "healthy" as const };
 			return {
 				postgres: { status: "healthy" as const },
-				redis: { status: "healthy" as const },
 				webServer,
 				traefik: { status: webServer.status },
 			};
 		}
 
-		const [postgres, redis, webServer] = await Promise.all([
+		const [postgres, webServer] = await Promise.all([
 			checkPostgresHealth(),
-			checkRedisHealth(),
 			checkWebServerHealth(provider),
 		]);
 
 		return {
 			postgres,
-			redis,
 			webServer,
 			traefik: { status: webServer.status, message: webServer.message },
 		};

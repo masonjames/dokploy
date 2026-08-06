@@ -1237,8 +1237,36 @@
     {
       "idx": 176,
       "version": "7",
-      "when": 1785163893047,
-      "tag": "0176_careful_blockbuster",
+      "when": 1785274179336,
+      "tag": "0176_slimy_marten_broadcloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1785709848209,
+      "tag": "0177_glossy_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1785751631838,
+      "tag": "0178_silky_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1785800152143,
+      "tag": "0179_foamy_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1786048189101,
+      "tag": "0180_heavy_mathemanic",
       "breakpoints": true
     }
   ]

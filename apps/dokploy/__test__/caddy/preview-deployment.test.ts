@@ -9,6 +9,7 @@ const previewDeploymentRow = {
 };
 
 const insertedPreviewDeployment = { ...previewDeploymentRow };
+const findGithubByIdMock = vi.hoisted(() => vi.fn());
 
 const dbMock = vi.hoisted(() => ({
 	query: {
@@ -42,6 +43,7 @@ vi.mock("@dokploy/server/services/domain", () => ({
 }));
 
 vi.mock("@dokploy/server/services/github", () => ({
+	findGithubById: findGithubByIdMock,
 	getIssueComment: vi.fn(() => "preview comment"),
 }));
 
@@ -100,6 +102,7 @@ const createApplication = () => ({
 	name: "My App",
 	owner: "dokploy",
 	repository: "dokploy",
+	githubId: "github-1",
 	github: {},
 	serverId: null,
 	server: {
@@ -122,6 +125,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	Object.assign(insertedPreviewDeployment, previewDeploymentRow);
 	dbMock.query.organization.findFirst.mockResolvedValue({ ownerId: "user-1" });
+	findGithubByIdMock.mockResolvedValue({ githubId: "github-1" });
 	createCommentMock.mockResolvedValue({ data: { id: 12345 } });
 	dbMock.insert.mockReturnValue({
 		values: vi.fn().mockReturnValue({

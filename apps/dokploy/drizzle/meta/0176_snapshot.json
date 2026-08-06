@@ -1,5 +1,5 @@
 {
-  "id": "f701600d-5ea9-4ccc-ba58-d41327930aa4",
+  "id": "383b87f1-fb41-4d41-9539-a87a3b2b677e",
   "prevId": "7a9f40d5-02c9-4ac5-8b88-08bdbdd02aac",
   "version": "7",
   "dialect": "postgresql",
@@ -2568,6 +2568,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'idle'"
+        },
+        "icon": {
+          "name": "icon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "environmentId": {
           "name": "environmentId",
@@ -7414,21 +7420,6 @@
           "notNull": true,
           "default": false
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
         "buildsConcurrency": {
           "name": "buildsConcurrency",
           "type": "integer",
@@ -8399,28 +8390,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
-        "requestLogsEnabled": {
-          "name": "requestLogsEnabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "serverIp": {
           "name": "serverIp",
           "type": "text",
@@ -8798,14 +8767,6 @@
       "values": [
         "push",
         "tag"
-      ]
-    },
-    "public.webServerProvider": {
-      "name": "webServerProvider",
-      "schema": "public",
-      "values": [
-        "traefik",
-        "caddy"
       ]
     }
   },
