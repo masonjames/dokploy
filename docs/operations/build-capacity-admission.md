@@ -97,8 +97,9 @@ docker info --format '{{.DockerRootDir}}'
 df -Pk / "$(docker info --format '{{.DockerRootDir}}')"
 
 # Candidate container (both must report ro and FSROOT=/)
-findmnt -n -o OPTIONS,FSROOT -T /run/dokploy-host-root
-findmnt -n -o OPTIONS,FSROOT \
+findmnt --first-only --direction backward -n -o OPTIONS,FSROOT \
+  -T /run/dokploy-host-root
+findmnt --first-only --direction backward -n -o OPTIONS,FSROOT \
   -T "/run/dokploy-host-root$(docker info --format '{{.DockerRootDir}}')"
 df -Pk /run/dokploy-host-root \
   "/run/dokploy-host-root$(docker info --format '{{.DockerRootDir}}')"

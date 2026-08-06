@@ -20,6 +20,12 @@ sha256_file() {
 	fi
 }
 
+# Overlapping binds can produce multiple rows for one target. The backward
+# match is the active (topmost) mount rather than a shadowed underlay.
+findmnt_active() {
+	findmnt --first-only --direction backward -n -o "$1" -T "$2"
+}
+
 namespace_mode=${DOKPLOY_BUILD_GATE_NAMESPACE_MODE:-}
 host_root=${DOKPLOY_BUILD_HOST_ROOT_MOUNT:-}
 gate=${DOKPLOY_PLATFORM_CAPACITY_GATE_PATH:-}
@@ -67,12 +73,12 @@ actual_df_adapter_sha=$(sha256_file "$df_adapter")
 if [ "$namespace_mode" = "container" ]; then
 	[ "$host_root" != "/" ] || deny "container root cannot attest host capacity"
 	mountpoint -q -- "$host_root" || deny "host-root view is not a mountpoint"
-	options=$(findmnt -n -o OPTIONS -T "$host_root")
+	options=$(findmnt_active OPTIONS "$host_root")
 	case ",$options," in
 		*,ro,*) ;;
 		*) deny "host-root mount must be read-only" ;;
 	esac
-	fs_root=$(findmnt -n -o FSROOT -T "$host_root")
+	fs_root=$(findmnt_active FSROOT "$host_root")
 	[ "$fs_root" = "/" ] || deny "host-root mount does not expose filesystem root"
 else
 	[ "$host_root" = "/" ] || deny "host namespace must use / as its root view"
@@ -96,13 +102,13 @@ fi
 [ -d "$host_docker_root" ] || deny "DockerRootDir is absent from the host-root view"
 
 if [ "$namespace_mode" = "container" ]; then
-	docker_options=$(findmnt -n -o OPTIONS -T "$host_docker_root") ||
+	docker_options=$(findmnt_active OPTIONS "$host_docker_root") ||
 		deny "DockerRootDir mount options could not be resolved"
 	case ",$docker_options," in
 		*,ro,*) ;;
 		*) deny "DockerRootDir mount must be read-only" ;;
 	esac
-	docker_fs_root=$(findmnt -n -o FSROOT -T "$host_docker_root") ||
+	docker_fs_root=$(findmnt_active FSROOT "$host_docker_root") ||
 		deny "DockerRootDir filesystem root could not be resolved"
 	[ "$docker_fs_root" = "/" ] ||
 		deny "DockerRootDir mount does not expose its filesystem root"
