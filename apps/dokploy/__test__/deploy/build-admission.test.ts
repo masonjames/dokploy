@@ -79,10 +79,26 @@ echo "DOKPLOY_BUILD_GATE_NAMESPACE=host"
 
 const createAdapterFixture = async ({
 	namespaceMode = "host",
+	hostMountOptions = "ro",
 	dockerMountOptions = "ro",
+	hostFsRoot = "/",
+	dockerFsRoot = "/",
+	overlappingMountRows = false,
+	underlayHostMountOptions = "ro",
+	underlayDockerMountOptions = "ro",
+	underlayHostFsRoot = "/",
+	underlayDockerFsRoot = "/",
 }: {
 	namespaceMode?: "container" | "host";
-	dockerMountOptions?: "ro" | "rw";
+	hostMountOptions?: string;
+	dockerMountOptions?: string;
+	hostFsRoot?: string;
+	dockerFsRoot?: string;
+	overlappingMountRows?: boolean;
+	underlayHostMountOptions?: string;
+	underlayDockerMountOptions?: string;
+	underlayHostFsRoot?: string;
+	underlayDockerFsRoot?: string;
 } = {}) => {
 	const root = await mkdtemp(join(tmpdir(), "dokploy-capacity-adapter-"));
 	temporaryDirectories.push(root);
@@ -111,13 +127,63 @@ const createAdapterFixture = async ({
 		findmntPath,
 		`#!/bin/sh
 set -eu
-[ "$1" = -n ] && [ "$2" = -o ] && [ "$4" = -T ] || exit 2
-case "$3:$5" in
-	OPTIONS:"$FIXTURE_HOST_ROOT") echo ro ;;
-	OPTIONS:*) echo "$FIXTURE_DOCKER_OPTIONS" ;;
-	FSROOT:*) echo / ;;
-	*) exit 2 ;;
-esac
+first_only=false
+direction=forward
+column=
+target=
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-f|--first-only) first_only=true ;;
+		-d|--direction)
+			shift
+			[ "$#" -gt 0 ] || exit 2
+			direction=$1
+			;;
+		-n|--noheadings) ;;
+		-o|--output)
+			shift
+			[ "$#" -gt 0 ] || exit 2
+			column=$1
+			;;
+		-T|--target)
+			shift
+			[ "$#" -gt 0 ] || exit 2
+			target=$1
+			;;
+		*) exit 2 ;;
+	esac
+	shift
+done
+
+render_row() {
+	row=$1
+	case "$row:$column:$target" in
+		active:OPTIONS:"$FIXTURE_HOST_ROOT") printf '%s\n' "$FIXTURE_HOST_OPTIONS" ;;
+		active:OPTIONS:*) printf '%s\n' "$FIXTURE_DOCKER_OPTIONS" ;;
+		active:FSROOT:"$FIXTURE_HOST_ROOT") printf '%s\n' "$FIXTURE_HOST_FSROOT" ;;
+		active:FSROOT:*) printf '%s\n' "$FIXTURE_DOCKER_FSROOT" ;;
+		underlay:OPTIONS:"$FIXTURE_HOST_ROOT") printf '%s\n' "$FIXTURE_UNDERLAY_HOST_OPTIONS" ;;
+		underlay:OPTIONS:*) printf '%s\n' "$FIXTURE_UNDERLAY_DOCKER_OPTIONS" ;;
+		underlay:FSROOT:"$FIXTURE_HOST_ROOT") printf '%s\n' "$FIXTURE_UNDERLAY_HOST_FSROOT" ;;
+		underlay:FSROOT:*) printf '%s\n' "$FIXTURE_UNDERLAY_DOCKER_FSROOT" ;;
+		*) exit 2 ;;
+	esac
+}
+
+if [ "$FIXTURE_OVERLAPPING_MOUNTS" = true ]; then
+	if [ "$first_only" = true ]; then
+		if [ "$direction" = backward ]; then
+			render_row active
+		else
+			render_row underlay
+		fi
+	else
+		render_row underlay
+		render_row active
+	fi
+else
+	render_row active
+fi
 `,
 	);
 	await chmod(findmntPath, 0o755);
@@ -151,7 +217,15 @@ echo ${shellQuote(dockerRoot)}
 			...process.env,
 			PATH: `${fakeBin}:${process.env.PATH || ""}`,
 			FIXTURE_HOST_ROOT: hostRoot,
+			FIXTURE_HOST_OPTIONS: hostMountOptions,
 			FIXTURE_DOCKER_OPTIONS: dockerMountOptions,
+			FIXTURE_HOST_FSROOT: hostFsRoot,
+			FIXTURE_DOCKER_FSROOT: dockerFsRoot,
+			FIXTURE_OVERLAPPING_MOUNTS: String(overlappingMountRows),
+			FIXTURE_UNDERLAY_HOST_OPTIONS: underlayHostMountOptions,
+			FIXTURE_UNDERLAY_DOCKER_OPTIONS: underlayDockerMountOptions,
+			FIXTURE_UNDERLAY_HOST_FSROOT: underlayHostFsRoot,
+			FIXTURE_UNDERLAY_DOCKER_FSROOT: underlayDockerFsRoot,
 			DOKPLOY_BUILD_GATE_NAMESPACE_MODE: namespaceMode,
 			DOKPLOY_BUILD_HOST_ROOT_MOUNT: hostRoot,
 			DOKPLOY_PLATFORM_CAPACITY_GATE_PATH: gatePath,
@@ -300,6 +374,7 @@ describe("host build admission", () => {
 		const writable = await createAdapterFixture({
 			namespaceMode: "container",
 			dockerMountOptions: "rw",
+			overlappingMountRows: true,
 		});
 		await expect(
 			execFileAsync("/bin/sh", [writable.adapterPath], {
@@ -307,6 +382,66 @@ describe("host build admission", () => {
 			}),
 		).rejects.toMatchObject({
 			stderr: expect.stringContaining("DockerRootDir mount must be read-only"),
+		});
+	});
+
+	it("accepts overlapping read-only bind rows by selecting the active mount", async () => {
+		const overlapping = await createAdapterFixture({
+			namespaceMode: "container",
+			overlappingMountRows: true,
+		});
+
+		await expect(
+			execFileAsync("/bin/sh", [overlapping.adapterPath], {
+				env: overlapping.environment,
+			}),
+		).resolves.toMatchObject({
+			stdout: expect.stringContaining("DOKPLOY_BUILD_GATE_NAMESPACE=host"),
+		});
+	});
+
+	it("selects the active overmount instead of a writable shadowed row", async () => {
+		const overlapping = await createAdapterFixture({
+			namespaceMode: "container",
+			overlappingMountRows: true,
+			underlayHostMountOptions: "rw",
+			underlayDockerMountOptions: "rw",
+		});
+
+		await expect(
+			execFileAsync("/bin/sh", [overlapping.adapterPath], {
+				env: overlapping.environment,
+			}),
+		).resolves.toMatchObject({
+			stdout: expect.stringContaining("DOKPLOY_BUILD_GATE_NAMESPACE=host"),
+		});
+	});
+
+	it("rejects malformed or wrong-root active mount evidence", async () => {
+		const malformed = await createAdapterFixture({
+			namespaceMode: "container",
+			dockerMountOptions: "ro\nrw",
+		});
+		await expect(
+			execFileAsync("/bin/sh", [malformed.adapterPath], {
+				env: malformed.environment,
+			}),
+		).rejects.toMatchObject({
+			stderr: expect.stringContaining("DockerRootDir mount must be read-only"),
+		});
+
+		const wrongRoot = await createAdapterFixture({
+			namespaceMode: "container",
+			dockerFsRoot: "/docker-subdirectory",
+		});
+		await expect(
+			execFileAsync("/bin/sh", [wrongRoot.adapterPath], {
+				env: wrongRoot.environment,
+			}),
+		).rejects.toMatchObject({
+			stderr: expect.stringContaining(
+				"DockerRootDir mount does not expose its filesystem root",
+			),
 		});
 	});
 
