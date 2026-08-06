@@ -3,6 +3,10 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import { docker, paths } from "@dokploy/server/constants";
 import type { Compose } from "@dokploy/server/services/compose";
+import {
+	type BuildAdmissionContext,
+	withHostBuildAdmission,
+} from "@dokploy/server/utils/process/build-admission";
 import type { ContainerInfo, ResourceRequirements } from "dockerode";
 import { parse } from "dotenv";
 import { quote } from "shell-quote";
@@ -13,7 +17,11 @@ import type { MongoNested } from "../databases/mongo";
 import type { MysqlNested } from "../databases/mysql";
 import type { PostgresNested } from "../databases/postgres";
 import type { RedisNested } from "../databases/redis";
-import { execAsync, execAsyncRemote } from "../process/execAsync";
+import {
+	execAsync,
+	execAsyncRemote,
+	execAsyncStream,
+} from "../process/execAsync";
 import { spawnAsync } from "../process/spawnAsync";
 import { getRemoteDocker } from "../servers/remote-docker";
 import type { WebServerProvider } from "../web-server/providers";
@@ -23,6 +31,30 @@ interface RegistryAuth {
 	password: string;
 	registryUrl: string;
 }
+
+export const pullImageUnderBuildAdmission = async ({
+	context,
+	dockerImage,
+	serverId,
+	onData,
+}: {
+	context: BuildAdmissionContext;
+	dockerImage: string;
+	serverId: string | null;
+	onData?: (data: any) => void;
+}) => {
+	if (!dockerImage) throw new Error("Docker image not found");
+	context.assertLockHeld();
+	const command = await context.prepareCommand(
+		`docker pull ${quote([dockerImage])}`,
+	);
+	if (serverId) {
+		await execAsyncRemote(serverId, command, onData, context.signal);
+	} else {
+		await execAsyncStream(command, onData, { signal: context.signal });
+	}
+	context.assertLockHeld();
+};
 
 export const pullImage = async (
 	dockerImage: string,
@@ -363,7 +395,17 @@ export const cleanupAllBackground = async (serverId?: string) => {
 
 export const startService = async (appName: string) => {
 	try {
-		await execAsync(`docker service scale ${appName}=1 `);
+		await withHostBuildAdmission(
+			{ serverId: null, operation: "service-start" },
+			async ({ assertLockHeld, prepareCommand, signal }) => {
+				assertLockHeld();
+				const command = await prepareCommand(
+					quote(["docker", "service", "scale", `${appName}=1`]),
+				);
+				await execAsync(command, { signal });
+				assertLockHeld();
+			},
+		);
 	} catch (error) {
 		console.error(error);
 		throw error;
@@ -372,7 +414,17 @@ export const startService = async (appName: string) => {
 
 export const startServiceRemote = async (serverId: string, appName: string) => {
 	try {
-		await execAsyncRemote(serverId, `docker service scale ${appName}=1 `);
+		await withHostBuildAdmission(
+			{ serverId, operation: "service-start" },
+			async ({ assertLockHeld, prepareCommand, signal }) => {
+				assertLockHeld();
+				const command = await prepareCommand(
+					quote(["docker", "service", "scale", `${appName}=1`]),
+				);
+				await execAsyncRemote(serverId, command, undefined, signal);
+				assertLockHeld();
+			},
+		);
 	} catch (error) {
 		console.error(error);
 		throw error;

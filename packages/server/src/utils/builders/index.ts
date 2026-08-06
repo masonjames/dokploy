@@ -1,6 +1,7 @@
 import { resolveServiceNetworks } from "@dokploy/server/services/network";
 import { findRegistryByIdWithCredentials } from "@dokploy/server/services/registry";
 import type { InferResultType } from "@dokploy/server/types/with";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { getRegistryTag, uploadImageRemoteCommand } from "../cluster/upload";
 import {
@@ -78,7 +79,9 @@ export const getBuildCommand = async (application: ApplicationNested) => {
 
 export const mechanizeDockerContainer = async (
 	application: ApplicationNested,
+	context: BuildAdmissionContext,
 ) => {
+	context.assertLockHeld();
 	const {
 		appName,
 		env,
@@ -172,8 +175,10 @@ export const mechanizeDockerContainer = async (
 	};
 
 	try {
+		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
+		context.assertLockHeld();
 
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
@@ -183,13 +188,16 @@ export const mechanizeDockerContainer = async (
 				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
 			},
 		});
+		context.assertLockHeld();
 	} catch (error) {
 		console.log(error);
+		context.assertLockHeld();
 		if (authConfig) {
 			await docker.createService(authConfig, settings);
 		} else {
 			await docker.createService(settings);
 		}
+		context.assertLockHeld();
 	}
 };
 

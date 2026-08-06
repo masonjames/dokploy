@@ -1,6 +1,8 @@
 import { createHmac } from "node:crypto";
 import type { CreateServiceOptions } from "dockerode";
 import { betterAuthSecret } from "../lib/auth-secret";
+import { pullImageUnderBuildAdmission } from "../utils/docker/utils";
+import { withHostBuildAdmission } from "../utils/process/build-admission";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 
 export const FORWARD_AUTH_SERVICE_NAME = "dokploy-forward-auth";
@@ -25,6 +27,12 @@ export interface SetupForwardAuthOptions {
 	authDomainHttps?: boolean;
 	emailDomains?: string[];
 }
+
+const isDockerNotFoundError = (error: unknown) =>
+	typeof error === "object" &&
+	error !== null &&
+	"statusCode" in error &&
+	error.statusCode === 404;
 
 export const deriveBaseDomain = (authDomain: string): string => {
 	const labels = authDomain.trim().toLowerCase().split(".").filter(Boolean);
@@ -111,29 +119,43 @@ export const setupForwardAuth = async (options: SetupForwardAuthOptions) => {
 		},
 	};
 
-	try {
-		const service = docker.getService(FORWARD_AUTH_SERVICE_NAME);
-		const inspect = await service.inspect();
-		await service.update({
-			version: Number.parseInt(inspect.Version.Index),
-			...settings,
-			TaskTemplate: {
-				...settings.TaskTemplate,
-				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
-			},
-		});
-		console.log("Forward Auth Updated ✅");
-	} catch (_) {
-		try {
-			await docker.createService(settings);
-			console.log("Forward Auth Started ✅");
-		} catch (error: any) {
-			if (error?.statusCode !== 409) {
-				throw error;
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "forward-auth-setup" },
+		async (context) => {
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: FORWARD_AUTH_IMAGE,
+				serverId: serverId || null,
+			});
+
+			const service = docker.getService(FORWARD_AUTH_SERVICE_NAME);
+			let inspect: Awaited<ReturnType<typeof service.inspect>>;
+			try {
+				inspect = await service.inspect();
+			} catch (error) {
+				if (!isDockerNotFoundError(error)) {
+					throw error;
+				}
+				context.assertLockHeld();
+				await docker.createService(settings);
+				context.assertLockHeld();
+				console.log("Forward Auth Started ✅");
+				return;
 			}
-			console.log("Forward Auth service already exists, continuing...");
-		}
-	}
+
+			context.assertLockHeld();
+			await service.update({
+				version: Number.parseInt(inspect.Version.Index, 10),
+				...settings,
+				TaskTemplate: {
+					...settings.TaskTemplate,
+					ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
+				},
+			});
+			context.assertLockHeld();
+			console.log("Forward Auth Updated ✅");
+		},
+	);
 };
 
 export const removeForwardAuth = async (serverId?: string) => {

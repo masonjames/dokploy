@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+deny() {
+	echo "DENY host filesystem df adapter: $*" >&2
+	exit 1
+}
+
+[ "$#" -eq 3 ] || deny "unexpected argument count"
+[ "$1" = "-Pk" ] || deny "only df -Pk is supported"
+[ "$2" = "/" ] || deny "the first target must be host root"
+
+host_root=${DOKPLOY_BUILD_HOST_ROOT_MOUNT:-}
+docker_root=$3
+
+case "$host_root" in
+	/*) ;;
+	*) deny "host-root mount is not absolute" ;;
+esac
+case "$docker_root" in
+	/*) ;;
+	*) deny "DockerRootDir is not absolute" ;;
+esac
+case "$docker_root" in
+	*".."*) deny "DockerRootDir contains a parent traversal" ;;
+esac
+
+if [ "$host_root" = "/" ]; then
+	host_docker_root=$docker_root
+else
+	host_docker_root=${host_root%/}$docker_root
+fi
+
+[ -d "$host_root" ] || deny "host-root mount is missing"
+[ -d "$host_docker_root" ] || deny "DockerRootDir is absent from the host-root view"
+[ -x /usr/bin/df ] || deny "real df executable is unavailable"
+
+exec /usr/bin/df -Pk "$host_root" "$host_docker_root"

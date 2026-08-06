@@ -19,6 +19,7 @@ import {
 import type { ComposeSpecification } from "@dokploy/server/utils/docker/types";
 import { sendBuildErrorNotifications } from "@dokploy/server/utils/notifications/build-error";
 import { sendBuildSuccessNotifications } from "@dokploy/server/utils/notifications/build-success";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import {
 	ExecError,
 	execAsync,
@@ -162,11 +163,22 @@ export const loadServices = async (
 
 	if (type === "fetch") {
 		const command = await cloneCompose(compose);
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, command);
-		} else {
-			await execAsync(command);
-		}
+		await withHostBuildAdmission(
+			{ serverId: compose.serverId, operation: "compose-service-fetch" },
+			async ({ prepareCommand, signal }) => {
+				const admittedCommand = await prepareCommand(command);
+				if (compose.serverId) {
+					await execAsyncRemote(
+						compose.serverId,
+						admittedCommand,
+						undefined,
+						signal,
+					);
+				} else {
+					await execAsync(admittedCommand, { signal });
+				}
+			},
+		);
 	}
 
 	let composeData: ComposeSpecification | null;
@@ -238,53 +250,63 @@ export const deployCompose = async ({
 			...compose,
 			type: "compose" as const,
 		};
-		let command = "set -e;";
-		if (compose.sourceType === "github") {
-			command += await cloneGithubRepository(entity);
-		} else if (compose.sourceType === "gitlab") {
-			command += await cloneGitlabRepository(entity);
-		} else if (compose.sourceType === "bitbucket") {
-			command += await cloneBitbucketRepository(entity);
-		} else if (compose.sourceType === "git") {
-			command += await cloneGitRepository(entity);
-		} else if (compose.sourceType === "gitea") {
-			command += await cloneGiteaRepository(entity);
-		} else if (compose.sourceType === "raw") {
-			command += getCreateComposeFileCommand(entity);
-		}
+		let caddyComposeRouteTargets: Awaited<
+			ReturnType<typeof getCaddyComposeRouteTargetsForWebServer>
+		> = null;
+		await withHostBuildAdmission(
+			{ serverId: compose.serverId, operation: "compose-deploy" },
+			async ({ prepareCommand, signal }) => {
+				const execute = async (commandToExecute: string) => {
+					const admittedCommand = await prepareCommand(commandToExecute);
+					if (compose.serverId) {
+						await execAsyncRemote(
+							compose.serverId,
+							admittedCommand,
+							undefined,
+							signal,
+						);
+					} else {
+						await execAsync(admittedCommand, { signal });
+					}
+				};
 
-		let commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
-		if (compose.sourceType !== "raw") {
-			command = "set -e;";
-			command += await generateApplyPatchesCommand({
-				id: compose.composeId,
-				type: "compose",
-				serverId: compose.serverId,
-			});
-			commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, commandWithLog);
-			} else {
-				await execAsync(commandWithLog);
-			}
-		}
+				let command = "set -e;";
+				if (compose.sourceType === "github") {
+					command += await cloneGithubRepository(entity);
+				} else if (compose.sourceType === "gitlab") {
+					command += await cloneGitlabRepository(entity);
+				} else if (compose.sourceType === "bitbucket") {
+					command += await cloneBitbucketRepository(entity);
+				} else if (compose.sourceType === "git") {
+					command += await cloneGitRepository(entity);
+				} else if (compose.sourceType === "gitea") {
+					command += await cloneGiteaRepository(entity);
+				} else if (compose.sourceType === "raw") {
+					command += getCreateComposeFileCommand(entity);
+				}
+				await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
 
-		const caddyComposeRouteTargets =
-			await getCaddyComposeRouteTargetsForWebServer(entity, compose.domains);
+				if (compose.sourceType !== "raw") {
+					command = "set -e;";
+					command += await generateApplyPatchesCommand({
+						id: compose.composeId,
+						type: "compose",
+						serverId: compose.serverId,
+					});
+					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
+				}
 
-		command = "set -e;";
-		command += await getBuildComposeCommand(entity);
-		commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
+				caddyComposeRouteTargets =
+					await getCaddyComposeRouteTargetsForWebServer(
+						entity,
+						compose.domains,
+					);
+
+				command = "set -e;";
+				command += await getBuildComposeCommand(entity);
+				await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
+			},
+		);
 
 		if (caddyComposeRouteTargets) {
 			await writeCaddyComposeRoutesForTargets(
@@ -374,44 +396,50 @@ export const rebuildCompose = async ({
 	});
 
 	try {
-		let command = "set -e;";
-		if (compose.sourceType === "raw") {
-			command += getCreateComposeFileCommand(compose);
-		}
+		let caddyComposeRouteTargets: Awaited<
+			ReturnType<typeof getCaddyComposeRouteTargetsForWebServer>
+		> = null;
+		await withHostBuildAdmission(
+			{ serverId: compose.serverId, operation: "compose-rebuild" },
+			async ({ prepareCommand, signal }) => {
+				const execute = async (commandToExecute: string) => {
+					const admittedCommand = await prepareCommand(commandToExecute);
+					if (compose.serverId) {
+						await execAsyncRemote(
+							compose.serverId,
+							admittedCommand,
+							undefined,
+							signal,
+						);
+					} else {
+						await execAsync(admittedCommand, { signal });
+					}
+				};
 
-		let commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
+				let command = "set -e;";
+				if (compose.sourceType === "raw") {
+					command += getCreateComposeFileCommand(compose);
+					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
+				} else {
+					command += await generateApplyPatchesCommand({
+						id: compose.composeId,
+						type: "compose",
+						serverId: compose.serverId,
+					});
+					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
+				}
 
-		if (compose.sourceType !== "raw") {
-			command = "set -e;";
-			command += await generateApplyPatchesCommand({
-				id: compose.composeId,
-				type: "compose",
-				serverId: compose.serverId,
-			});
-			commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, commandWithLog);
-			} else {
-				await execAsync(commandWithLog);
-			}
-		}
+				caddyComposeRouteTargets =
+					await getCaddyComposeRouteTargetsForWebServer(
+						compose,
+						compose.domains,
+					);
 
-		const caddyComposeRouteTargets =
-			await getCaddyComposeRouteTargetsForWebServer(compose, compose.domains);
-
-		command = "set -e;";
-		command += await getBuildComposeCommand(compose);
-		commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
+				command = "set -e;";
+				command += await getBuildComposeCommand(compose);
+				await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
+			},
+		);
 
 		if (caddyComposeRouteTargets) {
 			await writeCaddyComposeRoutesForTargets(
@@ -503,16 +531,28 @@ export const startCompose = async (composeId: string) => {
 			compose.sourceType === "raw" ? "docker-compose.yml" : compose.composePath;
 		const baseCommand = `env -i PATH="$PATH" docker compose -p ${quote([compose.appName])} -f ${quote([path])} up -d`;
 		if (compose.composeType === "docker-compose") {
-			if (compose.serverId) {
-				await execAsyncRemote(
-					compose.serverId,
-					`cd ${projectPath} && ${baseCommand}`,
-				);
-			} else {
-				await execAsync(baseCommand, {
-					cwd: projectPath,
-				});
-			}
+			await withHostBuildAdmission(
+				{ serverId: compose.serverId, operation: "compose-start" },
+				async ({ prepareCommand, signal }) => {
+					const command = compose.serverId
+						? `cd ${quote([projectPath])} && ${baseCommand}`
+						: baseCommand;
+					const admittedCommand = await prepareCommand(command);
+					if (compose.serverId) {
+						await execAsyncRemote(
+							compose.serverId,
+							admittedCommand,
+							undefined,
+							signal,
+						);
+					} else {
+						await execAsync(admittedCommand, {
+							cwd: projectPath,
+							signal,
+						});
+					}
+				},
+			);
 		}
 
 		await updateCompose(composeId, {

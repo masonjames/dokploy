@@ -1,0 +1,120 @@
+#!/bin/sh
+set -eu
+
+deny() {
+	echo "DENY host capacity adapter: $*" >&2
+	exit 1
+}
+
+for dependency in awk bash docker findmnt mountpoint readlink; do
+	command -v "$dependency" >/dev/null 2>&1 || deny "missing command: $dependency"
+done
+
+sha256_file() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum -- "$1" | awk '{ print $1 }'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 -- "$1" | awk '{ print $1 }'
+	else
+		deny "missing command: sha256sum or shasum"
+	fi
+}
+
+namespace_mode=${DOKPLOY_BUILD_GATE_NAMESPACE_MODE:-}
+host_root=${DOKPLOY_BUILD_HOST_ROOT_MOUNT:-}
+gate=${DOKPLOY_PLATFORM_CAPACITY_GATE_PATH:-}
+gate_sha=${DOKPLOY_PLATFORM_CAPACITY_GATE_SHA256:-}
+policy=${DOKPLOY_PLATFORM_CAPACITY_POLICY_PATH:-}
+policy_sha=${DOKPLOY_PLATFORM_CAPACITY_POLICY_SHA256:-}
+df_adapter=${DOKPLOY_BUILD_DF_ADAPTER_PATH:-}
+df_adapter_sha=${DOKPLOY_BUILD_DF_ADAPTER_SHA256:-}
+
+case "$namespace_mode" in
+	container|host) ;;
+	*) deny "namespace mode must be container or host" ;;
+esac
+for path in "$host_root" "$gate" "$policy" "$df_adapter"; do
+	case "$path" in
+		/*) ;;
+		*) deny "all configured paths must be absolute" ;;
+	esac
+done
+for digest in "$gate_sha" "$policy_sha" "$df_adapter_sha"; do
+	[ "${#digest}" -eq 64 ] ||
+		deny "gate and policy checksums must be exactly 64 characters"
+	case "$digest" in
+		*[!0-9a-f]*)
+			deny "gate and policy checksums must be lowercase SHA-256 digests"
+			;;
+	esac
+done
+
+[ -x "$gate" ] || deny "platform capacity gate is not executable"
+[ -r "$policy" ] || deny "platform capacity policy is not readable"
+
+gate_root=$(CDPATH= cd -- "$(dirname -- "$gate")/../.." && pwd -P)
+expected_policy=$gate_root/apps/monitoring/generated/platform-capacity-policy.json
+[ "$(readlink -f -- "$policy")" = "$(readlink -f -- "$expected_policy")" ] ||
+	deny "policy is not the file resolved by the platform gate"
+
+actual_gate_sha=$(sha256_file "$gate")
+[ "$actual_gate_sha" = "$gate_sha" ] || deny "platform capacity gate checksum mismatch"
+actual_policy_sha=$(sha256_file "$policy")
+[ "$actual_policy_sha" = "$policy_sha" ] || deny "platform capacity policy checksum mismatch"
+actual_df_adapter_sha=$(sha256_file "$df_adapter")
+[ "$actual_df_adapter_sha" = "$df_adapter_sha" ] || deny "df adapter checksum mismatch"
+
+if [ "$namespace_mode" = "container" ]; then
+	[ "$host_root" != "/" ] || deny "container root cannot attest host capacity"
+	mountpoint -q -- "$host_root" || deny "host-root view is not a mountpoint"
+	options=$(findmnt -n -o OPTIONS -T "$host_root")
+	case ",$options," in
+		*,ro,*) ;;
+		*) deny "host-root mount must be read-only" ;;
+	esac
+	fs_root=$(findmnt -n -o FSROOT -T "$host_root")
+	[ "$fs_root" = "/" ] || deny "host-root mount does not expose filesystem root"
+else
+	[ "$host_root" = "/" ] || deny "host namespace must use / as its root view"
+fi
+
+docker_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null) ||
+	deny "DockerRootDir could not be resolved"
+case "$docker_root" in
+	/*) ;;
+	*) deny "DockerRootDir is not absolute" ;;
+esac
+case "$docker_root" in
+	*".."*) deny "DockerRootDir contains a parent traversal" ;;
+esac
+
+if [ "$host_root" = "/" ]; then
+	host_docker_root=$docker_root
+else
+	host_docker_root=${host_root%/}$docker_root
+fi
+[ -d "$host_docker_root" ] || deny "DockerRootDir is absent from the host-root view"
+
+if [ "$namespace_mode" = "container" ]; then
+	docker_options=$(findmnt -n -o OPTIONS -T "$host_docker_root") ||
+		deny "DockerRootDir mount options could not be resolved"
+	case ",$docker_options," in
+		*,ro,*) ;;
+		*) deny "DockerRootDir mount must be read-only" ;;
+	esac
+	docker_fs_root=$(findmnt -n -o FSROOT -T "$host_docker_root") ||
+		deny "DockerRootDir filesystem root could not be resolved"
+	[ "$docker_fs_root" = "/" ] ||
+		deny "DockerRootDir mount does not expose its filesystem root"
+fi
+
+# The platform gate is authoritative for thresholds and reserve. This adapter
+# only changes df path resolution so the gate measures the host filesystems
+# from Dokploy's container mount namespace.
+[ -x "$df_adapter" ] || deny "df adapter is unavailable"
+if ! output=$(PATH="$(dirname -- "$df_adapter"):$PATH" "$gate" 2>&1); then
+	printf '%s\n' "$output" >&2
+	exit 1
+fi
+printf '%s\n' "$output"
+printf 'DOKPLOY_BUILD_GATE_NAMESPACE=host\n'

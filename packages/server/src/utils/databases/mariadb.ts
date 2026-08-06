@@ -1,4 +1,5 @@
 import type { InferResultType } from "@dokploy/server/types/with";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
 import {
@@ -15,7 +16,10 @@ export type MariadbNested = InferResultType<
 	"mariadb",
 	{ mounts: true; environment: { with: { project: true } } }
 >;
-export const buildMariadb = async (mariadb: MariadbNested) => {
+export const buildMariadb = async (
+	mariadb: MariadbNested,
+	context: BuildAdmissionContext,
+) => {
 	const {
 		appName,
 		env,
@@ -120,8 +124,10 @@ export const buildMariadb = async (mariadb: MariadbNested) => {
 		},
 	};
 	try {
+		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
+		context.assertLockHeld();
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
 			...settings,
@@ -130,7 +136,10 @@ export const buildMariadb = async (mariadb: MariadbNested) => {
 				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
 			},
 		});
+		context.assertLockHeld();
 	} catch {
+		context.assertLockHeld();
 		await docker.createService(settings);
+		context.assertLockHeld();
 	}
 };

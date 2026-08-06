@@ -44,9 +44,23 @@ jobs:
 
       - name: Run focused Caddy and release tests
         run: >-
-          pnpm --filter=dokploy test --run
+          pnpm --filter ./apps/dokploy test --run
           __test__/caddy
+          __test__/deploy/application.command.test.ts
           __test__/deploy/application-image-cas.test.ts
+          __test__/deploy/build-admission.test.ts
+          __test__/deploy/build-environment-argv.test.ts
+          __test__/deploy/compose-build-admission.test.ts
+          __test__/deploy/database-service-build-admission.test.ts
+          __test__/deploy/exec-async-remote.test.ts
+          __test__/deploy/forward-auth-build-admission.test.ts
+          __test__/deploy/libsql-build-admission.test.ts
+          __test__/deploy/provider-git-askpass.test.ts
+          __test__/deploy/pull-image-build-admission.test.ts
+          __test__/deploy/rollback-build-admission.test.ts
+          __test__/deploy/settings-build-admission.test.ts
+          __test__/deploy/service-start-build-admission.test.ts
+          __test__/deploy/snapshot-service-start-build-admission.test.ts
           __test__/deploy/application-release-api.test.ts
           __test__/deploy/application-release-cloud-api.test.ts
           __test__/deploy/application-runtime-status.test.ts
@@ -54,7 +68,7 @@ jobs:
           __test__/queues/in-memory-queue.test.ts
 
       - name: Typecheck Dokploy
-        run: pnpm --filter=dokploy typecheck
+        run: pnpm --filter ./apps/dokploy typecheck
 
       - name: Typecheck server package
         run: pnpm --filter=@dokploy/server typecheck

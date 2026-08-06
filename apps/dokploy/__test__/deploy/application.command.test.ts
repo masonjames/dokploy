@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as adminService from "@dokploy/server/services/admin";
 import * as applicationService from "@dokploy/server/services/application";
 import { deployApplication } from "@dokploy/server/services/application";
 import * as deploymentService from "@dokploy/server/services/deployment";
 import * as builders from "@dokploy/server/utils/builders";
 import * as notifications from "@dokploy/server/utils/notifications/build-success";
+import * as buildAdmission from "@dokploy/server/utils/process/build-admission";
 import * as execProcess from "@dokploy/server/utils/process/execAsync";
 import * as gitProvider from "@dokploy/server/utils/providers/git";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +19,7 @@ vi.mock("@dokploy/server/db", () => {
 			returning: vi.fn().mockResolvedValue([{}] as any),
 			from: vi.fn(() => chain),
 			innerJoin: vi.fn(() => chain),
+			// biome-ignore lint/suspicious/noThenProperty: The chainable query mock must be awaitable.
 			then: (resolve: (v: any) => void) => {
 				resolve([]);
 			},
@@ -77,7 +81,19 @@ vi.mock("@dokploy/server/utils/providers/git", async () => {
 
 vi.mock("@dokploy/server/utils/process/execAsync", () => ({
 	execAsync: vi.fn(),
+	execAsyncRemote: vi.fn(),
 	ExecError: class ExecError extends Error {},
+}));
+
+vi.mock("@dokploy/server/utils/process/build-admission", () => ({
+	withHostBuildAdmission: vi.fn(async (_options, callback) => {
+		const signal = new AbortController().signal;
+		return callback({
+			prepareCommand: async (command: string) => `ADMITTED:${command}`,
+			signal,
+			assertLockHeld: () => undefined,
+		});
+	}),
 }));
 
 vi.mock("@dokploy/server/utils/builders", async () => {
@@ -198,6 +214,28 @@ describe("deployApplication - Command Generation Tests", () => {
 		expect(command).toContain("https://github.com/Dokploy/examples.git");
 	});
 
+	it("rejects credentials embedded in a custom HTTP clone URL", async () => {
+		await expect(
+			cloneGitRepository(
+				createMockApplication({
+					customGitUrl:
+						"https://fixture-user:fixture-token@example.test/repository.git",
+				}) as any,
+			),
+		).rejects.toThrow("must not contain credentials");
+	});
+
+	it("rejects shell metacharacters in a custom SSH clone host", async () => {
+		await expect(
+			cloneGitRepository(
+				createMockApplication({
+					customGitUrl: "git@$(id):owner/repository.git",
+					customGitSSHKeyId: "ssh-key-id",
+				}) as any,
+			),
+		).rejects.toThrow("Malformatted SSH host");
+	});
+
 	it("should verify nixpacks command is called with correct app", async () => {
 		const mockNixpacksCommand = "nixpacks build /path/to/app --name test-app";
 		vi.mocked(builders.getBuildCommand).mockResolvedValue(mockNixpacksCommand);
@@ -218,6 +256,7 @@ describe("deployApplication - Command Generation Tests", () => {
 
 		expect(execProcess.execAsync).toHaveBeenCalledWith(
 			expect.stringContaining("nixpacks build"),
+			expect.objectContaining({ signal: expect.anything() }),
 		);
 	});
 
@@ -247,6 +286,7 @@ describe("deployApplication - Command Generation Tests", () => {
 
 		expect(execProcess.execAsync).toHaveBeenCalledWith(
 			expect.stringContaining("railpack prepare"),
+			expect.objectContaining({ signal: expect.anything() }),
 		);
 	});
 
@@ -264,6 +304,18 @@ describe("deployApplication - Command Generation Tests", () => {
 		expect(execCalls.length).toBeGreaterThan(0);
 
 		const fullCommand = execCalls[0]?.[0];
+		expect(buildAdmission.withHostBuildAdmission).toHaveBeenCalledWith(
+			expect.objectContaining({ operation: "application-deploy" }),
+			expect.any(Function),
+		);
+		expect(buildAdmission.withHostBuildAdmission).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operation: "application-deploy-deployment-host",
+				serverId: null,
+			}),
+			expect.any(Function),
+		);
+		expect(fullCommand).toMatch(/^ADMITTED:/);
 		expect(fullCommand).toContain("set -e");
 		expect(fullCommand).toContain("git clone");
 		expect(fullCommand).toContain("nixpacks build");
@@ -283,5 +335,69 @@ describe("deployApplication - Command Generation Tests", () => {
 		const fullCommand = execCalls[0]?.[0];
 
 		expect(fullCommand).toContain(">> /tmp/test-deployment.log 2>&1");
+	});
+
+	it("acquires a second admission on a distinct deployment host", async () => {
+		const splitApplication = createMockApplication({
+			serverId: "deployment-server",
+			buildServerId: "build-server",
+		});
+		vi.mocked(applicationService.findApplicationById).mockResolvedValue(
+			splitApplication as any,
+		);
+		vi.mocked(db.query.applications.findFirst).mockResolvedValue(
+			splitApplication as any,
+		);
+		vi.mocked(builders.getBuildCommand).mockResolvedValue("nixpacks build");
+
+		await deployApplication({
+			applicationId: "test-app-id",
+			titleLog: "Split host deployment",
+			descriptionLog: "",
+		});
+
+		expect(buildAdmission.withHostBuildAdmission).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				operation: "application-deploy",
+				serverId: "build-server",
+			}),
+			expect.any(Function),
+		);
+		expect(buildAdmission.withHostBuildAdmission).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				operation: "application-deploy-deployment-host",
+				serverId: "deployment-server",
+			}),
+			expect.any(Function),
+		);
+		expect(builders.mechanizeDockerContainer).toHaveBeenCalledOnce();
+	});
+
+	it("routes preview builds and releases through their distinct admitted hosts", () => {
+		const source = readFileSync(
+			join(process.cwd(), "../../packages/server/src/services/application.ts"),
+			"utf8",
+		);
+		const previewDeploy = source.slice(
+			source.indexOf("export const deployPreviewApplication"),
+			source.indexOf("export const rebuildPreviewApplication"),
+		);
+		const previewRebuild = source.slice(
+			source.indexOf("export const rebuildPreviewApplication"),
+			source.indexOf("export const getApplicationStats"),
+		);
+
+		for (const previewFlow of [previewDeploy, previewRebuild]) {
+			expect(previewFlow).toContain(
+				"application.buildServerId || application.serverId",
+			);
+			expect(previewFlow).toContain(
+				"mechanizeApplicationWithDeploymentAdmission(",
+			);
+		}
+		expect(previewDeploy).toContain('"application-preview-deploy"');
+		expect(previewRebuild).toContain('"application-preview-rebuild"');
 	});
 });

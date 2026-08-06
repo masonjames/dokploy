@@ -231,7 +231,9 @@ describe("Caddy migration upstream preflight", () => {
 
 		expect(preflight.status).toBe("passed");
 		expect(preflight.probeMode).toBe("standalone");
-		expect(execAsyncMock.mock.calls[0]?.[0]).toContain("docker run --rm");
+		expect(execAsyncMock.mock.calls[0]?.[0]).toContain(
+			"docker run --pull=never --rm",
+		);
 		expect(execAsyncMock.mock.calls[0]?.[0]).toContain(
 			"--network dokploy-network",
 		);
@@ -266,7 +268,9 @@ describe("Caddy migration upstream preflight", () => {
 		expect(preflight.status).toBe("passed");
 		expect(preflight.probeMode).toBe("service");
 		expect(execAsyncMock).toHaveBeenCalledTimes(2);
-		expect(execAsyncMock.mock.calls[0]?.[0]).toContain("docker run --rm");
+		expect(execAsyncMock.mock.calls[0]?.[0]).toContain(
+			"docker run --pull=never --rm",
+		);
 		expect(execAsyncMock.mock.calls[1]?.[0]).toContain("docker service create");
 	});
 

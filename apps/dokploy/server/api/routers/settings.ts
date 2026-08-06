@@ -14,6 +14,7 @@ import {
 	cleanupVolumes,
 	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
+	dispatchDokployUpdate,
 	execAsync,
 	findServerById,
 	getCaddyCompileSettings,
@@ -38,7 +39,6 @@ import {
 	resolveWebServerProvider,
 	sendDockerCleanupNotifications,
 	setupGPUSupport,
-	spawnAsync,
 	startLogCleanup,
 	stopLogCleanup,
 	updateLetsEncryptEmail,
@@ -636,15 +636,10 @@ export const settingsRouter = createTRPCRouter({
 		}
 
 		const data = await getUpdateData(packageInfo.version);
-		if (data.updateAvailable) {
-			void spawnAsync("docker", [
-				"service",
-				"update",
-				"--force",
-				"--image",
-				`dokploy/dokploy:${data.latestVersion}`,
-				"dokploy",
-			]);
+		if (data.updateAvailable && data.latestVersion) {
+			// This dispatches a self-restart, so the request may not finish. The
+			// frontend verifies the replacement through /api/health.
+			await dispatchDokployUpdate(data.latestVersion);
 			await audit(ctx, {
 				action: "update",
 				resourceType: "settings",

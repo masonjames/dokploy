@@ -7,11 +7,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildMariadb } from "@dokploy/server/utils/databases/mariadb";
-import { pullImage } from "@dokploy/server/utils/docker/utils";
-import { execAsyncRemote } from "@dokploy/server/utils/process/execAsync";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
-import { quote } from "shell-quote";
 import type { z } from "zod";
 import { validUniqueServerAppName } from "./project";
 
@@ -143,17 +142,19 @@ export const deployMariadb = async (
 			applicationStatus: "running",
 		});
 		onData?.("Starting mariadb deployment...");
-		if (mariadb.serverId) {
-			await execAsyncRemote(
-				mariadb.serverId,
-				`docker pull ${quote([mariadb.dockerImage])}`,
-				onData,
-			);
-		} else {
-			await pullImage(mariadb.dockerImage, onData);
-		}
-
-		await buildMariadb(mariadb);
+		await withHostBuildAdmission(
+			{ serverId: mariadb.serverId, operation: "mariadb-deploy" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: mariadb.dockerImage,
+					serverId: mariadb.serverId,
+					onData,
+				});
+				await buildMariadb(mariadb, context);
+				context.assertLockHeld();
+			},
+		);
 		await updateMariadbById(mariadbId, {
 			applicationStatus: "done",
 		});

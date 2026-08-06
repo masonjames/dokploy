@@ -15,6 +15,7 @@ vi.mock("@dokploy/server/utils/process/execAsync", () => ({
 
 import {
 	type ApplicationNested,
+	type BuildAdmissionContext,
 	type CaddyRouteFragment,
 	type CaddyRouteIntent,
 	CLOUDFLARE_TRUSTED_PROXY_RANGES,
@@ -33,6 +34,7 @@ import {
 	removeCaddyDomain,
 	updateServerCaddy,
 	validateCaddyConfigFileWithImage,
+	validateCaddyConfigWithContainer,
 	writeCaddyRouteFragment,
 } from "@dokploy/server";
 import type { webServerSettings } from "@dokploy/server/db/schema";
@@ -662,7 +664,9 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 	const validateCommand = execAsyncMock.mock.calls
 		.map(([command]) => command as string)
 		.find((command) => command.includes("docker run"));
-	expect(validateCommand).toContain("docker run --rm --network none");
+	expect(validateCommand).toContain(
+		"docker run --pull=never --rm --network none",
+	);
 	expect(validateCommand).toContain("caddy\\:2.11.4");
 	expect(validateCommand).toContain(
 		"/etc/dokploy/caddy/migrations/test/caddy.json\\:/etc/caddy/caddy.json\\:ro",
@@ -675,6 +679,50 @@ test("validates a config file with the Caddy binary in an isolated runtime conta
 	);
 	expect(validateCommand).toContain(" caddy validate --config");
 	expect(validateCommand).not.toContain("caddy\\:2.11.4 validate --config");
+});
+
+test("aborts admitted live Caddy validation when ownership is lost", async () => {
+	const controller = new AbortController();
+	const lockLoss = new Error("fixture build admission ownership lost");
+	const context: BuildAdmissionContext = {
+		assertLockHeld: vi.fn(() => {
+			if (controller.signal.aborted) throw controller.signal.reason;
+		}),
+		prepareCommand: vi.fn(async (command: string) => `ADMITTED:${command}`),
+		signal: controller.signal,
+	};
+	execAsyncMock
+		.mockResolvedValueOnce({ stdout: "caddy-task\n", stderr: "" })
+		.mockImplementationOnce(
+			(_command: string, options?: { signal?: AbortSignal }) =>
+				new Promise<never>((_resolve, reject) => {
+					const signal = options?.signal;
+					if (!signal) {
+						reject(new Error("validation command did not receive a signal"));
+						return;
+					}
+					if (signal.aborted) {
+						reject(signal.reason);
+						return;
+					}
+					signal.addEventListener("abort", () => reject(signal.reason), {
+						once: true,
+					});
+				}),
+		);
+
+	const validation = validateCaddyConfigWithContainer(undefined, context);
+	await vi.waitFor(() => expect(execAsyncMock).toHaveBeenCalledTimes(2));
+	controller.abort(lockLoss);
+
+	await expect(validation).rejects.toBe(lockLoss);
+	expect(execAsyncMock.mock.calls[0]?.[1]).toEqual({
+		signal: controller.signal,
+	});
+	expect(execAsyncMock.mock.calls[1]?.[1]).toEqual({
+		signal: controller.signal,
+	});
+	expect(context.prepareCommand).toHaveBeenCalledTimes(2);
 });
 
 test("validates with an explicit digest-pinned Caddy image", async () => {

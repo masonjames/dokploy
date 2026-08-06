@@ -8,6 +8,7 @@ import {
 import type { InferResultType } from "@dokploy/server/types/with";
 import { TRPCError } from "@trpc/server";
 import { quote } from "shell-quote";
+import { getAuthenticatedGitCloneCommand } from "./git-askpass";
 
 export const getErrorCloneRequirements = (entity: {
 	giteaRepository?: string | null;
@@ -99,14 +100,13 @@ export const refreshGiteaToken = async (giteaProviderId: string) => {
 
 const buildGiteaCloneUrl = (
 	giteaUrl: string,
-	accessToken: string,
 	owner: string,
 	repository: string,
 ) => {
 	const protocol = giteaUrl.startsWith("http://") ? "http" : "https";
 	const baseUrl = giteaUrl.replace(/^https?:\/\//, "");
 	const repoClone = `${owner}/${repository}.git`;
-	const cloneUrl = `${protocol}://oauth2:${accessToken}@${baseUrl}/${repoClone}`;
+	const cloneUrl = `${protocol}://${baseUrl}/${repoClone}`;
 	return cloneUrl;
 };
 
@@ -163,6 +163,11 @@ export const cloneGiteaRepository = async ({
 		command += `echo "❌ [ERROR] Gitea provider not found in the database"; exit 1;`;
 		return command;
 	}
+	const requirements = getErrorCloneRequirements(entity);
+	if (requirements.length > 0) {
+		command += `echo "❌ [ERROR] Gitea Repository configuration failed for application: ${appName}"; echo "Reasons:"; echo "${requirements.join("\n")}"; exit 1;`;
+		return command;
+	}
 
 	const basePath = type === "compose" ? COMPOSE_PATH : APPLICATIONS_PATH;
 	const outputPath = outputPathOverride ?? join(basePath, appName, "code");
@@ -172,13 +177,19 @@ export const cloneGiteaRepository = async ({
 	const repoClone = `${giteaOwner}/${giteaRepository}.git`;
 	const cloneUrl = buildGiteaCloneUrl(
 		giteaProvider.giteaInternalUrl || giteaProvider.giteaUrl,
-		giteaProvider.accessToken!,
 		giteaOwner!,
 		giteaRepository!,
 	);
 
 	command += `echo ${quote([`Cloning Repo ${repoClone} to ${outputPath}: ✅`])};`;
-	command += `git clone --branch ${quote([String(giteaBranch ?? "")])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} ${quote([String(cloneUrl ?? "")])} ${quote([String(outputPath ?? "")])} --progress;`;
+	command += getAuthenticatedGitCloneCommand({
+		branch: giteaBranch!,
+		cloneUrl,
+		enableSubmodules,
+		outputPath,
+		password: giteaProvider.accessToken,
+		username: "oauth2",
+	});
 	return command;
 };
 

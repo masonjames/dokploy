@@ -14,12 +14,17 @@ import {
 	updateLocalWebServerProvider,
 	updateRemoteWebServerProvider,
 } from "@dokploy/server/services/web-server-settings";
-import { filterTraefikCarryOverPortsForCaddyMigration } from "@dokploy/server/setup/caddy-setup";
+import {
+	CADDY_IMAGE,
+	filterTraefikCarryOverPortsForCaddyMigration,
+} from "@dokploy/server/setup/caddy-setup";
 import {
 	reloadCaddyAfterValidation,
 	validateCaddyConfigFileWithImage,
 	validateCaddyConfigWithContainer,
 } from "@dokploy/server/utils/caddy/config";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import {
 	acquireCaddyMigrationOperationLock,
 	appendCaddyMigrationEvent,
@@ -301,9 +306,14 @@ const applyCaddyMigrationUnlocked = async (input: {
 		serverId,
 	);
 
-	const runtimePreflight = await runCaddyMigrationUpstreamPreflight(report, {
-		serverId,
-	});
+	const runtimePreflight = await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "caddy-migration-preflight" },
+		async (context) =>
+			await runCaddyMigrationUpstreamPreflight(report, {
+				context,
+				serverId,
+			}),
+	);
 	report = await writeCaddyMigrationReport(
 		appendCaddyMigrationEvent(
 			{ ...report, runtimePreflight },
@@ -325,9 +335,21 @@ const applyCaddyMigrationUnlocked = async (input: {
 	}
 
 	try {
-		await validateCaddyConfigFileWithImage(
-			report.artifactPaths.caddyJson,
-			serverId,
+		await withHostBuildAdmission(
+			{ serverId: serverId || null, operation: "caddy-migration-validate" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: CADDY_IMAGE,
+					serverId: serverId || null,
+				});
+				await validateCaddyConfigFileWithImage(
+					report.artifactPaths.caddyJson,
+					serverId,
+					CADDY_IMAGE,
+					context,
+				);
+			},
 		);
 	} catch (error) {
 		const message = `Pre-stop Caddy runtime validation failed: ${

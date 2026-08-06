@@ -11,7 +11,12 @@ const execAsyncBase = util.promisify(exec);
 
 export const execAsync = async (
 	command: string,
-	options?: { cwd?: string; env?: NodeJS.ProcessEnv; shell?: string },
+	options?: {
+		cwd?: string;
+		env?: NodeJS.ProcessEnv;
+		shell?: string;
+		signal?: AbortSignal;
+	},
 ): Promise<{ stdout: string; stderr: string }> => {
 	try {
 		const result = await execAsyncBase(command, options);
@@ -43,6 +48,7 @@ export const execAsync = async (
 interface ExecOptions {
 	cwd?: string;
 	env?: NodeJS.ProcessEnv;
+	signal?: AbortSignal;
 }
 
 export const execAsyncStream = (
@@ -143,6 +149,7 @@ export const execAsyncRemote = async (
 	serverId: string | null,
 	command: string,
 	onData?: (data: string) => void,
+	signal?: AbortSignal,
 ): Promise<{ stdout: string; stderr: string }> => {
 	if (!serverId) return { stdout: "", stderr: "" };
 	const server = await findServerById(serverId);
@@ -152,12 +159,29 @@ export const execAsyncRemote = async (
 	let stderr = "";
 	return new Promise((resolve, reject) => {
 		const conn = new Client();
+		const onAbort = () => {
+			conn.end();
+			reject(
+				new ExecError("Remote command aborted after build lock loss", {
+					command,
+					serverId,
+				}),
+			);
+		};
+		if (signal?.aborted) {
+			onAbort();
+			return;
+		}
+		signal?.addEventListener("abort", onAbort, { once: true });
+		const cleanupAbort = () => signal?.removeEventListener("abort", onAbort);
 
 		sleep(1000);
 		conn
 			.once("ready", () => {
 				conn.exec(command, (err, stream) => {
 					if (err) {
+						cleanupAbort();
+						conn.end();
 						onData?.(err.message);
 						reject(
 							new ExecError(`Remote command execution failed: ${err.message}`, {
@@ -170,6 +194,7 @@ export const execAsyncRemote = async (
 					}
 					stream
 						.on("close", (code: number, _signal: string) => {
+							cleanupAbort();
 							conn.end();
 							if (code === 0) {
 								resolve({ stdout, stderr });
@@ -199,6 +224,7 @@ export const execAsyncRemote = async (
 				});
 			})
 			.on("error", (err) => {
+				cleanupAbort();
 				conn.end();
 				if (err.level === "client-authentication") {
 					const technicalDetail = `Error: ${err.message} ${err.level}`;

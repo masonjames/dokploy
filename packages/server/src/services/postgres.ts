@@ -7,11 +7,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildPostgres } from "@dokploy/server/utils/databases/postgres";
-import { pullImage } from "@dokploy/server/utils/docker/utils";
-import { execAsyncRemote } from "@dokploy/server/utils/process/execAsync";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
-import { quote } from "shell-quote";
 import type { z } from "zod";
 import { validUniqueServerAppName } from "./project";
 
@@ -153,17 +152,19 @@ export const deployPostgres = async (
 
 		onData?.("Starting postgres deployment...");
 
-		if (postgres.serverId) {
-			await execAsyncRemote(
-				postgres.serverId,
-				`docker pull ${quote([postgres.dockerImage])}`,
-				onData,
-			);
-		} else {
-			await pullImage(postgres.dockerImage, onData);
-		}
-
-		await buildPostgres(postgres);
+		await withHostBuildAdmission(
+			{ serverId: postgres.serverId, operation: "postgres-deploy" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: postgres.dockerImage,
+					serverId: postgres.serverId,
+					onData,
+				});
+				await buildPostgres(postgres, context);
+				context.assertLockHeld();
+			},
+		);
 
 		await updatePostgresById(postgresId, {
 			applicationStatus: "done",

@@ -1,3 +1,9 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	type BuildAdmissionContext,
+	withHostBuildAdmission,
+} from "@dokploy/server/utils/process/build-admission";
 import type { ContainerCreateOptions, CreateServiceOptions } from "dockerode";
 import { paths } from "../constants";
 import {
@@ -55,7 +61,7 @@ type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
 type DockerClient = Awaited<ReturnType<typeof getRemoteDocker>>;
 type DockerContainer = ReturnType<DockerClient["getContainer"]>;
 type DockerService = ReturnType<DockerClient["getService"]>;
-type CaddyPostStartHook = () => Promise<unknown>;
+type CaddyPostStartHook = (context: BuildAdmissionContext) => Promise<unknown>;
 type DockerTaskSnapshot = {
 	Status?: { State?: string };
 	Spec?: { ContainerSpec?: { Image?: string } };
@@ -175,31 +181,6 @@ const buildStandalonePorts = (
 	return { exposedPorts, portBindings };
 };
 
-const pullImage = async (docker: DockerClient, imageName: string) => {
-	await new Promise<void>((resolve, reject) => {
-		docker.pull(
-			imageName,
-			(error: Error | null, stream?: NodeJS.ReadableStream) => {
-				if (error) {
-					reject(error);
-					return;
-				}
-				if (!stream) {
-					resolve();
-					return;
-				}
-				docker.modem.followProgress(stream, (progressError?: Error | null) => {
-					if (progressError) {
-						reject(progressError);
-						return;
-					}
-					resolve();
-				});
-			},
-		);
-	});
-};
-
 const isDockerNotFoundError = (error: unknown) =>
 	typeof error === "object" &&
 	error !== null &&
@@ -252,8 +233,14 @@ const assertContainerNetworks = async (
 	}
 };
 
-const assertActiveUpstreamsReachable = async (serverId?: string) => {
-	const preflight = await runActiveCaddyUpstreamPreflight({ serverId });
+const assertActiveUpstreamsReachable = async (
+	serverId?: string,
+	context?: BuildAdmissionContext,
+) => {
+	const preflight = await runActiveCaddyUpstreamPreflight({
+		context,
+		serverId,
+	});
 	if (preflight.status === "passed") {
 		return;
 	}
@@ -386,8 +373,13 @@ const waitForCaddyService = async (
 	docker: DockerClient,
 	service: DockerService,
 	expectedImage: string,
-	options: { retries?: number; intervalMs?: number } = {},
+	options: {
+		context?: BuildAdmissionContext;
+		retries?: number;
+		intervalMs?: number;
+	} = {},
 ) => {
+	const { context } = options;
 	const retries = options.retries ?? 60;
 	const intervalMs = options.intervalMs ?? 1000;
 	const failedStates = new Set([
@@ -398,7 +390,9 @@ const waitForCaddyService = async (
 	]);
 
 	for (let attempt = 0; attempt < retries; attempt++) {
+		context?.assertLockHeld();
 		const inspect = await service.inspect();
+		context?.assertLockHeld();
 		const updateState = inspect.UpdateStatus?.State as string | undefined;
 		if (updateState && failedStates.has(updateState)) {
 			throw new Error(
@@ -412,6 +406,7 @@ const waitForCaddyService = async (
 				"desired-state": ["running"],
 			},
 		})) as DockerTaskSnapshot[];
+		context?.assertLockHeld();
 		const runningTasks = tasks.filter(
 			(task) => task.Status?.State === "running",
 		);
@@ -423,7 +418,13 @@ const waitForCaddyService = async (
 		) {
 			return;
 		}
-		await new Promise((resolve) => setTimeout(resolve, intervalMs));
+		try {
+			await delay(intervalMs, undefined, { signal: context?.signal });
+		} catch (error) {
+			context?.assertLockHeld();
+			throw error;
+		}
+		context?.assertLockHeld();
 	}
 	throw new Error(
 		`Caddy service did not converge on ${expectedImage} within ${retries} attempts`,
@@ -516,82 +517,103 @@ const initializeStandaloneCaddyLockHeld = async (
 	const previousConfig = await readCaddyConfigFileIfExists({ serverId });
 	let retained: RetainedCaddyContainer | undefined;
 	let candidate: DockerContainer | undefined;
-	try {
-		await ensureDefaultCaddyConfig({
-			serverId,
-			letsEncryptEmail,
-			trustedProxies,
-			accessLogs,
-		});
-		const docker = await getRemoteDocker(serverId);
-		await pullImage(docker, imageName);
-		await docker.getImage(imageName).inspect();
-		await validateCaddyConfigFileWithImage(
-			CADDY_CONFIG_PATH,
-			serverId,
-			imageName,
-		);
-		await assertActiveUpstreamsReachable(serverId);
-		console.log("Caddy candidate pulled and validated ✅");
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "caddy-standalone-setup" },
+		async (context) => {
+			try {
+				await ensureDefaultCaddyConfig({
+					serverId,
+					letsEncryptEmail,
+					trustedProxies,
+					accessLogs,
+				});
+				const docker = await getRemoteDocker(serverId);
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: imageName,
+					serverId: serverId || null,
+				});
+				await docker.getImage(imageName).inspect();
+				context.assertLockHeld();
+				await validateCaddyConfigFileWithImage(
+					CADDY_CONFIG_PATH,
+					serverId,
+					imageName,
+					context,
+				);
+				context.assertLockHeld();
+				await assertActiveUpstreamsReachable(serverId, context);
+				context.assertLockHeld();
+				console.log("Caddy candidate pulled and validated ✅");
 
-		const existing = await getExistingContainer(docker, containerName);
-		settings.NetworkingConfig = {
-			EndpointsConfig: buildStandaloneNetworkEndpoints(
-				existing?.networkNames ?? [],
-			),
-		};
-		retained = existing
-			? await stopAndRetainCaddyContainer(
-					existing.container,
-					existing.wasRunning,
-					containerName,
-				)
-			: undefined;
-		candidate = await docker.createContainer(settings);
-		await candidate.start();
-		await validateCaddyConfigWithContainer(serverId);
-		if (postStartHook) {
-			await postStartHook();
-		}
-		await assertContainerNetworks(candidate, [
-			DOKPLOY_CADDY_NETWORK,
-			...(existing?.networkNames ?? []),
-		]);
-		await assertActiveUpstreamsReachable(serverId);
-	} catch (error) {
-		const restoreErrors: unknown[] = [];
-		try {
-			if (candidate) {
-				await removeFailedCandidate(candidate, containerName);
+				const existing = await getExistingContainer(docker, containerName);
+				settings.NetworkingConfig = {
+					EndpointsConfig: buildStandaloneNetworkEndpoints(
+						existing?.networkNames ?? [],
+					),
+				};
+				context.assertLockHeld();
+				retained = existing
+					? await stopAndRetainCaddyContainer(
+							existing.container,
+							existing.wasRunning,
+							containerName,
+						)
+					: undefined;
+				context.assertLockHeld();
+				candidate = await docker.createContainer(settings);
+				context.assertLockHeld();
+				await candidate.start();
+				context.assertLockHeld();
+				await validateCaddyConfigWithContainer(serverId, context);
+				context.assertLockHeld();
+				if (postStartHook) {
+					await postStartHook(context);
+					context.assertLockHeld();
+				}
+				await assertContainerNetworks(candidate, [
+					DOKPLOY_CADDY_NETWORK,
+					...(existing?.networkNames ?? []),
+				]);
+				context.assertLockHeld();
+				await assertActiveUpstreamsReachable(serverId, context);
+				context.assertLockHeld();
+			} catch (error) {
+				const restoreErrors: unknown[] = [];
+				try {
+					if (candidate) {
+						await removeFailedCandidate(candidate, containerName);
+					}
+				} catch (restoreError) {
+					restoreErrors.push(restoreError);
+				}
+				try {
+					if (previousConfig) {
+						await writeCaddyConfigContent(previousConfig, { serverId });
+					}
+				} catch (restoreError) {
+					restoreErrors.push(restoreError);
+				}
+				try {
+					if (retained) {
+						await restoreRetainedCaddyContainer(retained, containerName);
+					}
+				} catch (restoreError) {
+					restoreErrors.push(restoreError);
+				}
+				if (error instanceof Error && restoreErrors.length > 0) {
+					(error as Error & { restoreError?: unknown }).restoreError =
+						restoreErrors.length === 1
+							? restoreErrors[0]
+							: new AggregateError(
+									restoreErrors,
+									"Failed to clean up the Caddy candidate and restore the previous edge",
+								);
+				}
+				throw error;
 			}
-		} catch (restoreError) {
-			restoreErrors.push(restoreError);
-		}
-		try {
-			if (previousConfig) {
-				await writeCaddyConfigContent(previousConfig, { serverId });
-			}
-		} catch (restoreError) {
-			restoreErrors.push(restoreError);
-		}
-		try {
-			if (retained) {
-				await restoreRetainedCaddyContainer(retained, containerName);
-			}
-		} catch (restoreError) {
-			restoreErrors.push(restoreError);
-		}
-		if (error instanceof Error && restoreErrors.length > 0) {
-			(error as Error & { restoreError?: unknown }).restoreError =
-				restoreErrors.length === 1
-					? restoreErrors[0]
-					: new AggregateError(
-							restoreErrors,
-							"Failed to clean up the Caddy candidate and restore the previous edge",
-						);
-		}
-		throw error;
-	}
+		},
+	);
 	if (retained) {
 		console.log(`Previous Caddy retained as ${retained.rollbackName} ✅`);
 	}
@@ -666,93 +688,119 @@ const initializeCaddyServiceLockHeld = async (
 			Order: "stop-first",
 		},
 	};
-	try {
-		await ensureDefaultCaddyConfig({
-			serverId,
-			letsEncryptEmail,
-			trustedProxies,
-			accessLogs,
-		});
-		await pullImage(docker, imageName);
-		await docker.getImage(imageName).inspect();
-		await validateCaddyConfigFileWithImage(
-			CADDY_CONFIG_PATH,
-			serverId,
-			imageName,
-		);
-		await assertActiveUpstreamsReachable(serverId);
-		console.log("Caddy service candidate pulled and validated ✅");
-
-		existing = await getExistingService(docker, appName);
-		const caddyNetworkTarget = await resolveCaddyNetworkTarget(docker);
-		settings.TaskTemplate = {
-			...settings.TaskTemplate,
-			Networks: mergeServiceNetworks(
-				existing?.inspect.Spec?.TaskTemplate?.Networks ?? [],
-				caddyNetworkTarget,
-			),
-		};
-
-		if (existing) {
-			activeService = existing.service;
-			await activeService.update({
-				version: existing.inspect.Version.Index,
-				...settings,
-				TaskTemplate: {
-					...settings.TaskTemplate,
-					ForceUpdate: existing.inspect.Spec?.TaskTemplate?.ForceUpdate ?? 0,
-				},
-			});
-			serviceMutated = true;
-			console.log("Caddy service update accepted ✅");
-		} else {
-			activeService = await docker.createService(settings);
-			createdService = true;
-			serviceMutated = true;
-			console.log("Caddy service creation accepted ✅");
-		}
-
-		await waitForCaddyService(docker, activeService, imageName);
-		await validateCaddyConfigWithContainer(serverId);
-		if (postStartHook) {
-			await postStartHook();
-			await waitForCaddyService(docker, activeService, imageName);
-		}
-		await assertActiveUpstreamsReachable(serverId);
-		console.log(existing ? "Caddy Updated ✅" : "Caddy Started ✅");
-	} catch (error) {
-		const restoreErrors: unknown[] = [];
-		try {
-			if (previousConfig) {
-				await writeCaddyConfigContent(previousConfig, { serverId });
-			}
-		} catch (restoreError) {
-			restoreErrors.push(restoreError);
-		}
-		try {
-			if (createdService && activeService) {
-				await activeService.remove();
-			} else if (serviceMutated && existing && activeService) {
-				await restoreCaddyService(
-					docker,
-					activeService,
-					existing.inspect.Spec as CreateServiceOptions,
+	await withHostBuildAdmission(
+		{ serverId: serverId || null, operation: "caddy-service-setup" },
+		async (context) => {
+			try {
+				await ensureDefaultCaddyConfig({
+					serverId,
+					letsEncryptEmail,
+					trustedProxies,
+					accessLogs,
+				});
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: imageName,
+					serverId: serverId || null,
+				});
+				await docker.getImage(imageName).inspect();
+				context.assertLockHeld();
+				await validateCaddyConfigFileWithImage(
+					CADDY_CONFIG_PATH,
+					serverId,
+					imageName,
+					context,
 				);
-			}
-		} catch (restoreError) {
-			restoreErrors.push(restoreError);
-		}
-		if (error instanceof Error && restoreErrors.length > 0) {
-			(error as Error & { restoreError?: unknown }).restoreError =
-				restoreErrors.length === 1
-					? restoreErrors[0]
-					: new AggregateError(
-							restoreErrors,
-							"Failed to restore the previous Caddy service",
+				context.assertLockHeld();
+				await assertActiveUpstreamsReachable(serverId, context);
+				context.assertLockHeld();
+				console.log("Caddy service candidate pulled and validated ✅");
+
+				existing = await getExistingService(docker, appName);
+				const caddyNetworkTarget = await resolveCaddyNetworkTarget(docker);
+				settings.TaskTemplate = {
+					...settings.TaskTemplate,
+					Networks: mergeServiceNetworks(
+						existing?.inspect.Spec?.TaskTemplate?.Networks ?? [],
+						caddyNetworkTarget,
+					),
+				};
+
+				context.assertLockHeld();
+				if (existing) {
+					activeService = existing.service;
+					await activeService.update({
+						version: existing.inspect.Version.Index,
+						...settings,
+						TaskTemplate: {
+							...settings.TaskTemplate,
+							ForceUpdate:
+								existing.inspect.Spec?.TaskTemplate?.ForceUpdate ?? 0,
+						},
+					});
+					serviceMutated = true;
+					context.assertLockHeld();
+					console.log("Caddy service update accepted ✅");
+				} else {
+					activeService = await docker.createService(settings);
+					createdService = true;
+					serviceMutated = true;
+					context.assertLockHeld();
+					console.log("Caddy service creation accepted ✅");
+				}
+
+				await waitForCaddyService(docker, activeService, imageName, {
+					context,
+				});
+				context.assertLockHeld();
+				await validateCaddyConfigWithContainer(serverId, context);
+				context.assertLockHeld();
+				if (postStartHook) {
+					await postStartHook(context);
+					context.assertLockHeld();
+					await waitForCaddyService(docker, activeService, imageName, {
+						context,
+					});
+					context.assertLockHeld();
+				}
+				await assertActiveUpstreamsReachable(serverId, context);
+				context.assertLockHeld();
+				console.log(existing ? "Caddy Updated ✅" : "Caddy Started ✅");
+			} catch (error) {
+				const restoreErrors: unknown[] = [];
+				try {
+					if (previousConfig) {
+						await writeCaddyConfigContent(previousConfig, { serverId });
+					}
+				} catch (restoreError) {
+					restoreErrors.push(restoreError);
+				}
+				try {
+					if (createdService && activeService) {
+						await activeService.remove();
+					} else if (serviceMutated && existing && activeService) {
+						await restoreCaddyService(
+							docker,
+							activeService,
+							existing.inspect.Spec as CreateServiceOptions,
 						);
-		}
-		throw error;
-	}
+					}
+				} catch (restoreError) {
+					restoreErrors.push(restoreError);
+				}
+				if (error instanceof Error && restoreErrors.length > 0) {
+					(error as Error & { restoreError?: unknown }).restoreError =
+						restoreErrors.length === 1
+							? restoreErrors[0]
+							: new AggregateError(
+									restoreErrors,
+									"Failed to restore the previous Caddy service",
+								);
+				}
+				throw error;
+			}
+		},
+	);
 };
 
 export const initializeCaddyService = async (

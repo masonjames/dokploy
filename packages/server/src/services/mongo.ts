@@ -8,11 +8,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildMongo } from "@dokploy/server/utils/databases/mongo";
-import { pullImage } from "@dokploy/server/utils/docker/utils";
-import { execAsyncRemote } from "@dokploy/server/utils/process/execAsync";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
-import { quote } from "shell-quote";
 import type { z } from "zod";
 import { validUniqueServerAppName } from "./project";
 
@@ -158,17 +157,19 @@ export const deployMongo = async (
 		});
 
 		onData?.("Starting mongo deployment...");
-		if (mongo.serverId) {
-			await execAsyncRemote(
-				mongo.serverId,
-				`docker pull ${quote([mongo.dockerImage])}`,
-				onData,
-			);
-		} else {
-			await pullImage(mongo.dockerImage, onData);
-		}
-
-		await buildMongo(mongo);
+		await withHostBuildAdmission(
+			{ serverId: mongo.serverId, operation: "mongo-deploy" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: mongo.dockerImage,
+					serverId: mongo.serverId,
+					onData,
+				});
+				await buildMongo(mongo, context);
+				context.assertLockHeld();
+			},
+		);
 		await updateMongoById(mongoId, {
 			applicationStatus: "done",
 		});

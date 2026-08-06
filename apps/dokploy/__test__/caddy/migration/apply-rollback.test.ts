@@ -1,6 +1,24 @@
 import { fs, vol } from "memfs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+const buildAdmissionMocks = vi.hoisted(() => {
+	const context = {
+		assertLockHeld: vi.fn(),
+		prepareCommand: vi.fn(async (command: string) => command),
+		signal: new AbortController().signal,
+	};
+	return {
+		context,
+		pullImage: vi.fn().mockResolvedValue(undefined),
+		withAdmission: vi.fn(
+			(
+				_options: { serverId: string | null; operation: string },
+				task: (admissionContext: typeof context) => Promise<unknown>,
+			) => task(context),
+		),
+	};
+});
+
 vi.mock("node:fs", () => ({
 	...fs,
 	default: fs,
@@ -33,6 +51,14 @@ vi.mock("@dokploy/server/utils/caddy/config", () => ({
 
 vi.mock("@dokploy/server/utils/caddy/migration/upstream-preflight", () => ({
 	runCaddyMigrationUpstreamPreflight: vi.fn(),
+}));
+
+vi.mock("@dokploy/server/utils/docker/utils", () => ({
+	pullImageUnderBuildAdmission: buildAdmissionMocks.pullImage,
+}));
+
+vi.mock("@dokploy/server/utils/process/build-admission", () => ({
+	withHostBuildAdmission: buildAdmissionMocks.withAdmission,
 }));
 
 import { paths } from "@dokploy/server/constants";
@@ -203,6 +229,8 @@ describe("applyCaddyMigration", () => {
 		expect(caddyConfig.validateCaddyConfigFileWithImage).toHaveBeenCalledWith(
 			report.artifactPaths.caddyJson,
 			undefined,
+			expect.any(String),
+			buildAdmissionMocks.context,
 		);
 		expect(
 			vi.mocked(caddyConfig.validateCaddyConfigFileWithImage).mock
@@ -283,6 +311,8 @@ describe("applyCaddyMigration", () => {
 		expect(caddyConfig.validateCaddyConfigFileWithImage).toHaveBeenCalledWith(
 			report.artifactPaths.caddyJson,
 			undefined,
+			expect.any(String),
+			buildAdmissionMocks.context,
 		);
 		const activeConfig = JSON.parse(
 			vol.readFileSync(paths().CADDY_CONFIG_PATH, "utf8") as string,

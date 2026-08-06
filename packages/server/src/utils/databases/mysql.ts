@@ -1,4 +1,5 @@
 import type { InferResultType } from "@dokploy/server/types/with";
+import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
 import {
@@ -16,7 +17,10 @@ export type MysqlNested = InferResultType<
 	{ mounts: true; environment: { with: { project: true } } }
 >;
 
-export const buildMysql = async (mysql: MysqlNested) => {
+export const buildMysql = async (
+	mysql: MysqlNested,
+	context: BuildAdmissionContext,
+) => {
 	const {
 		appName,
 		env,
@@ -126,8 +130,10 @@ export const buildMysql = async (mysql: MysqlNested) => {
 		},
 	};
 	try {
+		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
+		context.assertLockHeld();
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
 			...settings,
@@ -136,7 +142,10 @@ export const buildMysql = async (mysql: MysqlNested) => {
 				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
 			},
 		});
+		context.assertLockHeld();
 	} catch {
+		context.assertLockHeld();
 		await docker.createService(settings);
+		context.assertLockHeld();
 	}
 };

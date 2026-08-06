@@ -12,6 +12,7 @@ import {
 } from "@dokploy/server/utils/builders";
 import { sendBuildErrorNotifications } from "@dokploy/server/utils/notifications/build-error";
 import { sendBuildSuccessNotifications } from "@dokploy/server/utils/notifications/build-success";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import {
 	ExecError,
 	execAsync,
@@ -175,6 +176,23 @@ export const updateApplicationStatus = async (
 	return application;
 };
 
+const mechanizeApplicationWithDeploymentAdmission = async (
+	application: Awaited<ReturnType<typeof findApplicationById>>,
+	operation: string,
+) => {
+	await withHostBuildAdmission(
+		{
+			serverId: application.serverId,
+			operation: `${operation}-deployment-host`,
+		},
+		async (context) => {
+			context.assertLockHeld();
+			await mechanizeDockerContainer(application, context);
+			context.assertLockHeld();
+		},
+	);
+};
+
 export const deployApplication = async ({
 	applicationId,
 	titleLog = "Manual deployment",
@@ -225,13 +243,22 @@ export const deployApplication = async ({
 		command += await getBuildCommand(application);
 
 		const commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (serverId) {
-			await execAsyncRemote(serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
+		await withHostBuildAdmission(
+			{ serverId, operation: "application-deploy" },
+			async ({ prepareCommand, signal }) => {
+				const admittedCommand = await prepareCommand(commandWithLog);
+				if (serverId) {
+					await execAsyncRemote(serverId, admittedCommand, undefined, signal);
+				} else {
+					await execAsync(admittedCommand, { signal });
+				}
+			},
+		);
 
-		await mechanizeDockerContainer(application);
+		await mechanizeApplicationWithDeploymentAdmission(
+			application,
+			"application-deploy",
+		);
 		await updateDeploymentStatus(deployment.deploymentId, "done");
 		await updateApplicationStatus(applicationId, "done");
 
@@ -317,12 +344,38 @@ export const rebuildApplication = async ({
 		// Check case for docker only
 		command += await getBuildCommand(application);
 		const commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (serverId) {
-			await execAsyncRemote(serverId, commandWithLog);
+		const executeBuild = async (
+			admittedCommand: string,
+			signal?: AbortSignal,
+		) => {
+			if (serverId) {
+				await execAsyncRemote(serverId, admittedCommand, undefined, signal);
+			} else {
+				await execAsync(admittedCommand, { signal });
+			}
+		};
+		const dockerRebuildHasImageWrite =
+			application.sourceType === "docker" &&
+			!!(
+				application.registry ||
+				application.buildRegistry ||
+				application.rollbackRegistry
+			);
+		if (application.sourceType === "docker" && !dockerRebuildHasImageWrite) {
+			// A registry-free Docker-source rebuild emits no build, tag, push, or pull.
+			await executeBuild(commandWithLog);
 		} else {
-			await execAsync(commandWithLog);
+			await withHostBuildAdmission(
+				{ serverId, operation: "application-rebuild" },
+				async ({ prepareCommand, signal }) => {
+					await executeBuild(await prepareCommand(commandWithLog), signal);
+				},
+			);
 		}
-		await mechanizeDockerContainer(application);
+		await mechanizeApplicationWithDeploymentAdmission(
+			application,
+			"application-rebuild",
+		);
 		await updateDeploymentStatus(deployment.deploymentId, "done");
 		await updateApplicationStatus(applicationId, "done");
 
@@ -443,12 +496,30 @@ export const deployPreviewApplication = async ({
 			command += await getBuildCommand(application);
 
 			const commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-			if (application.serverId) {
-				await execAsyncRemote(application.serverId, commandWithLog);
-			} else {
-				await execAsync(commandWithLog);
-			}
-			await mechanizeDockerContainer(application);
+			const buildServerId = application.buildServerId || application.serverId;
+			await withHostBuildAdmission(
+				{
+					serverId: buildServerId,
+					operation: "application-preview-deploy",
+				},
+				async ({ prepareCommand, signal }) => {
+					const admittedCommand = await prepareCommand(commandWithLog);
+					if (buildServerId) {
+						await execAsyncRemote(
+							buildServerId,
+							admittedCommand,
+							undefined,
+							signal,
+						);
+					} else {
+						await execAsync(admittedCommand, { signal });
+					}
+				},
+			);
+			await mechanizeApplicationWithDeploymentAdmission(
+				application,
+				"application-preview-deploy",
+			);
 		}
 		const successComment = getIssueComment(
 			application.name,
@@ -552,17 +623,26 @@ export const rebuildPreviewApplication = async ({
 		application.rollbackRegistry = null;
 		application.registry = null;
 
-		const serverId = application.serverId;
+		const serverId = application.buildServerId || application.serverId;
 		let command = "set -e;";
 		// Only rebuild, don't clone repository
 		command += await getBuildCommand(application);
 		const commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
-		if (serverId) {
-			await execAsyncRemote(serverId, commandWithLog);
-		} else {
-			await execAsync(commandWithLog);
-		}
-		await mechanizeDockerContainer(application);
+		await withHostBuildAdmission(
+			{ serverId, operation: "application-preview-rebuild" },
+			async ({ prepareCommand, signal }) => {
+				const admittedCommand = await prepareCommand(commandWithLog);
+				if (serverId) {
+					await execAsyncRemote(serverId, admittedCommand, undefined, signal);
+				} else {
+					await execAsync(admittedCommand, { signal });
+				}
+			},
+		);
+		await mechanizeApplicationWithDeploymentAdmission(
+			application,
+			"application-preview-rebuild",
+		);
 
 		const successComment = getIssueComment(
 			application.name,

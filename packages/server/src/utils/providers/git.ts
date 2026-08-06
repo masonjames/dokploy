@@ -38,31 +38,28 @@ export const cloneGitRepository = async ({
 		command += `echo "Error: ❌ Repository not found"; exit 1;`;
 		return command;
 	}
+	const safeCustomGitUrl = isHttpOrHttps(customGitUrl)
+		? requireCredentialFreeHttpUrl(customGitUrl)
+		: customGitUrl;
 
-	const temporalKeyPath = path.join("/tmp", "id_rsa");
+	command += `: "\${DOKPLOY_BUILD_TMPDIR:?DOKPLOY_BUILD_TMPDIR is required for custom git clones}";`;
+	const temporalKeyPath = "${DOKPLOY_BUILD_TMPDIR}/id_rsa";
+	const quotedTemporalKeyPath = `"${temporalKeyPath}"`;
 
-	if (customGitSSHKeyId) {
-		const sshKey = await findSSHKeyById(customGitSSHKeyId);
-
-		command += `
-			echo "${sshKey.privateKey}" > ${temporalKeyPath}
-			chmod 600 ${temporalKeyPath};
-			`;
-	}
 	const basePath = type === "compose" ? COMPOSE_PATH : APPLICATIONS_PATH;
 	const outputPath = outputPathOverride ?? join(basePath, appName, "code");
 	const knownHostsPath = path.join(SSH_PATH, "known_hosts");
 
-	if (!isHttpOrHttps(customGitUrl)) {
+	if (!isHttpOrHttps(safeCustomGitUrl)) {
 		if (!customGitSSHKeyId) {
 			command += `echo "Error: ❌ You are trying to clone a ssh repository without a ssh key, please set a ssh key"; exit 1;`;
 			return command;
 		}
-		command += addHostToKnownHostsCommand(customGitUrl);
+		command += addHostToKnownHostsCommand(safeCustomGitUrl);
 	}
 	command += `rm -rf ${outputPath};`;
 	command += `mkdir -p ${outputPath};`;
-	command += `echo ${quote([`Cloning Repo Custom ${customGitUrl} to ${outputPath}: ✅`])};`;
+	command += `printf '%s\\n' ${quote([`Cloning Repo Custom ${safeCustomGitUrl} to ${outputPath}: ✅`])};`;
 
 	if (customGitSSHKeyId) {
 		await updateSSHKeyById({
@@ -73,14 +70,14 @@ export const cloneGitRepository = async ({
 
 	if (customGitSSHKeyId) {
 		const sshKey = await findSSHKeyById(customGitSSHKeyId);
-		const { port } = sanitizeRepoPathSSH(customGitUrl);
-		const gitSshCommand = `ssh -i /tmp/id_rsa${port ? ` -p ${port}` : ""} -o UserKnownHostsFile=${knownHostsPath} -o StrictHostKeyChecking=accept-new`;
-		command += `echo "${sshKey.privateKey}" > /tmp/id_rsa;`;
-		command += "chmod 600 /tmp/id_rsa;";
+		const { port } = sanitizeRepoPathSSH(safeCustomGitUrl);
+		const gitSshCommand = `ssh -i \\"${temporalKeyPath}\\"${port ? ` -p ${port}` : ""} -o UserKnownHostsFile=${knownHostsPath} -o StrictHostKeyChecking=accept-new`;
+		command += `printf '%s' ${quote([sshKey.privateKey])} > ${quotedTemporalKeyPath};`;
+		command += `chmod 600 ${quotedTemporalKeyPath};`;
 		command += `export GIT_SSH_COMMAND="${gitSshCommand}";`;
 	}
-	command += `if ! git clone --branch ${quote([String(customGitBranch ?? "")])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} --progress ${quote([String(customGitUrl ?? "")])} ${quote([String(outputPath ?? "")])}; then
-				echo ${quote([`❌ [ERROR] Fail to clone the repository ${customGitUrl}`])};
+	command += `if ! git clone --branch ${quote([customGitBranch])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} --progress -- ${quote([safeCustomGitUrl])} ${quote([outputPath])}; then
+				printf '%s\\n' ${quote([`❌ [ERROR] Fail to clone the repository ${safeCustomGitUrl}`])};
 				exit 1;
 			fi
 			`;
@@ -91,6 +88,25 @@ export const cloneGitRepository = async ({
 const isHttpOrHttps = (url: string): boolean => {
 	const regex = /^https?:\/\//;
 	return regex.test(url);
+};
+
+const requireCredentialFreeHttpUrl = (value: string) => {
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error("Custom Git URL must be an absolute HTTP(S) URL");
+	}
+	if (
+		(parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+		parsed.username ||
+		parsed.password
+	) {
+		throw new Error(
+			"Custom Git HTTP(S) URLs must not contain credentials; use SSH or a configured provider",
+		);
+	}
+	return parsed.toString();
 };
 
 // const addHostToKnownHosts = async (repositoryURL: string) => {
@@ -115,7 +131,7 @@ const addHostToKnownHostsCommand = (repositoryURL: string) => {
 	// ssh-keyscan is best-effort: some Git hosts (e.g. Hugging Face) never answer
 	// it, and its exit code must not abort the clone under `set -e`. The clone's
 	// own host-key check (StrictHostKeyChecking=accept-new) is the real boundary.
-	return `ssh-keyscan -p ${Number(port)} ${quote([String(domain ?? "")])} >> ${knownHostsPath} || true;`;
+	return `ssh-keyscan -p ${quote([String(port)])} ${quote([domain])} >> ${quote([knownHostsPath])} || true;`;
 };
 const sanitizeRepoPathSSH = (input: string) => {
 	const SSH_PATH_RE = new RegExp(
@@ -138,11 +154,19 @@ const sanitizeRepoPathSSH = (input: string) => {
 	if (!found) {
 		throw new Error(`Malformatted SSH path: ${input}`);
 	}
+	const domain = found.groups?.domain;
+	const port = Number(found.groups?.port ?? 22);
+	if (!domain || !/^[a-z0-9._-]+$/i.test(domain)) {
+		throw new Error(`Malformatted SSH host: ${input}`);
+	}
+	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+		throw new Error(`Invalid SSH port: ${input}`);
+	}
 
 	return {
 		user: found.groups?.user ?? "git",
-		domain: found.groups?.domain,
-		port: Number(found.groups?.port ?? 22),
+		domain,
+		port,
 		owner: found.groups?.owner ?? "",
 		repo: found.groups?.repo,
 		get repoPath() {

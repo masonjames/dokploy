@@ -3,7 +3,8 @@ import { getWebServerSettings } from "@dokploy/server/services/web-server-settin
 import type { ContainerCreateOptions } from "dockerode";
 import { IS_CLOUD } from "../constants";
 import { getDokployImageTag } from "../services/settings";
-import { pullImage, pullRemoteImage } from "../utils/docker/utils";
+import { pullImageUnderBuildAdmission } from "../utils/docker/utils";
+import { withHostBuildAdmission } from "../utils/process/build-admission";
 import { execAsync, execAsyncRemote } from "../utils/process/execAsync";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 
@@ -59,28 +60,47 @@ export const setupMonitoring = async (serverId: string) => {
 			serverId,
 			"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
 		);
-		if (serverId) {
-			await pullRemoteImage(imageName, serverId);
-		}
-
-		// Check if container exists
-		const container = docker.getContainer(containerName);
-		try {
-			await container.inspect();
-			await container.remove({ force: true });
-			console.log("Removed existing container");
-		} catch {
-			// Container doesn't exist, continue
-		}
-
-		await docker.createContainer(settings);
-		const newContainer = docker.getContainer(containerName);
-		await newContainer.start();
-
-		console.log("Monitoring Started ");
 	} catch (error) {
 		console.log("Monitoring Not Found: Starting ", error);
+		return;
 	}
+
+	await withHostBuildAdmission(
+		{ serverId, operation: "remote-monitoring-setup" },
+		async (context) => {
+			try {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: imageName,
+					serverId,
+				});
+
+				// Check if container exists
+				const container = docker.getContainer(containerName);
+				try {
+					await container.inspect();
+					context.assertLockHeld();
+					await container.remove({ force: true });
+					context.assertLockHeld();
+					console.log("Removed existing container");
+				} catch {
+					// Container doesn't exist, continue
+				}
+
+				context.assertLockHeld();
+				await docker.createContainer(settings);
+				context.assertLockHeld();
+				const newContainer = docker.getContainer(containerName);
+				await newContainer.start();
+				context.assertLockHeld();
+
+				console.log("Monitoring Started ");
+			} catch (error) {
+				context.assertLockHeld();
+				console.log("Monitoring Not Found: Starting ", error);
+			}
+		},
+	);
 };
 
 export const setupWebMonitoring = async () => {
@@ -134,21 +154,42 @@ export const setupWebMonitoring = async () => {
 		await execAsync(
 			"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
 		);
-		await pullImage(imageName);
-
-		const container = docker.getContainer(containerName);
-		try {
-			await container.inspect();
-			await container.remove({ force: true });
-			console.log("Removed existing container");
-		} catch {}
-
-		await docker.createContainer(settings);
-		const newContainer = docker.getContainer(containerName);
-		await newContainer.start();
-
-		console.log("Monitoring Started ");
 	} catch (error) {
 		console.log("Monitoring Not Found: Starting ", error);
+		return;
 	}
+
+	await withHostBuildAdmission(
+		{ serverId: null, operation: "web-monitoring-setup" },
+		async (context) => {
+			try {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: imageName,
+					serverId: null,
+				});
+
+				const container = docker.getContainer(containerName);
+				try {
+					await container.inspect();
+					context.assertLockHeld();
+					await container.remove({ force: true });
+					context.assertLockHeld();
+					console.log("Removed existing container");
+				} catch {}
+
+				context.assertLockHeld();
+				await docker.createContainer(settings);
+				context.assertLockHeld();
+				const newContainer = docker.getContainer(containerName);
+				await newContainer.start();
+				context.assertLockHeld();
+
+				console.log("Monitoring Started ");
+			} catch (error) {
+				context.assertLockHeld();
+				console.log("Monitoring Not Found: Starting ", error);
+			}
+		},
+	);
 };

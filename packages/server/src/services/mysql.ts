@@ -7,11 +7,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildMysql } from "@dokploy/server/utils/databases/mysql";
-import { pullImage } from "@dokploy/server/utils/docker/utils";
-import { execAsyncRemote } from "@dokploy/server/utils/process/execAsync";
+import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
-import { quote } from "shell-quote";
 import type { z } from "zod";
 import { validUniqueServerAppName } from "./project";
 
@@ -141,17 +140,19 @@ export const deployMySql = async (
 			applicationStatus: "running",
 		});
 		onData?.("Starting mysql deployment...");
-		if (mysql.serverId) {
-			await execAsyncRemote(
-				mysql.serverId,
-				`docker pull ${quote([mysql.dockerImage])}`,
-				onData,
-			);
-		} else {
-			await pullImage(mysql.dockerImage, onData);
-		}
-
-		await buildMysql(mysql);
+		await withHostBuildAdmission(
+			{ serverId: mysql.serverId, operation: "mysql-deploy" },
+			async (context) => {
+				await pullImageUnderBuildAdmission({
+					context,
+					dockerImage: mysql.dockerImage,
+					serverId: mysql.serverId,
+					onData,
+				});
+				await buildMysql(mysql, context);
+				context.assertLockHeld();
+			},
+		);
 		await updateMySqlById(mysqlId, {
 			applicationStatus: "done",
 		});
