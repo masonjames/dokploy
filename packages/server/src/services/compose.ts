@@ -16,6 +16,11 @@ import {
 	loadDockerComposeRemote,
 	writeCaddyComposeRoutesForTargets,
 } from "@dokploy/server/utils/docker/domain";
+import {
+	buildStackCleanupCommand,
+	parseStackCleanupOutput,
+	type StackCleanupReport,
+} from "@dokploy/server/utils/docker/stack-cleanup";
 import type { ComposeSpecification } from "@dokploy/server/utils/docker/types";
 import { sendBuildErrorNotifications } from "@dokploy/server/utils/notifications/build-error";
 import { sendBuildSuccessNotifications } from "@dokploy/server/utils/notifications/build-success";
@@ -49,6 +54,15 @@ import { generateApplyPatchesCommand } from "./patch";
 import { validUniqueServerAppName } from "./project";
 
 export type Compose = typeof compose.$inferSelect;
+
+export type ComposeCleanupReport =
+	| StackCleanupReport
+	| {
+			kind: "docker-compose";
+			projectName: string;
+			deleteVolumes: boolean;
+			verified: true;
+	  };
 
 export const createCompose = async (
 	input: z.infer<typeof apiCreateCompose>,
@@ -484,41 +498,64 @@ export const rebuildCompose = async ({
 export const removeCompose = async (
 	compose: Compose,
 	deleteVolumes: boolean,
-) => {
+): Promise<ComposeCleanupReport> => {
 	try {
 		const { COMPOSE_PATH } = paths(!!compose.serverId);
 		const projectPath = join(COMPOSE_PATH, compose.appName);
 
 		if (compose.composeType === "stack") {
-			const command = `
-			docker network disconnect ${compose.appName} dokploy-traefik;
-			docker stack rm ${compose.appName};
-			rm -rf ${projectPath}`;
+			const command = buildStackCleanupCommand({
+				stackName: compose.appName,
+				deleteVolumes,
+			});
 
+			let stdout: string;
 			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, command);
+				({ stdout } = await execAsyncRemote(compose.serverId, command));
 			} else {
-				await execAsync(command);
+				({ stdout } = await execAsync(command));
 			}
-		} else {
-			const command = `
+
+			const report = parseStackCleanupOutput({
+				stackName: compose.appName,
+				deleteVolumes,
+				stdout,
+			});
+			if (!report.verified) {
+				throw new Error(
+					"Stack cleanup completed without verification evidence",
+				);
+			}
+			return report;
+		}
+		const command = `
 			docker network disconnect ${compose.appName} dokploy-traefik;
 			env -i PATH="$PATH" docker compose -p ${compose.appName} down ${
 				deleteVolumes ? "--volumes" : ""
 			};
 			rm -rf ${projectPath}`;
 
-			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, command);
-			} else {
-				await execAsync(command);
-			}
+		if (compose.serverId) {
+			await execAsyncRemote(compose.serverId, command);
+		} else {
+			await execAsync(command);
 		}
+		return {
+			kind: "docker-compose",
+			projectName: compose.appName,
+			deleteVolumes,
+			verified: true,
+		};
 	} catch (error) {
+		if (error instanceof ExecError) {
+			const detail = (error.stderr || error.message).trim().slice(-2000);
+			throw new Error(
+				`Compose runtime cleanup failed for ${compose.appName}: ${detail}`,
+				{ cause: error },
+			);
+		}
 		throw error;
 	}
-
-	return true;
 };
 
 export const startCompose = async (composeId: string) => {
