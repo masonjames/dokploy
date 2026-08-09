@@ -246,25 +246,26 @@ export const composeRouter = createTRPCRouter({
 				});
 			}
 
-			const result = await db
-				.delete(composeTable)
-				.where(eq(composeTable.composeId, input.composeId))
-				.returning();
-
 			if (!IS_CLOUD) {
 				await cleanQueuesByCompose(input.composeId);
 			}
 
-			const cleanupOperations = [
-				async () => await removeCompose(composeResult, input.deleteVolumes),
-				async () => await removeDeploymentsByComposeId(composeResult),
-				async () => await removeComposeDirectory(composeResult.appName),
-			];
+			const cleanup = await removeCompose(composeResult, input.deleteVolumes);
+			await removeDeploymentsByComposeId(composeResult);
+			await removeComposeDirectory(
+				composeResult.appName,
+				composeResult.serverId,
+			);
 
-			for (const operation of cleanupOperations) {
-				try {
-					await operation();
-				} catch (_) {}
+			const deleted = await db
+				.delete(composeTable)
+				.where(eq(composeTable.composeId, input.composeId))
+				.returning();
+			if (deleted.length !== 1) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Compose cleanup succeeded but its record was not deleted",
+				});
 			}
 
 			await audit(ctx, {
@@ -273,7 +274,13 @@ export const composeRouter = createTRPCRouter({
 				resourceId: composeResult.composeId,
 				resourceName: composeResult.appName,
 			});
-			return composeResult;
+			return {
+				...composeResult,
+				cleanup: {
+					...cleanup,
+					composeRecordDeleted: true as const,
+				},
+			};
 		}),
 	cleanQueues: protectedProcedure
 		.input(apiFindCompose)
