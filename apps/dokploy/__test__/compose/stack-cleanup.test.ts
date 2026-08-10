@@ -33,6 +33,23 @@ describe("stack cleanup", () => {
 		expect(command).toContain("DOKPLOY_STACK_CLEANUP_RETAINED_VOLUME");
 	});
 
+	it("disconnects and removes an isolated external stack network", () => {
+		const command = buildStackCleanupCommand({
+			stackName: "isolated-e2e",
+			deleteVolumes: true,
+			isolatedDeployment: true,
+		});
+
+		expect(command).toContain("_dokploy_isolated=1");
+		expect(command).toContain(
+			'docker network disconnect -f "$_dokploy_stack" "$_dokploy_container"',
+		);
+		expect(command).toContain('docker network rm "$_dokploy_stack"');
+		expect(command).toContain(
+			"docker network inspect --format '{{.ID}}' \"$_dokploy_stack\"",
+		);
+	});
+
 	it("rejects unsafe stack names before constructing a shell command", () => {
 		expect(() =>
 			buildStackCleanupCommand({
@@ -62,5 +79,26 @@ describe("stack cleanup", () => {
 			verified: true,
 		});
 		expect(report.residualVolumes).toEqual([]);
+	});
+
+	it("preserves residual identifiers from an unverified command result", () => {
+		const report = parseStackCleanupOutput({
+			stackName: "e2e-test",
+			deleteVolumes: true,
+			stdout: [
+				"DOKPLOY_STACK_CLEANUP_RESIDUAL_SERVICE=service-1",
+				"DOKPLOY_STACK_CLEANUP_RESIDUAL_CONTAINER=container-1",
+				"DOKPLOY_STACK_CLEANUP_RESIDUAL_NETWORK=network-1",
+				"DOKPLOY_STACK_CLEANUP_RESIDUAL_VOLUME=volume-1",
+			].join("\n"),
+		});
+
+		expect(report).toMatchObject({
+			residualServices: ["service-1"],
+			residualContainers: ["container-1"],
+			residualNetworks: ["network-1"],
+			residualVolumes: ["volume-1"],
+			verified: false,
+		});
 	});
 });

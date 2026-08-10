@@ -16,15 +16,31 @@ export interface StackCleanupReport {
 	verified: boolean;
 }
 
+export class StackCleanupError extends Error {
+	public readonly report: StackCleanupReport;
+
+	constructor(
+		message: string,
+		report: StackCleanupReport,
+		options?: ErrorOptions,
+	) {
+		super(message, options);
+		this.name = "StackCleanupError";
+		this.report = report;
+	}
+}
+
 const shellQuote = (value: string) => quote([value]);
 
 export const buildStackCleanupCommand = ({
 	stackName,
 	deleteVolumes,
+	isolatedDeployment = false,
 	waitSeconds = 60,
 }: {
 	stackName: string;
 	deleteVolumes: boolean;
+	isolatedDeployment?: boolean;
 	waitSeconds?: number;
 }) => {
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/.test(stackName)) {
@@ -42,6 +58,7 @@ export const buildStackCleanupCommand = ({
 set -eu
 _dokploy_stack=${shellQuote(stackName)}
 _dokploy_delete_volumes=${deleteVolumes ? "1" : "0"}
+_dokploy_isolated=${isolatedDeployment ? "1" : "0"}
 _dokploy_wait_seconds=${waitSeconds}
 _dokploy_label="com.docker.stack.namespace=$_dokploy_stack"
 _dokploy_volumes_file=$(mktemp)
@@ -75,6 +92,14 @@ while :; do
 	sleep 1
 done
 
+if [ "$_dokploy_isolated" = "1" ] && docker network inspect "$_dokploy_stack" >/dev/null 2>&1; then
+	_dokploy_attached_containers=$(docker network inspect --format '{{range .Containers}}{{.Name}} {{end}}' "$_dokploy_stack")
+	for _dokploy_container in $_dokploy_attached_containers; do
+		docker network disconnect -f "$_dokploy_stack" "$_dokploy_container" >/dev/null 2>&1 || true
+	done
+	docker network rm "$_dokploy_stack" >/dev/null 2>&1 || true
+fi
+
 while IFS= read -r _dokploy_volume; do
 	[ -n "$_dokploy_volume" ] || continue
 	if [ "$_dokploy_delete_volumes" = "1" ]; then
@@ -94,7 +119,12 @@ done < "$_dokploy_volumes_file"
 
 _dokploy_residual_services=$(docker service ls -q --filter "label=$_dokploy_label")
 _dokploy_residual_containers=$(docker ps -aq --filter "label=$_dokploy_label")
-_dokploy_residual_networks=$(docker network ls -q --filter "label=$_dokploy_label")
+_dokploy_residual_networks=$(
+	docker network ls -q --filter "label=$_dokploy_label"
+	if [ "$_dokploy_isolated" = "1" ] && docker network inspect "$_dokploy_stack" >/dev/null 2>&1; then
+		docker network inspect --format '{{.ID}}' "$_dokploy_stack"
+	fi
+)
 _dokploy_residual_volumes=""
 if [ "$_dokploy_delete_volumes" = "1" ]; then
 	_dokploy_residual_volumes=$(docker volume ls -q --filter "label=$_dokploy_label")

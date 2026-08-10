@@ -19,6 +19,7 @@ import {
 import {
 	buildStackCleanupCommand,
 	parseStackCleanupOutput,
+	StackCleanupError,
 	type StackCleanupReport,
 } from "@dokploy/server/utils/docker/stack-cleanup";
 import type { ComposeSpecification } from "@dokploy/server/utils/docker/types";
@@ -501,12 +502,14 @@ export const removeCompose = async (
 ): Promise<ComposeCleanupReport> => {
 	try {
 		const { COMPOSE_PATH } = paths(!!compose.serverId);
-		const projectPath = join(COMPOSE_PATH, compose.appName);
+		const projectRoot = join(COMPOSE_PATH, compose.appName);
+		const projectPath = join(projectRoot, "code");
 
 		if (compose.composeType === "stack") {
 			const command = buildStackCleanupCommand({
 				stackName: compose.appName,
 				deleteVolumes,
+				isolatedDeployment: compose.isolatedDeployment,
 			});
 
 			let stdout: string;
@@ -528,12 +531,24 @@ export const removeCompose = async (
 			}
 			return report;
 		}
+		const composePath =
+			compose.sourceType === "raw" ? "docker-compose.yml" : compose.composePath;
+		const isolatedNetworkCleanup = compose.isolatedDeployment
+			? `
+			if docker network inspect ${quote([compose.appName])} >/dev/null 2>&1; then
+				_dokploy_attached_containers=$(docker network inspect --format '{{range .Containers}}{{.Name}} {{end}}' ${quote([compose.appName])})
+				for _dokploy_container in $_dokploy_attached_containers; do
+					docker network disconnect -f ${quote([compose.appName])} "$_dokploy_container" >/dev/null 2>&1 || true
+				done
+				docker network rm ${quote([compose.appName])}
+			fi`
+			: "";
 		const command = `
-			docker network disconnect ${compose.appName} dokploy-traefik;
-			env -i PATH="$PATH" docker compose -p ${compose.appName} down ${
-				deleteVolumes ? "--volumes" : ""
-			};
-			rm -rf ${projectPath}`;
+				set -eu
+				cd ${quote([projectPath])}
+				env -i PATH="$PATH" docker compose -p ${quote([compose.appName])} -f ${quote([composePath])} down ${deleteVolumes ? "--volumes" : ""}
+				${isolatedNetworkCleanup}
+				rm -rf -- ${quote([projectRoot])}`;
 
 		if (compose.serverId) {
 			await execAsyncRemote(compose.serverId, command);
@@ -548,7 +563,38 @@ export const removeCompose = async (
 		};
 	} catch (error) {
 		if (error instanceof ExecError) {
-			const detail = (error.stderr || error.message).trim().slice(-2000);
+			if (compose.composeType === "stack") {
+				const report = parseStackCleanupOutput({
+					stackName: compose.appName,
+					deleteVolumes,
+					stdout: error.stdout || "",
+				});
+				const residualGroups: Array<[string, string[]]> = [
+					["services", report.residualServices],
+					["containers", report.residualContainers],
+					["networks", report.residualNetworks],
+					["volumes", report.residualVolumes],
+				];
+				const residuals = residualGroups
+					.filter(([, ids]) => ids.length > 0)
+					.map(([kind, ids]) => `${kind}=${ids.join(",")}`)
+					.join("; ");
+				const detail = [error.stderr, residuals, error.stdout]
+					.filter(Boolean)
+					.join("\n")
+					.trim()
+					.slice(-2000);
+				throw new StackCleanupError(
+					`Stack runtime cleanup failed for ${compose.appName}: ${detail || error.message}`,
+					report,
+					{ cause: error },
+				);
+			}
+			const detail = [error.stderr, error.stdout, error.message]
+				.filter(Boolean)
+				.join("\n")
+				.trim()
+				.slice(-2000);
 			throw new Error(
 				`Compose runtime cleanup failed for ${compose.appName}: ${detail}`,
 				{ cause: error },
