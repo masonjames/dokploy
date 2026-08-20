@@ -11,15 +11,17 @@ import {
 	prepareEnvironmentVariables,
 } from "../docker/utils";
 import { getRemoteDocker } from "../servers/remote-docker";
+import { withResolvedVaultRefs } from "../vault";
 
 export type RedisNested = InferResultType<
 	"redis",
 	{ mounts: true; environment: { with: { project: true } } }
 >;
 export const buildRedis = async (
-	redis: RedisNested,
+	rawRedis: RedisNested,
 	context: BuildAdmissionContext,
 ) => {
+	const redis = await withResolvedVaultRefs(rawRedis);
 	const {
 		appName,
 		env,

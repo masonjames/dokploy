@@ -11,6 +11,7 @@ import {
 	prepareEnvironmentVariables,
 } from "../docker/utils";
 import { getRemoteDocker } from "../servers/remote-docker";
+import { withResolvedVaultRefs } from "../vault";
 
 export type LibsqlNested = InferResultType<
 	"libsql",
@@ -20,9 +21,10 @@ export type LibsqlNested = InferResultType<
 	}
 >;
 export const buildLibsql = async (
-	libsql: LibsqlNested,
+	rawLibsql: LibsqlNested,
 	context: BuildAdmissionContext,
 ) => {
+	const libsql = await withResolvedVaultRefs(rawLibsql);
 	const {
 		appName,
 		env,

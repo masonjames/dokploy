@@ -1,17 +1,17 @@
 import { findServerById } from "@dokploy/server/services/server";
 import { getWebServerSettings } from "@dokploy/server/services/web-server-settings";
-import type { ContainerCreateOptions } from "dockerode";
+import type { CreateServiceOptions } from "dockerode";
 import { IS_CLOUD } from "../constants";
 import { getDokployImageTag } from "../services/settings";
 import { pullImageUnderBuildAdmission } from "../utils/docker/utils";
-import { withHostBuildAdmission } from "../utils/process/build-admission";
+import {
+	type BuildAdmissionContext,
+	withHostBuildAdmission,
+} from "../utils/process/build-admission";
 import { execAsync, execAsyncRemote } from "../utils/process/execAsync";
 import { getRemoteDocker } from "../utils/servers/remote-docker";
 
-export const setupMonitoring = async (serverId: string) => {
-	const server = await findServerById(serverId);
-
-	const containerName = "dokploy-monitoring";
+const getMonitoringImage = () => {
 	let imageName = "dokploy/monitoring:latest";
 
 	if (
@@ -22,83 +22,111 @@ export const setupMonitoring = async (serverId: string) => {
 		imageName = "dokploy/monitoring:canary";
 	}
 
-	const settings: ContainerCreateOptions = {
-		name: containerName,
-		Env: [`METRICS_CONFIG=${JSON.stringify(server?.metricsConfig)}`],
-		Image: imageName,
-		HostConfig: {
-			// Memory: 100 * 1024 * 1024, // 100MB en bytes
-			// PidMode: "host",
-			// CapAdd: ["NET_ADMIN", "SYS_ADMIN"],
-			// Privileged: true,
-			RestartPolicy: {
-				Name: "always",
+	return imageName;
+};
+
+const deployMonitoringService = async (
+	docker: Awaited<ReturnType<typeof getRemoteDocker>>,
+	serviceName: string,
+	settings: CreateServiceOptions,
+	context: BuildAdmissionContext,
+) => {
+	try {
+		const service = docker.getService(serviceName);
+		const inspect = await service.inspect();
+		context.assertLockHeld();
+		await service.update({
+			version: Number.parseInt(inspect.Version.Index),
+			...settings,
+			TaskTemplate: {
+				...settings.TaskTemplate,
+				ForceUpdate: (inspect.Spec.TaskTemplate.ForceUpdate ?? 0) + 1,
 			},
-			PortBindings: {
-				[`${server.metricsConfig.server.port}/tcp`]: [
+		});
+		context.assertLockHeld();
+		console.log("Monitoring Updated ✅");
+	} catch (error: any) {
+		if (error?.statusCode && error.statusCode !== 404) {
+			throw error;
+		}
+		context.assertLockHeld();
+		await docker.createService(settings);
+		context.assertLockHeld();
+		console.log("Monitoring Started ✅");
+	}
+};
+
+export const setupMonitoring = async (serverId: string) => {
+	const server = await findServerById(serverId);
+
+	const serviceName = "dokploy-monitoring";
+	const imageName = getMonitoringImage();
+
+	const settings: CreateServiceOptions = {
+		Name: serviceName,
+		TaskTemplate: {
+			ContainerSpec: {
+				Image: imageName,
+				Env: [`METRICS_CONFIG=${JSON.stringify(server?.metricsConfig)}`],
+				Mounts: [
 					{
-						HostPort: server.metricsConfig.server.port.toString(),
+						Type: "bind",
+						Source: "/var/run/docker.sock",
+						Target: "/var/run/docker.sock",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/sys",
+						Target: "/host/sys",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/etc/os-release",
+						Target: "/etc/os-release",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/proc",
+						Target: "/host/proc",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/etc/dokploy/monitoring/monitoring.db",
+						Target: "/app/monitoring.db",
 					},
 				],
 			},
-			Binds: [
-				"/var/run/docker.sock:/var/run/docker.sock:ro",
-				"/sys:/host/sys:ro",
-				"/etc/os-release:/etc/os-release:ro",
-				"/proc:/host/proc:ro",
-				"/etc/dokploy/monitoring/monitoring.db:/app/monitoring.db",
-			],
-			NetworkMode: "host",
+			Networks: [{ Target: "host" }],
+			Placement: {
+				Constraints: ["node.role==manager"],
+			},
 		},
-		ExposedPorts: {
-			[`${server.metricsConfig.server.port}/tcp`]: {},
+		Mode: {
+			Replicated: {
+				Replicas: 1,
+			},
 		},
 	};
-	const docker = await getRemoteDocker(serverId);
-	try {
-		await execAsyncRemote(
-			serverId,
-			"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
-		);
-	} catch (error) {
-		console.log("Monitoring Not Found: Starting ", error);
-		return;
-	}
 
+	const docker = await getRemoteDocker(serverId);
+
+	await execAsyncRemote(
+		serverId,
+		"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
+	);
 	await withHostBuildAdmission(
 		{ serverId, operation: "remote-monitoring-setup" },
 		async (context) => {
-			try {
-				await pullImageUnderBuildAdmission({
-					context,
-					dockerImage: imageName,
-					serverId,
-				});
-
-				// Check if container exists
-				const container = docker.getContainer(containerName);
-				try {
-					await container.inspect();
-					context.assertLockHeld();
-					await container.remove({ force: true });
-					context.assertLockHeld();
-					console.log("Removed existing container");
-				} catch {
-					// Container doesn't exist, continue
-				}
-
-				context.assertLockHeld();
-				await docker.createContainer(settings);
-				context.assertLockHeld();
-				const newContainer = docker.getContainer(containerName);
-				await newContainer.start();
-				context.assertLockHeld();
-
-				console.log("Monitoring Started ");
-			} catch (error) {
-				context.assertLockHeld();
-				console.log("Monitoring Not Found: Starting ", error);
-			}
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: imageName,
+				serverId,
+			});
+			await deployMonitoringService(docker, serviceName, settings, context);
 		},
 	);
 };
@@ -106,90 +134,85 @@ export const setupMonitoring = async (serverId: string) => {
 export const setupWebMonitoring = async () => {
 	const webServerSettings = await getWebServerSettings();
 
-	const containerName = "dokploy-monitoring";
-	let imageName = "dokploy/monitoring:latest";
+	const serviceName = "dokploy-monitoring";
+	const imageName = getMonitoringImage();
+	const port = webServerSettings?.metricsConfig?.server?.port;
 
-	if (
-		(getDokployImageTag() !== "latest" ||
-			process.env.NODE_ENV === "development") &&
-		!IS_CLOUD
-	) {
-		imageName = "dokploy/monitoring:canary";
-	}
-
-	const settings: ContainerCreateOptions = {
-		name: containerName,
-		Env: [`METRICS_CONFIG=${JSON.stringify(webServerSettings?.metricsConfig)}`],
-		Image: imageName,
-		HostConfig: {
-			// Memory: 100 * 1024 * 1024, // 100MB en bytes
-			// PidMode: "host",
-			// CapAdd: ["NET_ADMIN", "SYS_ADMIN"],
-			// Privileged: true,
-			RestartPolicy: {
-				Name: "always",
-			},
-			PortBindings: {
-				[`${webServerSettings?.metricsConfig?.server?.port}/tcp`]: [
+	const settings: CreateServiceOptions = {
+		Name: serviceName,
+		TaskTemplate: {
+			ContainerSpec: {
+				Image: imageName,
+				Env: [
+					`METRICS_CONFIG=${JSON.stringify(webServerSettings?.metricsConfig)}`,
+				],
+				Mounts: [
 					{
-						HostPort: webServerSettings?.metricsConfig?.server?.port.toString(),
+						Type: "bind",
+						Source: "/var/run/docker.sock",
+						Target: "/var/run/docker.sock",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/sys",
+						Target: "/host/sys",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/etc/os-release",
+						Target: "/etc/os-release",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/proc",
+						Target: "/host/proc",
+						ReadOnly: true,
+					},
+					{
+						Type: "bind",
+						Source: "/etc/dokploy/monitoring/monitoring.db",
+						Target: "/app/monitoring.db",
 					},
 				],
 			},
-			Binds: [
-				"/var/run/docker.sock:/var/run/docker.sock:ro",
-				"/sys:/host/sys:ro",
-				"/etc/os-release:/etc/os-release:ro",
-				"/proc:/host/proc:ro",
-				"/etc/dokploy/monitoring/monitoring.db:/app/monitoring.db",
-			],
-			// NetworkMode: "host",
+			Placement: {
+				Constraints: ["node.role==manager"],
+			},
 		},
-		ExposedPorts: {
-			[`${webServerSettings?.metricsConfig?.server?.port}/tcp`]: {},
+		Mode: {
+			Replicated: {
+				Replicas: 1,
+			},
+		},
+		EndpointSpec: {
+			Ports: [
+				{
+					TargetPort: port,
+					PublishedPort: port,
+					Protocol: "tcp",
+					PublishMode: "host",
+				},
+			],
 		},
 	};
-	const docker = await getRemoteDocker();
-	try {
-		await execAsync(
-			"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
-		);
-	} catch (error) {
-		console.log("Monitoring Not Found: Starting ", error);
-		return;
-	}
 
+	const docker = await getRemoteDocker();
+
+	await execAsync(
+		"mkdir -p /etc/dokploy/monitoring && touch /etc/dokploy/monitoring/monitoring.db",
+	);
 	await withHostBuildAdmission(
 		{ serverId: null, operation: "web-monitoring-setup" },
 		async (context) => {
-			try {
-				await pullImageUnderBuildAdmission({
-					context,
-					dockerImage: imageName,
-					serverId: null,
-				});
-
-				const container = docker.getContainer(containerName);
-				try {
-					await container.inspect();
-					context.assertLockHeld();
-					await container.remove({ force: true });
-					context.assertLockHeld();
-					console.log("Removed existing container");
-				} catch {}
-
-				context.assertLockHeld();
-				await docker.createContainer(settings);
-				context.assertLockHeld();
-				const newContainer = docker.getContainer(containerName);
-				await newContainer.start();
-				context.assertLockHeld();
-
-				console.log("Monitoring Started ");
-			} catch (error) {
-				context.assertLockHeld();
-				console.log("Monitoring Not Found: Starting ", error);
-			}
+			await pullImageUnderBuildAdmission({
+				context,
+				dockerImage: imageName,
+				serverId: null,
+			});
+			await deployMonitoringService(docker, serviceName, settings, context);
 		},
 	);
 };

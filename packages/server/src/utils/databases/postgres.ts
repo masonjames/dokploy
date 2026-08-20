@@ -11,15 +11,17 @@ import {
 	prepareEnvironmentVariables,
 } from "../docker/utils";
 import { getRemoteDocker } from "../servers/remote-docker";
+import { withResolvedVaultRefs } from "../vault";
 
 export type PostgresNested = InferResultType<
 	"postgres",
 	{ mounts: true; environment: { with: { project: true } } }
 >;
 export const buildPostgres = async (
-	postgres: PostgresNested,
+	rawPostgres: PostgresNested,
 	context: BuildAdmissionContext,
 ) => {
+	const postgres = await withResolvedVaultRefs(rawPostgres);
 	const {
 		appName,
 		env,

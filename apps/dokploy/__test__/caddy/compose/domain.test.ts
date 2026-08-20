@@ -194,7 +194,12 @@ describe("Caddy compose route generation", () => {
 	});
 
 	test("Traefik provider conversion delegates to the existing Traefik label path", async () => {
-		const composeInput = compose();
+		const composeFile = stringify({
+			services: {
+				web: { image: "nginx" },
+			},
+		});
+		const composeInput = compose({ composeFile });
 		writeComposeFile(composeInput, {
 			services: {
 				web: { image: "nginx" },

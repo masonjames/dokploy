@@ -11,15 +11,17 @@ import {
 	prepareEnvironmentVariables,
 } from "../docker/utils";
 import { getRemoteDocker } from "../servers/remote-docker";
+import { withResolvedVaultRefs } from "../vault";
 
 export type MariadbNested = InferResultType<
 	"mariadb",
 	{ mounts: true; environment: { with: { project: true } } }
 >;
 export const buildMariadb = async (
-	mariadb: MariadbNested,
+	rawMariadb: MariadbNested,
 	context: BuildAdmissionContext,
 ) => {
+	const mariadb = await withResolvedVaultRefs(rawMariadb);
 	const {
 		appName,
 		env,

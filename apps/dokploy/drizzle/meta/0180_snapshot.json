@@ -1,5 +1,5 @@
 {
-  "id": "f63c8784-dc77-4610-b260-f40ec39b8d6e",
+  "id": "6ca6441e-7818-4252-a702-4b24fc80a239",
   "prevId": "df4869f3-5095-4472-8c0b-f169f6f89615",
   "version": "7",
   "dialect": "postgresql",
@@ -2634,6 +2634,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "createEnvFile": {
+          "name": "createEnvFile",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
         },
         "enableSubmodules": {
           "name": "enableSubmodules",
@@ -7557,21 +7564,6 @@
           "notNull": true,
           "default": false
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
         "buildsConcurrency": {
           "name": "buildsConcurrency",
           "type": "integer",
@@ -8542,28 +8534,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "webServerProvider": {
-          "name": "webServerProvider",
-          "type": "webServerProvider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'traefik'"
-        },
-        "caddyTrustedProxyConfig": {
-          "name": "caddyTrustedProxyConfig",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'null'::jsonb"
-        },
-        "requestLogsEnabled": {
-          "name": "requestLogsEnabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "serverIp": {
           "name": "serverIp",
           "type": "text",
@@ -8941,14 +8911,6 @@
       "values": [
         "push",
         "tag"
-      ]
-    },
-    "public.webServerProvider": {
-      "name": "webServerProvider",
-      "schema": "public",
-      "values": [
-        "traefik",
-        "caddy"
       ]
     }
   },

@@ -11,6 +11,7 @@ import {
 	prepareEnvironmentVariables,
 } from "../docker/utils";
 import { getRemoteDocker } from "../servers/remote-docker";
+import { withResolvedVaultRefs } from "../vault";
 
 export type MysqlNested = InferResultType<
 	"mysql",
@@ -18,9 +19,10 @@ export type MysqlNested = InferResultType<
 >;
 
 export const buildMysql = async (
-	mysql: MysqlNested,
+	rawMysql: MysqlNested,
 	context: BuildAdmissionContext,
 ) => {
+	const mysql = await withResolvedVaultRefs(rawMysql);
 	const {
 		appName,
 		env,
