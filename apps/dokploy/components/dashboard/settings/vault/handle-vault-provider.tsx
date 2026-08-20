@@ -1013,8 +1013,12 @@ export const HandleVaultProvider = ({ vaultProviderId }: Props) => {
 											key={project.projectId}
 											className="flex flex-col gap-1.5"
 										>
-											<label className="flex flex-row items-center gap-2 text-sm cursor-pointer">
+											<label
+												htmlFor={`vault-project-${project.projectId}`}
+												className="flex flex-row items-center gap-2 text-sm cursor-pointer"
+											>
 												<Checkbox
+													id={`vault-project-${project.projectId}`}
 													checked={!!assignment}
 													onCheckedChange={() =>
 														toggleProject(project.projectId)
@@ -1027,9 +1031,11 @@ export const HandleVaultProvider = ({ vaultProviderId }: Props) => {
 													{project.environments?.map((environment) => (
 														<label
 															key={environment.environmentId}
+															htmlFor={`vault-environment-${project.projectId}-${environment.environmentId}`}
 															className="flex flex-row items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
 														>
 															<Checkbox
+																id={`vault-environment-${project.projectId}-${environment.environmentId}`}
 																checked={assignment.environmentIds.includes(
 																	environment.environmentId,
 																)}

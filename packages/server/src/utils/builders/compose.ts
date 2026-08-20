@@ -11,8 +11,8 @@ import {
 	prepareEnvironmentVariables,
 	prepareEnvironmentVariablesForFile,
 } from "../docker/utils";
-import { getWebServerResourceName } from "../web-server/providers";
 import { withResolvedVaultRefs } from "../vault";
+import { getWebServerResourceName } from "../web-server/providers";
 
 export type ComposeNested = InferResultType<
 	"compose",
