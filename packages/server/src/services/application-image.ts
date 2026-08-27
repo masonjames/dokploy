@@ -621,6 +621,9 @@ export const prepareImmutableApplicationImage = async ({
 						"Application release generation changed before image preparation",
 				});
 			}
+			await tx.execute(
+				sql`SELECT set_config('dockhand.internal_image_cas', '1', true)`,
+			);
 			const updated = await tx
 				.update(applications)
 				.set({ dockerImage: candidateImage })
@@ -632,6 +635,9 @@ export const prepareImmutableApplicationImage = async ({
 					),
 				)
 				.returning({ applicationId: applications.applicationId });
+			await tx.execute(
+				sql`SELECT set_config('dockhand.internal_image_cas', '0', true)`,
+			);
 			if (updated.length !== 1) {
 				throw new TRPCError({
 					code: "CONFLICT",

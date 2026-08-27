@@ -5,6 +5,20 @@ const migration = readFileSync(
 	new URL("../../drizzle/0188_crazy_lionheart.sql", import.meta.url),
 	"utf8",
 );
+const imageOnlyCorrection = readFileSync(
+	new URL(
+		"../../drizzle/0189_dockhand_image_only_revision.sql",
+		import.meta.url,
+	),
+	"utf8",
+);
+const applicationImageService = readFileSync(
+	new URL(
+		"../../../../packages/server/src/services/application-image.ts",
+		import.meta.url,
+	),
+	"utf8",
+);
 const mountService = readFileSync(
 	new URL("../../../../packages/server/src/services/mount.ts", import.meta.url),
 	"utf8",
@@ -68,4 +82,43 @@ test("serializes parent membership and file-backed mount deletion", () => {
 	expect(guardedDelete.indexOf("activeRelease")).toBeLessThan(
 		guardedDelete.indexOf("deleteFileMount(mountId)"),
 	);
+});
+
+test("image-only CAS preserves the non-image configuration revision", () => {
+	expect(imageOnlyCorrection).toContain(
+		"to_jsonb(NEW) - ARRAY['applicationStatus', 'dockerImage', 'releaseConfigRevision']",
+	);
+	expect(imageOnlyCorrection).toContain(
+		"to_jsonb(OLD) - ARRAY['applicationStatus', 'dockerImage', 'releaseConfigRevision']",
+	);
+	expect(imageOnlyCorrection).toContain(
+		'NEW."releaseConfigRevision" := OLD."releaseConfigRevision" + 1',
+	);
+	expect(imageOnlyCorrection).toContain(
+		'image_changed := NEW."dockerImage" IS DISTINCT FROM OLD."dockerImage"',
+	);
+	expect(imageOnlyCorrection).toContain(
+		"current_setting('dockhand.internal_image_cas', true) = '1'",
+	);
+	expect(imageOnlyCorrection).toContain(
+		"IF configuration_changed OR image_changed THEN",
+	);
+	expect(imageOnlyCorrection).toContain(
+		"IF configuration_changed OR (image_changed AND NOT internal_image_cas) THEN",
+	);
+	expect(imageOnlyCorrection.indexOf("OR image_changed THEN")).toBeLessThan(
+		imageOnlyCorrection.indexOf("PERFORM"),
+	);
+	expect(imageOnlyCorrection.indexOf("PERFORM")).toBeLessThan(
+		imageOnlyCorrection.indexOf(
+			"OR (image_changed AND NOT internal_image_cas) THEN",
+		),
+	);
+	expect(applicationImageService).toContain(
+		"set_config('dockhand.internal_image_cas', '1', true)",
+	);
+	expect(applicationImageService).toContain(
+		"set_config('dockhand.internal_image_cas', '0', true)",
+	);
+	expect(imageOnlyCorrection).not.toContain("SECRET_TOKEN");
 });

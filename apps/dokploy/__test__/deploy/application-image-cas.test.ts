@@ -100,7 +100,7 @@ beforeEach(() => {
 	findFirstMock.mockResolvedValueOnce(application).mockResolvedValueOnce({
 		...application,
 		dockerImage: digestImage,
-		releaseConfigRevision: 8,
+		releaseConfigRevision: 7,
 	});
 	returningMock.mockResolvedValue([{ applicationId: "app-1" }]);
 });
@@ -121,9 +121,16 @@ test("serializably changes only dockerImage under exact release generation", asy
 		accessMode: "read write",
 	});
 	expect(setMock).toHaveBeenCalledWith({ dockerImage: digestImage });
+	expect(dbMock.execute).toHaveBeenCalledTimes(4);
+	expect(dbMock.execute.mock.invocationCallOrder[2]).toBeLessThan(
+		updateMock.mock.invocationCallOrder[0]!,
+	);
+	expect(dbMock.execute.mock.invocationCallOrder[3]).toBeGreaterThan(
+		returningMock.mock.invocationCallOrder[0]!,
+	);
 	expect(result.previous).toEqual(before);
 	expect(result.current.dockerImage).toBe(digestImage);
-	expect(result.current.nonImageConfigHash).not.toBe(before.nonImageConfigHash);
+	expect(result.current.nonImageConfigHash).toBe(before.nonImageConfigHash);
 	expect(JSON.stringify(result)).not.toContain("must-never-escape");
 });
 
