@@ -7,6 +7,7 @@ import {
 	immutableReleaseRequests,
 } from "@dokploy/server/db/schema";
 import { TRPCError } from "@trpc/server";
+import { parse as parseDotEnv } from "dotenv";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import postgres from "postgres";
 
@@ -364,6 +365,19 @@ const selectedList = (
 		.sort((left, right) => sha256(left).localeCompare(sha256(right)));
 };
 
+const ENVIRONMENT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const selectedEnvironmentNames = (...values: unknown[]): string[] =>
+	Array.from(
+		new Set(
+			values.flatMap((value) =>
+				typeof value === "string" ? Object.keys(parseDotEnv(value)) : [],
+			),
+		),
+	)
+		.filter((name) => ENVIRONMENT_NAME_RE.test(name))
+		.sort();
+
 /**
  * Secret-free release projection. The database-managed revision changes for
  * every application, environment, project, mount, port, or domain mutation,
@@ -428,6 +442,9 @@ export const immutableApplicationReleaseSnapshot = (
 	const nonImageConfig =
 		normalizeImmutableApplicationReleaseConfig(application);
 	const nonImageConfigHash = sha256(nonImageConfig);
+	const environment = application.environment as
+		| { env?: unknown; project?: { env?: unknown } }
+		| undefined;
 	return {
 		applicationId,
 		sourceType: "docker" as const,
@@ -439,6 +456,11 @@ export const immutableApplicationReleaseSnapshot = (
 		}),
 		nonImageConfigHash,
 		nonImageConfig,
+		environmentNames: selectedEnvironmentNames(
+			application.env,
+			environment?.env,
+			environment?.project?.env,
+		),
 		applicationStatus:
 			typeof application.applicationStatus === "string"
 				? application.applicationStatus
