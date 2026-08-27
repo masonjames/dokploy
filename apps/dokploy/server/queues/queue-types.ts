@@ -1,3 +1,8 @@
+import type { ImmutableApplicationReleaseGuard } from "@dokploy/server";
+
+export type ImmutableReleaseDeploymentGuard =
+	ImmutableApplicationReleaseGuard & { attempt: number };
+
 type DeployJob =
 	| {
 			applicationId: string;
@@ -7,6 +12,7 @@ type DeployJob =
 			type: "deploy" | "redeploy";
 			applicationType: "application";
 			serverId?: string;
+			releaseGuard?: ImmutableReleaseDeploymentGuard;
 	  }
 	| {
 			composeId: string;

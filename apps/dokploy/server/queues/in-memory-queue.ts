@@ -89,6 +89,11 @@ export interface InMemoryQueueOptions {
 	maxTerminalJobs?: number;
 }
 
+export type InMemoryAddOptions = Record<string, unknown> & {
+	/** Stable operation identity used to make an enqueue retry idempotent. */
+	jobId?: string;
+};
+
 export class InMemoryQueue {
 	private partitions = new Map<string, Partition>();
 	private processor: Processor | null = null;
@@ -137,8 +142,13 @@ export class InMemoryQueue {
 		return Promise.resolve();
 	}
 
-	async add(data: DeploymentJob): Promise<{ id: string }> {
-		const id = `job-${randomUUID()}`;
+	async add(
+		data: DeploymentJob,
+		options: InMemoryAddOptions = {},
+	): Promise<{ id: string }> {
+		const id = options.jobId ?? `job-${randomUUID()}`;
+		const existing = this.findInternalJob(id);
+		if (existing) return { id: existing.id };
 		const partitionKey = getPartition(data);
 		const job: InternalJob = {
 			id,
@@ -175,6 +185,19 @@ export class InMemoryQueue {
 			.slice(-this.maxTerminalJobs);
 	}
 
+	private findInternalJob(id: string): InternalJob | null {
+		for (const partition of this.partitions.values()) {
+			this.pruneTerminal(partition);
+			const job = [
+				...partition.waiting,
+				...partition.active,
+				...partition.terminal,
+			].find((candidate) => candidate.id === id);
+			if (job) return job;
+		}
+		return null;
+	}
+
 	/** Snapshot of jobs in the requested states (defaults to waiting + active). */
 	getJobs(states?: JobState[]): Promise<InMemoryJob[]> {
 		const wantWaiting = !states || states.includes("waiting");
@@ -206,16 +229,8 @@ export class InMemoryQueue {
 	}
 
 	getJob(id: string): Promise<InMemoryJob | null> {
-		for (const partition of this.partitions.values()) {
-			this.pruneTerminal(partition);
-			const job = [
-				...partition.waiting,
-				...partition.active,
-				...partition.terminal,
-			].find((candidate) => candidate.id === id);
-			if (job) return Promise.resolve(this.toPublic(job));
-		}
-		return Promise.resolve(null);
+		const job = this.findInternalJob(id);
+		return Promise.resolve(job ? this.toPublic(job) : null);
 	}
 
 	/** Remove a single waiting or terminal job by id. Active jobs cannot be removed. */

@@ -34,6 +34,10 @@ import type { z } from "zod";
 import { encodeBase64 } from "../utils/docker/utils";
 import { getDokployUrl } from "./admin";
 import {
+	assertImmutableApplicationReleaseGuard,
+	type ImmutableApplicationReleaseGuard,
+} from "./application-image";
+import {
 	createDeployment,
 	createDeploymentPreview,
 	updateDeployment,
@@ -324,12 +328,17 @@ export const rebuildApplication = async ({
 	applicationId,
 	titleLog = "Rebuild deployment",
 	descriptionLog = "",
+	releaseGuard,
 }: {
 	applicationId: string;
 	titleLog: string;
 	descriptionLog: string;
+	releaseGuard?: ImmutableApplicationReleaseGuard;
 }) => {
 	const application = await findApplicationById(applicationId);
+	if (releaseGuard) {
+		assertImmutableApplicationReleaseGuard(application, releaseGuard);
+	}
 	const serverId = application.buildServerId || application.serverId;
 	const buildLink = `${await getDokployUrl()}/dashboard/project/${application.environment.projectId}/environment/${application.environmentId}/services/application/${application.applicationId}?tab=deployments`;
 
@@ -343,7 +352,9 @@ export const rebuildApplication = async ({
 		let command = "set -e;";
 		// Check case for docker only
 		command += await getBuildCommand(application);
-		const commandWithLog = `(${command}) >> ${deployment.logPath} 2>&1`;
+		const commandWithLog = releaseGuard
+			? `(${command}) > /dev/null 2>&1`
+			: `(${command}) >> ${deployment.logPath} 2>&1`;
 		const executeBuild = async (
 			admittedCommand: string,
 			signal?: AbortSignal,
@@ -392,7 +403,7 @@ export const rebuildApplication = async ({
 		let command = "";
 
 		// Only log details for non-ExecError errors
-		if (!(error instanceof ExecError)) {
+		if (!releaseGuard && !(error instanceof ExecError)) {
 			const message = error instanceof Error ? error.message : String(error);
 			const encodedMessage = encodeBase64(message);
 			command += `echo "${encodedMessage}" | base64 -d >> "${deployment.logPath}";`;
@@ -406,6 +417,9 @@ export const rebuildApplication = async ({
 		}
 		await updateDeploymentStatus(deployment.deploymentId, "error");
 		await updateApplicationStatus(applicationId, "error");
+		if (releaseGuard) {
+			throw new Error("Governed immutable deployment failed");
+		}
 		throw error;
 	}
 

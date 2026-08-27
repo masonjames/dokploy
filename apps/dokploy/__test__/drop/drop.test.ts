@@ -31,6 +31,7 @@ if (typeof window === "undefined") {
 const baseApp: ApplicationNested = {
 	railpackVersion: "0.15.4",
 	applicationId: "",
+	releaseConfigRevision: 0,
 	previewLabels: [],
 	networkIds: [],
 	detachDokployNetwork: false,
