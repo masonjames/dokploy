@@ -81,7 +81,14 @@ const application = {
 	domains: [],
 	deployments: [],
 	applicationStatus: "done",
-	environment: { project: { projectId: "project-1", organizationId: "org-1" } },
+	environment: {
+		env: "ENVIRONMENT_FLAG=environment-secret\nSHARED_FLAG=environment",
+		project: {
+			projectId: "project-1",
+			organizationId: "org-1",
+			env: "PROJECT_FLAG=project-secret\nSHARED_FLAG=project",
+		},
+	},
 };
 
 beforeEach(() => {
@@ -172,6 +179,25 @@ test("binds arbitrary configuration through its revision without hashing values"
 				normalizeImmutableApplicationReleaseConfig(changedSecrets),
 		}),
 	).not.toContain("must-never-escape");
+});
+
+test("projects sorted environment names without exposing any values", () => {
+	const snapshot = immutableApplicationReleaseSnapshot(application);
+	expect(snapshot.environmentNames).toEqual([
+		"ENVIRONMENT_FLAG",
+		"PROJECT_FLAG",
+		"PUBLIC_FLAG",
+		"SECRET_TOKEN",
+		"SHARED_FLAG",
+	]);
+	const wire = JSON.stringify(snapshot);
+	for (const secretValue of [
+		"environment-secret",
+		"project-secret",
+		"must-never-escape",
+	]) {
+		expect(wire).not.toContain(secretValue);
+	}
 });
 
 test("rejects remote-server and mutable registry routing", () => {

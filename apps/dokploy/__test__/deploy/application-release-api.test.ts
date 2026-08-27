@@ -136,6 +136,7 @@ test("reads a secret-free immutable release snapshot", async () => {
 		releaseGeneration: "b".repeat(64),
 		nonImageConfigHash: "c".repeat(64),
 		nonImageConfig: { applicationId: "app-1", sourceType: "docker" },
+		environmentNames: ["PUBLIC_FLAG", "SECRET_TOKEN"],
 		applicationStatus: "done",
 		deployments: [],
 	});
@@ -156,6 +157,7 @@ test("reads a secret-free immutable release snapshot", async () => {
 	expect(result.nonImageConfig).toEqual(
 		expect.objectContaining({ applicationId: "app-1", sourceType: "docker" }),
 	);
+	expect(result.environmentNames).toEqual(["PUBLIC_FLAG", "SECRET_TOKEN"]);
 	expect(JSON.stringify(result)).not.toContain("secret-value");
 });
 
