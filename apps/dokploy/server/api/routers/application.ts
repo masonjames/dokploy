@@ -12,8 +12,10 @@ import {
 	getApplicationRuntimeStatus,
 	getApplicationStats,
 	getContainerLogs,
+	getImmutableApplicationReleaseSnapshot,
 	getWebServerSettings,
 	IS_CLOUD,
+	markImmutableImageDeploymentQueued,
 	mechanizeDockerContainer,
 	prepareImmutableApplicationImage,
 	readConfig,
@@ -24,6 +26,7 @@ import {
 	removePreviewDeployment,
 	removeService,
 	removeTraefikConfig,
+	reserveImmutableImageDeployment,
 	resolveWebServerProvider,
 	startService,
 	startServiceRemote,
@@ -64,6 +67,7 @@ import {
 	apiPrepareImmutableImage,
 	apiRedeployApplication,
 	apiReloadApplication,
+	apiRequestImmutableImageDeployment,
 	apiSaveBitbucketProvider,
 	apiSaveBuildType,
 	apiSaveDockerProvider,
@@ -80,6 +84,7 @@ import {
 import type { DeploymentJob } from "@/server/queues/queue-types";
 import {
 	cleanQueuesByApplication,
+	ensureImmutableReleaseQueueReconciled,
 	killDockerBuild,
 	myQueue,
 } from "@/server/queues/queueSetup";
@@ -304,6 +309,115 @@ export const applicationRouter = createTRPCRouter({
 				deployment: ["read"],
 			});
 			return getApplicationRuntimeStatus(input.applicationId);
+		}),
+	immutableReleaseSnapshot: protectedProcedure
+		.input(apiFindOneApplication)
+		.query(async ({ input, ctx }) => {
+			await checkServiceAccess(ctx, input.applicationId, "read");
+			const application = await findApplicationById(input.applicationId);
+			if (
+				application.environment.project.organizationId !==
+				ctx.session.activeOrganizationId
+			) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You are not authorized to access this application",
+				});
+			}
+			return getImmutableApplicationReleaseSnapshot(input.applicationId);
+		}),
+	requestImmutableImageDeployment: protectedProcedure
+		.input(apiRequestImmutableImageDeployment)
+		.mutation(async ({ input, ctx }) => {
+			await checkServicePermissionAndAccess(ctx, input.applicationId, {
+				deployment: ["create"],
+			});
+			if (IS_CLOUD) {
+				throw new TRPCError({
+					code: "NOT_IMPLEMENTED",
+					message: "Immutable image deployment requires the self-hosted queue",
+				});
+			}
+			const application = await findApplicationById(input.applicationId);
+			if (
+				application.environment.project.organizationId !==
+				ctx.session.activeOrganizationId
+			) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You are not authorized to access this application",
+				});
+			}
+			if (
+				application.sourceType !== "docker" ||
+				application.dockerImage !== input.expectedImage
+			) {
+				throw new TRPCError({
+					code: "CONFLICT",
+					message: "Application image changed before deployment request",
+				});
+			}
+			await ensureImmutableReleaseQueueReconciled();
+			const title = `Dockhand governed release ${input.idempotencyKey}`;
+			const snapshot = await getImmutableApplicationReleaseSnapshot(
+				input.applicationId,
+			);
+			if (
+				snapshot.dockerImage !== input.expectedImage ||
+				snapshot.releaseGeneration !== input.expectedGeneration ||
+				snapshot.nonImageConfigHash !== input.expectedNonImageConfigHash
+			) {
+				throw new TRPCError({
+					code: "CONFLICT",
+					message:
+						"Application release generation changed before deployment request",
+				});
+			}
+			const reservation = await reserveImmutableImageDeployment({
+				applicationId: input.applicationId,
+				organizationId: ctx.session.activeOrganizationId,
+				idempotencyKey: input.idempotencyKey,
+				expectedImage: input.expectedImage,
+				expectedGeneration: input.expectedGeneration,
+				expectedNonImageConfigHash: input.expectedNonImageConfigHash,
+			});
+			if (reservation.shouldEnqueue) {
+				const jobData: DeploymentJob = {
+					applicationId: input.applicationId,
+					titleLog: title,
+					descriptionLog: "",
+					type: "redeploy",
+					applicationType: "application",
+					server: !!application.serverId,
+					serverId: application.serverId ?? undefined,
+					releaseGuard: {
+						idempotencyKey: input.idempotencyKey,
+						organizationId: ctx.session.activeOrganizationId,
+						attempt: reservation.attempt,
+						expectedImage: input.expectedImage,
+						expectedGeneration: input.expectedGeneration,
+						expectedNonImageConfigHash: input.expectedNonImageConfigHash,
+					},
+				};
+				const queued = await myQueue.add("deployments", jobData, {
+					jobId: reservation.physicalJobId,
+				});
+				if (queued.id !== reservation.physicalJobId) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Immutable deployment queue identity changed",
+					});
+				}
+				await markImmutableImageDeploymentQueued(
+					input.idempotencyKey,
+					reservation.attempt,
+				);
+			}
+			return {
+				queued: true,
+				queue: "in-memory" as const,
+				jobId: reservation.logicalJobId,
+			};
 		}),
 
 	stop: protectedProcedure
@@ -589,7 +703,22 @@ export const applicationRouter = createTRPCRouter({
 			await checkServicePermissionAndAccess(ctx, input.applicationId, {
 				service: ["create"],
 			});
-			const result = await prepareImmutableApplicationImage(input);
+			const existingApplication = await findApplicationById(
+				input.applicationId,
+			);
+			if (
+				existingApplication.environment.project.organizationId !==
+				ctx.session.activeOrganizationId
+			) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You are not authorized to access this application",
+				});
+			}
+			const result = await prepareImmutableApplicationImage({
+				...input,
+				expectedOrganizationId: ctx.session.activeOrganizationId,
+			});
 			const application = await findApplicationById(input.applicationId);
 			await audit(ctx, {
 				action: "update",

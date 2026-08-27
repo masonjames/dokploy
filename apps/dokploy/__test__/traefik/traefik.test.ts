@@ -6,6 +6,7 @@ const baseApp: ApplicationNested = {
 	railpackVersion: "0.15.4",
 	rollbackActive: false,
 	applicationId: "",
+	releaseConfigRevision: 0,
 	previewLabels: [],
 	networkIds: [],
 	detachDokployNetwork: false,

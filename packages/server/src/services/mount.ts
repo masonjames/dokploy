@@ -3,6 +3,7 @@ import { paths } from "@dokploy/server/constants";
 import { db } from "@dokploy/server/db";
 import {
 	type apiCreateMount,
+	immutableReleaseRequests,
 	mounts,
 	type ServiceType,
 } from "@dokploy/server/db/schema";
@@ -17,7 +18,7 @@ import {
 	execAsyncRemote,
 } from "@dokploy/server/utils/process/execAsync";
 import { TRPCError } from "@trpc/server";
-import { eq, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { quote } from "shell-quote";
 import type { z } from "zod";
 
@@ -244,9 +245,42 @@ export const findMountsByApplicationId = async (
 };
 
 export const deleteMount = async (mountId: string) => {
-	const { type } = await findMountById(mountId);
+	const mount = await findMountById(mountId);
+	const applicationId = mount.applicationId;
 
-	if (type === "file") {
+	if (mount.type === "file" && applicationId) {
+		return db.transaction(async (tx) => {
+			await tx.execute(sql`SELECT pg_advisory_xact_lock(20260827)`);
+			await tx.execute(
+				sql`SELECT pg_advisory_xact_lock(hashtextextended(${applicationId}, 20260827))`,
+			);
+			const activeRelease = await tx.query.immutableReleaseRequests.findFirst({
+				columns: { idempotencyKey: true },
+				where: and(
+					eq(immutableReleaseRequests.applicationId, applicationId),
+					inArray(immutableReleaseRequests.status, [
+						"reserved",
+						"queued",
+						"running",
+					]),
+				),
+			});
+			if (activeRelease) {
+				throw new TRPCError({
+					code: "CONFLICT",
+					message: "Application release configuration is fenced",
+				});
+			}
+			await deleteFileMount(mountId);
+			const deleted = await tx
+				.delete(mounts)
+				.where(eq(mounts.mountId, mountId))
+				.returning();
+			return deleted[0];
+		});
+	}
+
+	if (mount.type === "file") {
 		await deleteFileMount(mountId);
 	}
 

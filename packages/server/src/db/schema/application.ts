@@ -197,6 +197,9 @@ export const applications = pgTable("application", {
 	createdAt: text("createdAt")
 		.notNull()
 		.$defaultFn(() => new Date().toISOString()),
+	releaseConfigRevision: bigint("releaseConfigRevision", { mode: "number" })
+		.notNull()
+		.default(0),
 	registryId: text("registryId").references(() => registry.registryId, {
 		onDelete: "set null",
 	}),
@@ -237,6 +240,37 @@ export const applications = pgTable("application", {
 	detachDokployNetwork: boolean("detachDokployNetwork")
 		.notNull()
 		.default(false),
+});
+
+export type ImmutableReleaseRequestStatus =
+	| "reserved"
+	| "queued"
+	| "running"
+	| "done"
+	| "error"
+	| "cancelled";
+
+export const immutableReleaseRequests = pgTable("immutableReleaseRequest", {
+	idempotencyKey: text("idempotencyKey").notNull().primaryKey(),
+	applicationId: text("applicationId")
+		.notNull()
+		.references(() => applications.applicationId, { onDelete: "cascade" }),
+	organizationId: text("organizationId").notNull(),
+	expectedImage: text("expectedImage").notNull(),
+	expectedGeneration: text("expectedGeneration").notNull(),
+	expectedNonImageConfigHash: text("expectedNonImageConfigHash").notNull(),
+	attempt: integer("attempt").notNull().default(1),
+	physicalJobId: text("physicalJobId").notNull().unique(),
+	status: text("status")
+		.$type<ImmutableReleaseRequestStatus>()
+		.notNull()
+		.default("reserved"),
+	createdAt: text("createdAt")
+		.notNull()
+		.$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt")
+		.notNull()
+		.$defaultFn(() => new Date().toISOString()),
 });
 
 export const applicationsRelations = relations(
@@ -522,6 +556,19 @@ export const apiPrepareImmutableImage = z.object({
 		.string()
 		.min(1)
 		.regex(/@sha256:[a-f0-9]{64}$/, "candidateImage must be digest-pinned"),
+	expectedGeneration: z.string().regex(/^[a-f0-9]{64}$/),
+	expectedNonImageConfigHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+export const apiRequestImmutableImageDeployment = z.object({
+	applicationId: z.string().min(1),
+	expectedImage: z
+		.string()
+		.min(1)
+		.regex(/@sha256:[a-f0-9]{64}$/, "expectedImage must be digest-pinned"),
+	expectedGeneration: z.string().regex(/^[a-f0-9]{64}$/),
+	expectedNonImageConfigHash: z.string().regex(/^[a-f0-9]{64}$/),
+	idempotencyKey: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 export const apiSaveGitProvider = createSchema
@@ -560,4 +607,4 @@ export const apiUpdateApplication = createSchema
 	.extend({
 		applicationId: z.string().min(1),
 	})
-	.omit({ serverId: true });
+	.omit({ serverId: true, releaseConfigRevision: true });

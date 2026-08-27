@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as adminService from "@dokploy/server/services/admin";
 import * as applicationService from "@dokploy/server/services/application";
-import { deployApplication } from "@dokploy/server/services/application";
+import {
+	deployApplication,
+	rebuildApplication,
+} from "@dokploy/server/services/application";
+import { immutableApplicationReleaseSnapshot } from "@dokploy/server/services/application-image";
 import * as deploymentService from "@dokploy/server/services/deployment";
 import * as builders from "@dokploy/server/utils/builders";
 import * as notifications from "@dokploy/server/utils/notifications/build-success";
@@ -335,6 +339,59 @@ describe("deployApplication - Command Generation Tests", () => {
 		const fullCommand = execCalls[0]?.[0];
 
 		expect(fullCommand).toContain(">> /tmp/test-deployment.log 2>&1");
+	});
+
+	it("redacts governed rebuild command output and failure details", async () => {
+		const privateDetail = "must-never-enter-governed-logs";
+		const dockerImage = `ghcr.io/example/app@sha256:${"a".repeat(64)}`;
+		const dockerApplication = createMockApplication({
+			sourceType: "docker",
+			dockerImage,
+			registryUrl: "ghcr.io",
+			command: "/app/bin/agent",
+			args: ["serve"],
+			replicas: 1,
+			ports: [],
+			mounts: [],
+			networkIds: [],
+		});
+		vi.mocked(applicationService.findApplicationById).mockResolvedValue(
+			dockerApplication as any,
+		);
+		vi.mocked(db.query.applications.findFirst).mockResolvedValue(
+			dockerApplication as any,
+		);
+		vi.mocked(builders.getBuildCommand).mockResolvedValue(
+			"docker image inspect",
+		);
+		vi.mocked(execProcess.execAsync)
+			.mockRejectedValueOnce(new Error(privateDetail))
+			.mockResolvedValueOnce({ stdout: "", stderr: "" } as any);
+		const snapshot = immutableApplicationReleaseSnapshot(dockerApplication);
+
+		await expect(
+			rebuildApplication({
+				applicationId: "test-app-id",
+				titleLog: "Governed release",
+				descriptionLog: "",
+				releaseGuard: {
+					idempotencyKey: "d".repeat(64),
+					organizationId: "org-id",
+					expectedImage: dockerImage,
+					expectedGeneration: snapshot.releaseGeneration,
+					expectedNonImageConfigHash: snapshot.nonImageConfigHash,
+				},
+			}),
+		).rejects.toThrow("Governed immutable deployment failed");
+
+		const commands = vi
+			.mocked(execProcess.execAsync)
+			.mock.calls.map(([command]) => String(command));
+		expect(commands[0]).toContain("> /dev/null 2>&1");
+		expect(commands.join("\n")).not.toContain(privateDetail);
+		expect(commands.join("\n")).not.toContain(
+			Buffer.from(privateDetail).toString("base64"),
+		);
 	});
 
 	it("acquires a second admission on a distinct deployment host", async () => {

@@ -1,7 +1,9 @@
 import {
+	claimImmutableImageDeployment,
 	deployApplication,
 	deployCompose,
 	deployPreviewApplication,
+	finishImmutableImageDeployment,
 	rebuildApplication,
 	rebuildCompose,
 	rebuildPreviewApplication,
@@ -16,8 +18,16 @@ import type { InMemoryJob } from "./in-memory-queue";
  * (in cloud) the direct background execution path.
  */
 export const processDeploymentJob = async (job: InMemoryJob) => {
+	let releaseClaimed = false;
 	try {
 		if (job.data.applicationType === "application") {
+			if (job.data.releaseGuard) {
+				releaseClaimed = await claimImmutableImageDeployment({
+					...job.data.releaseGuard,
+					applicationId: job.data.applicationId,
+				});
+				if (!releaseClaimed) return;
+			}
 			await updateApplicationStatus(job.data.applicationId, "running");
 
 			if (job.data.type === "redeploy") {
@@ -25,6 +35,7 @@ export const processDeploymentJob = async (job: InMemoryJob) => {
 					applicationId: job.data.applicationId,
 					titleLog: job.data.titleLog,
 					descriptionLog: job.data.descriptionLog,
+					releaseGuard: job.data.releaseGuard,
 				});
 			} else if (job.data.type === "deploy") {
 				await deployApplication({
@@ -32,6 +43,15 @@ export const processDeploymentJob = async (job: InMemoryJob) => {
 					titleLog: job.data.titleLog,
 					descriptionLog: job.data.descriptionLog,
 				});
+			}
+			if (job.data.releaseGuard && releaseClaimed) {
+				await finishImmutableImageDeployment(
+					{
+						...job.data.releaseGuard,
+						applicationId: job.data.applicationId,
+					},
+					"done",
+				);
 			}
 		} else if (job.data.applicationType === "compose") {
 			await updateCompose(job.data.composeId, {
@@ -72,6 +92,27 @@ export const processDeploymentJob = async (job: InMemoryJob) => {
 			}
 		}
 	} catch (error) {
-		console.log("Error", error);
+		if (job.data.applicationType === "application" && job.data.releaseGuard) {
+			console.error("Governed immutable deployment failed");
+		} else {
+			console.log("Error", error);
+		}
+		if (
+			job.data.applicationType === "application" &&
+			job.data.releaseGuard &&
+			releaseClaimed
+		) {
+			await finishImmutableImageDeployment(
+				{
+					...job.data.releaseGuard,
+					applicationId: job.data.applicationId,
+				},
+				"error",
+			);
+		}
+		if (job.data.applicationType === "application" && job.data.releaseGuard) {
+			throw new Error("Governed immutable deployment failed");
+		}
+		throw error;
 	}
 };

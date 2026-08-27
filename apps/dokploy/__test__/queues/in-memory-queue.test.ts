@@ -364,6 +364,32 @@ describe("InMemoryQueue job management", () => {
 		]);
 	});
 
+	it("deduplicates a caller-supplied idempotent job identity", async () => {
+		const queue = new InMemoryQueue({ resolveConcurrency: () => 1 });
+		const first = await queue.add(appJob("a"), {
+			jobId: "dockhand-release-fixed",
+		});
+		const duplicate = await queue.add(appJob("a"), {
+			jobId: "dockhand-release-fixed",
+		});
+
+		expect(first).toEqual({ id: "dockhand-release-fixed" });
+		expect(duplicate).toEqual({ id: "dockhand-release-fixed" });
+		expect(await queue.getJobs()).toHaveLength(1);
+	});
+
+	it("atomically deduplicates concurrent caller-supplied identities", async () => {
+		const queue = new InMemoryQueue({ resolveConcurrency: () => 1 });
+		const [first, duplicate] = await Promise.all([
+			queue.add(appJob("a"), { jobId: "dockhand-release-concurrent" }),
+			queue.add(appJob("a"), { jobId: "dockhand-release-concurrent" }),
+		]);
+
+		expect(first).toEqual({ id: "dockhand-release-concurrent" });
+		expect(duplicate).toEqual({ id: "dockhand-release-concurrent" });
+		expect(await queue.getJobs()).toHaveLength(1);
+	});
+
 	it("expires terminal job history after the configured retention", async () => {
 		let time = 0;
 		const queue = new InMemoryQueue({

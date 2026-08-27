@@ -1,4 +1,4 @@
-import { IS_CLOUD } from "@dokploy/server";
+import { acquireImmutableReleaseWorkerLease, IS_CLOUD } from "@dokploy/server";
 import {
 	execAsync,
 	execAsyncRemote,
@@ -6,6 +6,7 @@ import {
 import { resolveBuildsConcurrency } from "./concurrency";
 import { processDeploymentJob } from "./deployments-queue";
 import {
+	type InMemoryAddOptions,
 	type InMemoryJob,
 	InMemoryQueue,
 	type JobState,
@@ -24,7 +25,7 @@ interface DeploymentQueue {
 	add: (
 		name: string,
 		data: DeploymentJob,
-		opts?: Record<string, unknown>,
+		opts?: InMemoryAddOptions,
 	) => Promise<{ id: string }>;
 	getJobs: (states?: JobState[]) => Promise<InMemoryJob[]>;
 	getJob: (id: string) => Promise<InMemoryJob | null>;
@@ -53,7 +54,7 @@ const createInMemoryQueue = (): DeploymentQueue => {
 	queue.process(processDeploymentJob);
 
 	return {
-		add: (_name, data) => queue.add(data),
+		add: (_name, data, opts) => queue.add(data, opts),
 		getJobs: (states) => queue.getJobs(states),
 		getJob: (id) => queue.getJob(id),
 		close: () => queue.close(),
@@ -70,6 +71,7 @@ const createInMemoryQueue = (): DeploymentQueue => {
 // worker and the `add()` calls would land on different queue instances.
 const globalForQueue = globalThis as unknown as {
 	__dokployDeploymentQueue?: DeploymentQueue;
+	__dockhandReleaseQueueReconciled?: Promise<number>;
 };
 
 if (!globalForQueue.__dokployDeploymentQueue) {
@@ -80,8 +82,20 @@ if (!globalForQueue.__dokployDeploymentQueue) {
 
 const myQueue: DeploymentQueue = globalForQueue.__dokployDeploymentQueue;
 
-/** Start processing jobs. Called once on server startup (self-hosted). */
-export const startDeploymentWorker = () => myQueue.run();
+/** Fail closed any immutable jobs whose in-memory execution was lost. */
+export const ensureImmutableReleaseQueueReconciled = async () => {
+	if (!IS_CLOUD) {
+		globalForQueue.__dockhandReleaseQueueReconciled ??=
+			acquireImmutableReleaseWorkerLease();
+		await globalForQueue.__dockhandReleaseQueueReconciled;
+	}
+};
+
+/** Start processing jobs only after durable startup reconciliation. */
+export const startDeploymentWorker = async () => {
+	await ensureImmutableReleaseQueueReconciled();
+	await myQueue.run();
+};
 
 export const getJobsByApplicationId = async (applicationId: string) => {
 	const jobs = await myQueue.getJobs();
