@@ -221,13 +221,31 @@ test("rejects remote-server and mutable registry routing", () => {
 	}
 });
 
-test("rejects targets with caller-managed routes", () => {
-	expect(() =>
-		immutableApplicationReleaseSnapshot({
-			...application,
-			domains: [{ domainId: "route-1", host: "hostile.example" }],
-		}),
-	).toThrow("requires a target without routes");
+test("preserves route-bearing targets while changing only the image", async () => {
+	const routed = {
+		...application,
+		domains: [{ domainId: "route-1", host: "client.example" }],
+	};
+	findFirstMock.mockReset();
+	findFirstMock.mockResolvedValueOnce(routed).mockResolvedValueOnce({
+		...routed,
+		dockerImage: digestImage,
+	});
+	const before = immutableApplicationReleaseSnapshot(routed);
+
+	const result = await prepareImmutableApplicationImage({
+		applicationId: "app-1",
+		expectedOrganizationId: "org-1",
+		expectedCurrentImage: currentImage,
+		candidateImage: digestImage,
+		expectedGeneration: before.releaseGeneration,
+		expectedNonImageConfigHash: before.nonImageConfigHash,
+	});
+
+	expect(setMock).toHaveBeenCalledWith({ dockerImage: digestImage });
+	expect(result.current.nonImageConfig).toMatchObject({ domainCount: 1 });
+	expect(result.current.nonImageConfigHash).toBe(before.nonImageConfigHash);
+	expect(JSON.stringify(result)).not.toContain("client.example");
 });
 
 test("does not accept the database-managed release revision from clients", () => {

@@ -433,12 +433,6 @@ export const immutableApplicationReleaseSnapshot = (
 				"Immutable image deployment requires a local target without registry indirection",
 		});
 	}
-	if (Array.isArray(application.domains) && application.domains.length > 0) {
-		throw new TRPCError({
-			code: "BAD_REQUEST",
-			message: "Immutable image deployment requires a target without routes",
-		});
-	}
 	const nonImageConfig =
 		normalizeImmutableApplicationReleaseConfig(application);
 	const nonImageConfigHash = sha256(nonImageConfig);
