@@ -164,6 +164,45 @@ describe("static roles validate free-tier resources", () => {
 	});
 });
 
+describe("observer is release-read-only", () => {
+	it("allows the fixed-service release reads", async () => {
+		memberToReturn = mockMemberData("observer");
+		await expect(
+			checkPermission(ctx, {
+				service: ["read"],
+				deployment: ["read"],
+			}),
+		).resolves.toBeUndefined();
+	});
+
+	it("rejects mutation even when combined with an allowed read", async () => {
+		memberToReturn = mockMemberData("observer");
+		await expect(
+			checkPermission(ctx, {
+				service: ["read"],
+				deployment: ["create"],
+			}),
+		).rejects.toThrow();
+	});
+
+	it.each([
+		["envVars", "read"],
+		["envVars", "write"],
+		["environment", "read"],
+		["api", "read"],
+		["schedule", "read"],
+		["backup", "restore"],
+		["docker", "read"],
+		["server", "read"],
+		["service", "create"],
+	] as const)("rejects %s.%s", async (resource, action) => {
+		memberToReturn = mockMemberData("observer");
+		await expect(
+			checkPermission(ctx, { [resource]: [action] }),
+		).rejects.toThrow();
+	});
+});
+
 describe("legacy boolean overrides for member", () => {
 	it("member passes project.create with canCreateProjects=true", async () => {
 		memberToReturn = mockMemberData("member", { canCreateProjects: true });

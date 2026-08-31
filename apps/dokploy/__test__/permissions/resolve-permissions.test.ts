@@ -163,6 +163,22 @@ describe("free-tier resources for member", () => {
 	});
 });
 
+describe("observer permission allowlist", () => {
+	it("grants only release-safe reads", async () => {
+		memberToReturn = mockMemberData("observer");
+		const perms = await resolvePermissions(ctx);
+		const allowed = new Set(["service.read", "deployment.read"]);
+
+		for (const [resource, actions] of Object.entries(statements)) {
+			for (const action of actions) {
+				expect((perms as any)[resource][action], `${resource}.${action}`).toBe(
+					allowed.has(`${resource}.${action}`),
+				);
+			}
+		}
+	});
+});
+
 describe("free-tier resources for owner", () => {
 	it("owner gets all free-tier permissions as true", async () => {
 		memberToReturn = mockMemberData("owner");

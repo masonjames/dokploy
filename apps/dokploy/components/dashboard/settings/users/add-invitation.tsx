@@ -286,6 +286,7 @@ export const AddInvitation = () => {
 											</FormControl>
 											<SelectContent>
 												<SelectItem value="member">Member</SelectItem>
+												<SelectItem value="observer">Observer</SelectItem>
 												<SelectItem value="admin">Admin</SelectItem>
 												{customRoles?.map((role) => (
 													<SelectItem key={role.role} value={role.role}>

@@ -34,7 +34,7 @@ type ActionOf<R extends Resource> = (typeof statements)[R][number];
 interface CreateContextOptions {
 	user:
 		| (User & {
-				role: "member" | "admin" | "owner";
+				role: "member" | "observer" | "admin" | "owner";
 				ownerId: string;
 				enableEnterpriseFeatures: boolean;
 				isValidEnterpriseLicense: boolean;
@@ -94,7 +94,7 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
 			? {
 					...user,
 					email: user.email,
-					role: user.role as "owner" | "member" | "admin",
+					role: user.role as "owner" | "admin" | "member" | "observer",
 					id: user.id,
 					ownerId: user.ownerId,
 				}
@@ -158,19 +158,32 @@ export const publicProcedure = t.procedure;
  *
  * @see https://trpc.io/docs/procedures
  */
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-	if (!ctx.session || !ctx.user) {
-		throw new TRPCError({ code: "UNAUTHORIZED" });
-	}
-	return next({
-		ctx: {
-			// infers the `session` as non-nullable
-			session: ctx.session,
-			user: ctx.user,
-			// session: { ...ctx.session, user: ctx.user },
-		},
-	});
-});
+const observerQueryPaths = new Set([
+	"application.immutableReleaseSnapshot",
+	"application.runtimeStatus",
+]);
+
+export const protectedProcedure = t.procedure.use(
+	({ ctx, next, path, type }) => {
+		if (!ctx.session || !ctx.user) {
+			throw new TRPCError({ code: "UNAUTHORIZED" });
+		}
+		if (
+			ctx.user.role === "observer" &&
+			(type !== "query" || !observerQueryPaths.has(path))
+		) {
+			throw new TRPCError({ code: "FORBIDDEN" });
+		}
+		return next({
+			ctx: {
+				// infers the `session` as non-nullable
+				session: ctx.session,
+				user: ctx.user,
+				// session: { ...ctx.session, user: ctx.user },
+			},
+		});
+	},
+);
 
 export const cliProcedure = t.procedure.use(({ ctx, next }) => {
 	if (

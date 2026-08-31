@@ -204,3 +204,12 @@ export const memberRole = ac.newRole({
 	vaultProvider: ["read"],
 	dnsProvider: [],
 });
+
+/**
+ * Observer role — fixed-service release observation only.
+ * Service scoping is enforced separately by checkServicePermissionAndAccess.
+ */
+export const observerRole = ac.newRole({
+	service: ["read"],
+	deployment: ["read"],
+});
