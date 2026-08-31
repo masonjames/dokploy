@@ -358,7 +358,7 @@ export const organizationRouter = createTRPCRouter({
 			}
 
 			// If assigning a custom role, verify it exists
-			if (!["owner", "admin", "member"].includes(input.role)) {
+			if (!["owner", "admin", "member", "observer"].includes(input.role)) {
 				const customRole = await db.query.organizationRole.findFirst({
 					where: and(
 						eq(organizationRole.organizationId, orgId),
@@ -507,8 +507,8 @@ export const organizationRouter = createTRPCRouter({
 				});
 			}
 
-			// If assigning a custom role (not admin/member), verify it exists
-			if (input.role !== "admin" && input.role !== "member") {
+			// If assigning a custom role, verify it exists
+			if (!["admin", "member", "observer"].includes(input.role)) {
 				const customRole = await db.query.organizationRole.findFirst({
 					where: and(
 						eq(

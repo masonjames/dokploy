@@ -7,7 +7,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, organization, twoFactor } from "better-auth/plugins";
 import { db } from "../db";
 import * as schema from "../db/schema";
-import { ac, adminRole, memberRole, ownerRole } from "./access-control";
+import {
+	ac,
+	adminRole,
+	memberRole,
+	observerRole,
+	ownerRole,
+} from "./access-control";
 
 // CLI-only config for `@better-auth/cli generate` — must mirror the plugin set
 // in auth.ts. Never import this from runtime code.
@@ -37,7 +43,12 @@ export const auth = betterAuth({
 		passkey(),
 		organization({
 			ac,
-			roles: { owner: ownerRole, admin: adminRole, member: memberRole },
+			roles: {
+				owner: ownerRole,
+				admin: adminRole,
+				member: memberRole,
+				observer: observerRole,
+			},
 			dynamicAccessControl: {
 				enabled: true,
 				maximumRolesPerOrganization: 10,

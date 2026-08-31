@@ -8,6 +8,7 @@ import {
 	adminRole,
 	enterpriseOnlyResources,
 	memberRole,
+	observerRole,
 	ownerRole,
 	statements,
 } from "../lib/access-control";
@@ -34,6 +35,7 @@ const staticRoles: Record<string, ReturnType<typeof ac.newRole>> = {
 	owner: ownerRole,
 	admin: adminRole,
 	member: memberRole,
+	observer: observerRole,
 };
 
 const resolveRole = async (

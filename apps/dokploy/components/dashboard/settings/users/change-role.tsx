@@ -129,6 +129,7 @@ export const ChangeRole = ({ memberId, currentRole, userEmail }: Props) => {
 										<SelectContent>
 											<SelectItem value="admin">Admin</SelectItem>
 											<SelectItem value="member">Member</SelectItem>
+											<SelectItem value="observer">Observer</SelectItem>
 											{customRoles?.map((customRole) => (
 												<SelectItem
 													key={customRole.role}
@@ -144,6 +145,8 @@ export const ChangeRole = ({ memberId, currentRole, userEmail }: Props) => {
 										<br />
 										<strong>Member:</strong> Limited permissions, can be
 										customized.
+										<br />
+										<strong>Observer:</strong> Fixed-service release reads only.
 										{customRoles && customRoles.length > 0 && (
 											<>
 												<br />

@@ -29,7 +29,13 @@ import {
 	sendVerificationEmail,
 } from "../verification/send-verification-email";
 import { getPublicIpWithFallback } from "../wss/utils";
-import { ac, adminRole, memberRole, ownerRole } from "./access-control";
+import {
+	ac,
+	adminRole,
+	memberRole,
+	observerRole,
+	ownerRole,
+} from "./access-control";
 import { betterAuthSecret } from "./auth-secret";
 
 const resolveTrustedOrigins = async () => {
@@ -466,6 +472,7 @@ const createBetterAuth = () =>
 					owner: ownerRole,
 					admin: adminRole,
 					member: memberRole,
+					observer: observerRole,
 				},
 				dynamicAccessControl: {
 					enabled: true,
