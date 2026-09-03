@@ -6,7 +6,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildRedis } from "@dokploy/server/utils/databases/redis";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	pullImageUnderBuildAdmission,
+	waitForSwarmServiceConvergence,
+} from "@dokploy/server/utils/docker/utils";
 import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
@@ -120,6 +123,7 @@ export const deployRedis = async (
 				context.assertLockHeld();
 			},
 		);
+		await waitForSwarmServiceConvergence(redis.appName, redis.serverId);
 		await updateRedisById(redisId, {
 			applicationStatus: "done",
 		});

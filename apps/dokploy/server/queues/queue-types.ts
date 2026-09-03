@@ -22,6 +22,7 @@ type DeployJob =
 			type: "deploy" | "redeploy";
 			applicationType: "compose";
 			serverId?: string;
+			freshVolumes?: boolean;
 	  }
 	| {
 			applicationId: string;

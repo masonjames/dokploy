@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import json
 import re
 
 
@@ -7,6 +8,45 @@ ROOT = Path(__file__).resolve().parents[1]
 dockerfile = (ROOT / "Dockerfile").read_text()
 workflow = (ROOT / ".github/workflows/mason-immutable-release.yml").read_text()
 caddy_setup = (ROOT / "packages/server/src/setup/caddy-setup.ts").read_text()
+package = json.loads((ROOT / "apps/dokploy/package.json").read_text())
+journal = json.loads(
+    (ROOT / "apps/dokploy/drizzle/meta/_journal.json").read_text()
+)["entries"]
+upstream_migration = (
+    ROOT / "apps/dokploy/drizzle/0190_upstream_v0305.sql"
+).read_text()
+previous_snapshot = json.loads(
+    (ROOT / "apps/dokploy/drizzle/meta/0189_snapshot.json").read_text()
+)
+current_snapshot = json.loads(
+    (ROOT / "apps/dokploy/drizzle/meta/0190_snapshot.json").read_text()
+)
+
+assert package["version"] == "v0.30.5"
+assert [entry["tag"] for entry in journal[-5:]] == [
+    "0186_heavy_mathemanic",
+    "0187_grey_domino",
+    "0188_crazy_lionheart",
+    "0189_dockhand_image_only_revision",
+    "0190_upstream_v0305",
+]
+assert [entry["when"] for entry in journal[-5:]] == sorted(
+    entry["when"] for entry in journal[-5:]
+)
+for statement in (
+    'ADD VALUE \'porkbun\'',
+    'ADD VALUE \'phase\'',
+    'ADD COLUMN "dockerId"',
+    'ADD COLUMN "onboardingCompletedAt"',
+    'UPDATE "organization_role"',
+    'UPDATE "user" SET "onboardingCompletedAt"',
+):
+    assert statement in upstream_migration
+assert current_snapshot["prevId"] == previous_snapshot["id"]
+assert "public.immutableReleaseRequest" in current_snapshot["tables"]
+assert "releaseConfigRevision" in current_snapshot["tables"]["public.application"]["columns"]
+assert "dockerId" in current_snapshot["tables"]["public.network"]["columns"]
+assert "onboardingCompletedAt" in current_snapshot["tables"]["public.user"]["columns"]
 
 assert "ghcr.io/masonjames/dokploy" in workflow
 assert "type=raw,value=latest" not in workflow

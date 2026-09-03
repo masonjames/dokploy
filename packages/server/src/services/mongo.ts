@@ -8,7 +8,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildMongo } from "@dokploy/server/utils/databases/mongo";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	pullImageUnderBuildAdmission,
+	waitForSwarmServiceConvergence,
+} from "@dokploy/server/utils/docker/utils";
 import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
@@ -170,6 +173,7 @@ export const deployMongo = async (
 				context.assertLockHeld();
 			},
 		);
+		await waitForSwarmServiceConvergence(mongo.appName, mongo.serverId);
 		await updateMongoById(mongoId, {
 			applicationStatus: "done",
 		});

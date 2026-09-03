@@ -1331,6 +1331,13 @@
       "when": 1787803668308,
       "tag": "0189_dockhand_image_only_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1788470974739,
+      "tag": "0190_upstream_v0305",
+      "breakpoints": true
     }
   ]
 }

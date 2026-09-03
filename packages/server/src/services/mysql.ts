@@ -7,7 +7,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildMysql } from "@dokploy/server/utils/databases/mysql";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	pullImageUnderBuildAdmission,
+	waitForSwarmServiceConvergence,
+} from "@dokploy/server/utils/docker/utils";
 import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
@@ -153,6 +156,7 @@ export const deployMySql = async (
 				context.assertLockHeld();
 			},
 		);
+		await waitForSwarmServiceConvergence(mysql.appName, mysql.serverId);
 		await updateMySqlById(mysqlId, {
 			applicationStatus: "done",
 		});
