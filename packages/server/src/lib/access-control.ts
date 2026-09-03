@@ -1,5 +1,13 @@
 import { createAccessControl } from "better-auth/plugins/access";
 
+export const directApiKeyPaths = [
+	"/api-key/create",
+	"/api-key/delete",
+	"/api-key/get",
+	"/api-key/list",
+	"/api-key/update",
+] as const;
+
 /**
  * Dokploy Access Control Statements
  *

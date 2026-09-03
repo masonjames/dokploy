@@ -32,6 +32,7 @@ import { getPublicIpWithFallback } from "../wss/utils";
 import {
 	ac,
 	adminRole,
+	directApiKeyPaths,
 	memberRole,
 	observerRole,
 	ownerRole,
@@ -76,6 +77,7 @@ const createBetterAuth = () =>
 			schema: schema,
 		}),
 		disabledPaths: [
+			...directApiKeyPaths,
 			"/sso/register",
 			"/organization/create",
 			"/organization/update",
