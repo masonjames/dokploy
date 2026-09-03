@@ -7,7 +7,10 @@ import {
 } from "@dokploy/server/db/schema";
 import { generatePassword } from "@dokploy/server/templates";
 import { buildPostgres } from "@dokploy/server/utils/databases/postgres";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	pullImageUnderBuildAdmission,
+	waitForSwarmServiceConvergence,
+} from "@dokploy/server/utils/docker/utils";
 import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { TRPCError } from "@trpc/server";
 import { eq, getTableColumns } from "drizzle-orm";
@@ -165,6 +168,8 @@ export const deployPostgres = async (
 				context.assertLockHeld();
 			},
 		);
+
+		await waitForSwarmServiceConvergence(postgres.appName, postgres.serverId);
 
 		await updatePostgresById(postgresId, {
 			applicationStatus: "done",

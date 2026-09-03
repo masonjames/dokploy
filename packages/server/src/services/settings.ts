@@ -975,7 +975,7 @@ export const reconnectServicesToWebServer = async (
 		),
 	});
 
-	if (!composeResult) {
+	if (composeResult.length === 0) {
 		return [];
 	}
 	let commands = "set -eu\n";

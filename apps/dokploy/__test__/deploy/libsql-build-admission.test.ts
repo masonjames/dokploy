@@ -55,6 +55,9 @@ vi.mock("@dokploy/server/utils/docker/utils", () => ({
 			context?.assertLockHeld();
 		},
 	),
+	waitForSwarmServiceConvergence: vi.fn(async () => {
+		state.events.push("convergence");
+	}),
 }));
 
 vi.mock("@dokploy/server/utils/process/build-admission", () => ({
@@ -100,7 +103,10 @@ vi.mock("drizzle-orm", () => ({
 
 import { db } from "@dokploy/server/db";
 import { deployLibsql } from "@dokploy/server/services/libsql";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
+import {
+	pullImageUnderBuildAdmission,
+	waitForSwarmServiceConvergence,
+} from "@dokploy/server/utils/docker/utils";
 import { withHostBuildAdmission } from "@dokploy/server/utils/process/build-admission";
 import { getRemoteDocker } from "@dokploy/server/utils/servers/remote-docker";
 
@@ -188,6 +194,10 @@ describe("LibSQL host build admission", () => {
 				serverId: null,
 			}),
 		);
+		expect(waitForSwarmServiceConvergence).toHaveBeenCalledWith(
+			fixture.appName,
+			fixture.serverId,
+		);
 		expect(state.events).toEqual([
 			"admission-start",
 			"pull",
@@ -195,6 +205,7 @@ describe("LibSQL host build admission", () => {
 			"service-inspect",
 			"service-update",
 			"admission-release",
+			"convergence",
 		]);
 		expect(state.statuses).toEqual(["running", "done"]);
 		expect(createService).not.toHaveBeenCalled();

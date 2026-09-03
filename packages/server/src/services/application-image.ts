@@ -99,21 +99,21 @@ export const reserveImmutableImageDeployment = async (
 				})
 				.onConflictDoNothing()
 				.returning();
-			let request = inserted[0];
-			if (!request) {
-				request = await tx.query.immutableReleaseRequests.findFirst({
+			const existing =
+				inserted[0] ??
+				(await tx.query.immutableReleaseRequests.findFirst({
 					where: eq(
 						immutableReleaseRequests.idempotencyKey,
 						input.idempotencyKey,
 					),
-				});
-			}
-			if (!request) {
+				}));
+			if (!existing) {
 				throw new TRPCError({
 					code: "CONFLICT",
 					message: "Immutable release reservation could not be reconciled",
 				});
 			}
+			let request = existing;
 			assertReleaseRequestBinding(request, input);
 			if (request.status === "error" || request.status === "cancelled") {
 				const attempt = request.attempt + 1;
