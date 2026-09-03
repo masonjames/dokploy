@@ -31,12 +31,25 @@ assert re.search(
     re.MULTILINE,
 )
 assert re.search(
-    r"^COPY --from=buildpacksio/pack:0\.40\.7@sha256:[0-9a-f]{64} ",
+    r"^FROM docker:29\.7\.2-cli@sha256:[0-9a-f]{64} AS docker-cli$",
     dockerfile,
     re.MULTILINE,
 )
-assert "sh get-docker.sh --version 29.6.1" in dockerfile
-assert "ARG RAILPACK_VERSION=0.30.1" in dockerfile
+assert re.search(
+    r"^FROM golang:1\.26\.6-bookworm@sha256:[0-9a-f]{64} AS patched-tools$",
+    dockerfile,
+    re.MULTILINE,
+)
+assert "ARG X_CRYPTO_VERSION=v0.55.0" in dockerfile
+assert "ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048" in dockerfile
+assert "ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709" in dockerfile
+assert "ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690" in dockerfile
+assert "ARG COMPOSE_REVISION=870908cc8f07f5e90acdf5d34dd1b96a4fe51d16" in dockerfile
+assert "get.docker.com" not in dockerfile
+assert "rclone.org/install.sh" not in dockerfile
+assert "ARG RAILPACK_VERSION=0.39.0" in dockerfile
+for binary in ("docker-buildx", "docker-compose", "rclone", "pack"):
+    assert f"COPY --from=patched-tools /out/{binary} " in dockerfile
 assert 'org.opencontainers.image.revision="$SOURCE_REVISION"' in dockerfile
 assert dockerfile.index("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./") < dockerfile.index("pnpm install --frozen-lockfile")
 assert dockerfile.index("pnpm install --frozen-lockfile") < dockerfile.index("COPY . .")
