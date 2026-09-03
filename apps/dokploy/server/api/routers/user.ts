@@ -654,6 +654,54 @@ export const userRouter = createTRPCRouter({
 			return apiKey;
 		}),
 
+	createObserverApiKey: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().min(1),
+				name: apiKeyNameSchema,
+			}),
+		)
+		.mutation(async ({ input, ctx }) => {
+			const organizationId = ctx.session.activeOrganizationId;
+			if (!organizationId) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Active organization is required",
+				});
+			}
+
+			const targetMember = await db.query.member.findFirst({
+				where: and(
+					eq(member.userId, input.userId),
+					eq(member.organizationId, organizationId),
+				),
+			});
+			if (!targetMember) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Observer not found in the active organization",
+				});
+			}
+			if (targetMember.role !== "observer") {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "API keys can be created here only for observers",
+				});
+			}
+
+			const apiKey = await createApiKey(input.userId, {
+				name: input.name,
+				metadata: { organizationId },
+			});
+			await audit(ctx, {
+				action: "create",
+				resourceType: "user",
+				resourceId: apiKey.id,
+				resourceName: input.name,
+			});
+			return apiKey;
+		}),
+
 	checkUserOrganizations: protectedProcedure
 		.input(
 			z.object({
