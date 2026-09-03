@@ -6,6 +6,55 @@ RUN npm install -g npm@12.0.1
 RUN corepack enable
 RUN corepack prepare pnpm@10.34.5 --activate
 
+FROM docker:29.7.2-cli@sha256:3f4743208d2338c934d7b8bcfbe1bb54c0b2355c510ad5e0f31c0c4a54bd704e AS docker-cli
+
+FROM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
+ARG X_CRYPTO_VERSION=v0.55.0
+
+ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048
+RUN git clone --filter=blob:none https://github.com/rclone/rclone.git /src/rclone \
+    && git -C /src/rclone checkout "$RCLONE_REVISION" \
+    && test "$(git -C /src/rclone rev-parse HEAD)" = "$RCLONE_REVISION"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/rclone \
+    && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.0" -o /out/rclone .
+
+ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709
+RUN git clone --filter=blob:none https://github.com/buildpacks/pack.git /src/pack \
+    && git -C /src/pack checkout "$PACK_REVISION" \
+    && test "$(git -C /src/pack rev-parse HEAD)" = "$PACK_REVISION"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/pack \
+    && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/buildpacks/pack/pkg/client.Version=0.40.9" -o /out/pack .
+
+ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690
+RUN git clone --filter=blob:none https://github.com/docker/buildx.git /src/buildx \
+    && git -C /src/buildx checkout "$BUILDX_REVISION" \
+    && test "$(git -C /src/buildx rev-parse HEAD)" = "$BUILDX_REVISION"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/buildx \
+    && GOFLAGS=-mod=mod go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
+    && CGO_ENABLED=0 GOFLAGS=-mod=mod go build -trimpath -ldflags "-s -w -X github.com/docker/buildx/version.Version=v0.36.1 -X github.com/docker/buildx/version.Revision=$BUILDX_REVISION -X github.com/docker/buildx/version.Package=github.com/docker/buildx" -o /out/docker-buildx ./cmd/buildx
+
+ARG COMPOSE_REVISION=870908cc8f07f5e90acdf5d34dd1b96a4fe51d16
+RUN git clone --filter=blob:none https://github.com/docker/compose.git /src/compose \
+    && git -C /src/compose checkout "$COMPOSE_REVISION" \
+    && test "$(git -C /src/compose rev-parse HEAD)" = "$COMPOSE_REVISION"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/compose \
+    && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-w -X github.com/docker/compose/v5/internal.Version=v5.5.0" -o /out/docker-compose ./cmd
+
+RUN for binary in rclone pack docker-buildx docker-compose; do \
+      go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.55\.0'; \
+    done
+
 FROM base AS build
 WORKDIR /usr/src/app
 
@@ -64,8 +113,12 @@ COPY --from=build /prod/dokploy/node_modules ./node_modules
 RUN test -f /app/dist/caddy-migration-rollback.mjs \
   && node -r dotenv/config /app/dist/caddy-migration-rollback.mjs --help | grep -q "Usage: caddy-migration-rollback"
 
-# Install docker
-RUN curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh --version 29.6.1 && rm get-docker.sh && curl https://rclone.org/install.sh | bash
+# Install only the Docker client and its patched CLI plugins. Dokploy uses the
+# host socket and does not need a second daemon or rootless runtime in its image.
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=patched-tools /out/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+COPY --from=patched-tools /out/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY --from=patched-tools /out/rclone /usr/local/bin/rclone
 
 # Install Nixpacks and tsx
 # | VERBOSE=1 VERSION=1.21.0 bash
@@ -77,11 +130,11 @@ RUN curl -sSL https://nixpacks.com/install.sh -o install.sh \
     && pnpm install -g tsx
 
 # Install Railpack
-ARG RAILPACK_VERSION=0.30.1
+ARG RAILPACK_VERSION=0.39.0
 RUN curl -sSL https://railpack.com/install.sh | bash
 
 # Install buildpacks
-COPY --from=buildpacksio/pack:0.40.7@sha256:b3e4bb190749586d1f15a4f7de013ca7b76dea756a6919255e12281ed129c6ca /usr/local/bin/pack /usr/local/bin/pack
+COPY --from=patched-tools /out/pack /usr/local/bin/pack
 RUN /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
 
 ARG SOURCE_REVISION=unknown
