@@ -13,7 +13,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624
 ENV GOOS=linux GOARCH=amd64
 ARG X_CRYPTO_VERSION=v0.55.0
 
-ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048
+ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce
 RUN git clone --filter=blob:none https://github.com/rclone/rclone.git /src/rclone \
     && git -C /src/rclone checkout "$RCLONE_REVISION" \
     && test "$(git -C /src/rclone rev-parse HEAD)" = "$RCLONE_REVISION"
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd /src/rclone \
     && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
-    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.0" -o /out/rclone .
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.1" -o /out/rclone .
 
 ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709
 RUN git clone --filter=blob:none https://github.com/buildpacks/pack.git /src/pack \

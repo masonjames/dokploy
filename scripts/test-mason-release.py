@@ -104,7 +104,7 @@ assert re.search(
     re.MULTILINE,
 )
 assert "ARG X_CRYPTO_VERSION=v0.55.0" in dockerfile
-assert "ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048" in dockerfile
+assert "ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce" in dockerfile
 assert "ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709" in dockerfile
 assert "ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690" in dockerfile
 assert "ARG COMPOSE_REVISION=870908cc8f07f5e90acdf5d34dd1b96a4fe51d16" in dockerfile

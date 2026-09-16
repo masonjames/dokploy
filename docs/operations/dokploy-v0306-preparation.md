@@ -93,3 +93,18 @@ chosen continuous health interval. Reconcile the Swarm self-update image,
 version file, manifests and release lock only with observed acceptance.
 Production mutation requires approval for that concrete card. Historical
 native qualification and natural-soak evidence remain unchanged.
+
+## Candidate security findings
+
+The first complete local image scan found four fixable critical findings:
+Next.js `CVE-2026-75604` and `GHSA-2xp9-vwfh-vxw4`, and rclone
+`CVE-2026-88018` and `CVE-2026-88044`. Patch Next.js to 16.3.3 and rclone to
+1.75.1, with rclone source pinned to
+`687d264b689b8c49a67e2e52a8a5e0caa01c04ce`. Keep the existing crypto patch.
+The initial image remains unpublishable; rebuild and rescan the patched source.
+
+Upstream references: [Next.js advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2xp9-vwfh-vxw4)
+and [rclone changelog](https://rclone.org/changelog/#v1-75-1-2026-09-04).
+The scan also inventoried 15 unfixed critical package findings. Preserve their
+inventory and the existing policy that blocks fixable critical findings; this
+change introduces no vulnerability exception or claim of zero vulnerabilities.
