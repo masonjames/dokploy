@@ -8,7 +8,9 @@ RUN corepack prepare pnpm@10.34.5 --activate
 
 FROM docker:29.7.2-cli@sha256:3f4743208d2338c934d7b8bcfbe1bb54c0b2355c510ad5e0f31c0c4a54bd704e AS docker-cli
 
-FROM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
+# All patched tools disable CGO and target the existing Linux AMD64 release.
+ENV GOOS=linux GOARCH=amd64
 ARG X_CRYPTO_VERSION=v0.55.0
 
 ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048
@@ -51,8 +53,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-w -X github.com/docker/compose/v5/internal.Version=v5.5.0" -o /out/docker-compose ./cmd
 
-RUN for binary in rclone pack docker-buildx docker-compose; do \
+RUN set -eu; for binary in rclone pack docker-buildx docker-compose; do \
       go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.55\.0'; \
+      go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOOS=linux'; \
+      go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOARCH=amd64'; \
     done
 
 # Compile JavaScript on the builder architecture; runtime dependencies stay target-native.

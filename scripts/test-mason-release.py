@@ -99,7 +99,7 @@ assert re.search(
     re.MULTILINE,
 )
 assert re.search(
-    r"^FROM golang:1\.26\.6-bookworm@sha256:[0-9a-f]{64} AS patched-tools$",
+    r"^FROM --platform=\$BUILDPLATFORM golang:1\.26\.6-bookworm@sha256:[0-9a-f]{64} AS patched-tools$",
     dockerfile,
     re.MULTILINE,
 )

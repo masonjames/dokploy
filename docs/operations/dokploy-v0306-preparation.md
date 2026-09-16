@@ -73,6 +73,9 @@ The Dockerfile now compiles JavaScript on the builder architecture, then install
 and packages native dependencies on the AMD64 target stage. Final runtime
 dependencies come from that target stage. The existing release contract checks
 this distinction. No production image acceptance is implied by a local build.
+The patched Go tools also compile on the builder architecture, using their
+existing `CGO_ENABLED=0` and explicit Linux AMD64 target. The image build verifies
+each binary's embedded target metadata as well as its patched crypto version.
 
 ## Remaining release gates
 
