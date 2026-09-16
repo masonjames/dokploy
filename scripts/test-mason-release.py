@@ -69,6 +69,9 @@ for number in range(191, 196):
     current_snapshot = snapshot
 
 assert "ghcr.io/masonjames/dokploy" in workflow
+assert not re.search(r"^  (pull_request|push):", workflow, re.MULTILINE)
+assert "publish_image:" in workflow and "default: false" in workflow
+assert "inputs.publish_image == true && github.ref == 'refs/heads/mj/prod-caddy'" in workflow
 assert "type=raw,value=latest" not in workflow
 assert "ghcr.io/masonjames/dokploy:latest" not in workflow
 assert "provenance: mode=max" in workflow

@@ -53,6 +53,27 @@ requires authenticated acceptance before any release closeout.
   After Mason said "proceed", the same read-only check succeeded. Dockhand also
   still matched its accepted H5 image and service version `12115319`.
 
+## Local build default
+
+The existing Mason release workflow is now a manual fallback. Verification is
+its default; image publication requires an explicit input on `mj/prod-caddy`.
+Source publication and merges do not automatically run hosted compute.
+
+Use platform-infra's pinned `ops/scripts/run-dagger-platform-check.sh` wrapper
+and its existing Dagger `core host directory ... docker-build` interface with
+`--platform linux/amd64`. Export the exact Git commit into a clean context and
+copy `apps/dokploy/.env.production.example` to both `.env.production` and
+`apps/dokploy/.env.production`, as the existing release workflow does. Those
+tracked defaults contain only the port and production mode. Pass the full
+40-character commit as `SOURCE_REVISION` and the local builder architecture as
+`BUILDPLATFORM`; retain the OCI export and scan results separately.
+
+An emulated AMD64 Next.js build on the ARM Mac failed with a segmentation fault.
+The Dockerfile now compiles JavaScript on the builder architecture, then installs
+and packages native dependencies on the AMD64 target stage. Final runtime
+dependencies come from that target stage. The existing release contract checks
+this distinction. No production image acceptance is implied by a local build.
+
 ## Remaining release gates
 
 Use platform-infra's existing operator bridge and attended Dokploy release

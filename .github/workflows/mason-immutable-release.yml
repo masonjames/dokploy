@@ -1,11 +1,12 @@
 name: Mason immutable Dokploy release
 
 on:
-  pull_request:
-    branches: [mj/prod-caddy]
-  push:
-    branches: [mj/prod-caddy]
   workflow_dispatch:
+    inputs:
+      publish_image:
+        description: Publish an immutable image after verification
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -75,7 +76,7 @@ jobs:
 
   build:
     name: Build, attest, and scan immutable image
-    if: github.event_name != 'pull_request'
+    if: inputs.publish_image == true && github.ref == 'refs/heads/mj/prod-caddy'
     needs: verify
     runs-on: ubuntu-latest
     permissions:
