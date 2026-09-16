@@ -22,17 +22,20 @@ current_snapshot = json.loads(
     (ROOT / "apps/dokploy/drizzle/meta/0190_snapshot.json").read_text()
 )
 
-assert package["version"] == "v0.30.5"
-assert [entry["tag"] for entry in journal[-5:]] == [
+assert package["version"] == "v0.30.6"
+assert [entry["tag"] for entry in journal[-10:]] == [
     "0186_heavy_mathemanic",
     "0187_grey_domino",
     "0188_crazy_lionheart",
     "0189_dockhand_image_only_revision",
     "0190_upstream_v0305",
+    "0191_cool_christian_walker",
+    "0192_light_lake",
+    "0193_chemical_the_liberteens",
+    "0194_acoustic_prima",
+    "0195_classy_whirlwind",
 ]
-assert [entry["when"] for entry in journal[-5:]] == sorted(
-    entry["when"] for entry in journal[-5:]
-)
+assert all(a["when"] < b["when"] for a, b in zip(journal[-10:], journal[-9:]))
 for statement in (
     'ADD VALUE \'porkbun\'',
     'ADD VALUE \'phase\'',
@@ -48,7 +51,27 @@ assert "releaseConfigRevision" in current_snapshot["tables"]["public.application
 assert "dockerId" in current_snapshot["tables"]["public.network"]["columns"]
 assert "onboardingCompletedAt" in current_snapshot["tables"]["public.user"]["columns"]
 
+# Drizzle skips migrations older than the installed timestamp; preserve the fork chain.
+for number in range(191, 196):
+    snapshot = json.loads(
+        (ROOT / f"apps/dokploy/drizzle/meta/{number:04}_snapshot.json").read_text()
+    )
+    assert snapshot["prevId"] == current_snapshot["id"]
+    assert snapshot["tables"]["public.immutableReleaseRequest"] == current_snapshot["tables"]["public.immutableReleaseRequest"]
+    for table, columns in {
+        "public.application": ("releaseConfigRevision",),
+        "public.server": ("webServerProvider", "caddyTrustedProxyConfig"),
+        "public.webServerSettings": ("webServerProvider", "caddyTrustedProxyConfig", "requestLogsEnabled"),
+    }.items():
+        for column in columns:
+            assert snapshot["tables"][table]["columns"][column] == current_snapshot["tables"][table]["columns"][column]
+    assert snapshot["enums"]["public.webServerProvider"] == current_snapshot["enums"]["public.webServerProvider"]
+    current_snapshot = snapshot
+
 assert "ghcr.io/masonjames/dokploy" in workflow
+assert not re.search(r"^  (pull_request|push):", workflow, re.MULTILINE)
+assert "publish_image:" in workflow and "default: false" in workflow
+assert "inputs.publish_image == true && github.ref == 'refs/heads/mj/prod-caddy'" in workflow
 assert "type=raw,value=latest" not in workflow
 assert "ghcr.io/masonjames/dokploy:latest" not in workflow
 assert "provenance: mode=max" in workflow
@@ -76,12 +99,12 @@ assert re.search(
     re.MULTILINE,
 )
 assert re.search(
-    r"^FROM golang:1\.26\.6-bookworm@sha256:[0-9a-f]{64} AS patched-tools$",
+    r"^FROM --platform=\$BUILDPLATFORM golang:1\.26\.6-bookworm@sha256:[0-9a-f]{64} AS patched-tools$",
     dockerfile,
     re.MULTILINE,
 )
 assert "ARG X_CRYPTO_VERSION=v0.55.0" in dockerfile
-assert "ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048" in dockerfile
+assert "ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce" in dockerfile
 assert "ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709" in dockerfile
 assert "ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690" in dockerfile
 assert "ARG COMPOSE_REVISION=870908cc8f07f5e90acdf5d34dd1b96a4fe51d16" in dockerfile
@@ -93,6 +116,12 @@ for binary in ("docker-buildx", "docker-compose", "rclone", "pack"):
 assert 'org.opencontainers.image.revision="$SOURCE_REVISION"' in dockerfile
 assert dockerfile.index("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./") < dockerfile.index("pnpm install --frozen-lockfile")
 assert dockerfile.index("pnpm install --frozen-lockfile") < dockerfile.index("COPY . .")
+assert "FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:" in dockerfile
+package_stage = dockerfile.split("FROM base AS package\n", 1)[1].split("FROM base AS dokploy", 1)[0]
+assert "pnpm install --frozen-lockfile" in package_stage
+assert "COPY --from=build /usr/src/app/packages/server/dist" in package_stage
+assert "COPY --from=package /prod/dokploy/node_modules ./node_modules" in dockerfile
+assert "COPY --from=build /prod/dokploy/node_modules" not in dockerfile
 
 for match in re.finditer(r"uses:\s+[^\s@]+@([^\s#]+)", workflow):
     ref = match.group(1)

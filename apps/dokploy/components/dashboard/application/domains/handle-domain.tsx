@@ -161,7 +161,7 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 			domainId,
 		},
 		{
-			enabled: !!domainId,
+			enabled: isOpen && !!domainId,
 		},
 	);
 
@@ -172,7 +172,7 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 						applicationId: id,
 					},
 					{
-						enabled: !!id,
+						enabled: isOpen && !!id,
 					},
 				)
 			: api.compose.one.useQuery(
@@ -180,7 +180,7 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 						composeId: id,
 					},
 					{
-						enabled: !!id,
+						enabled: isOpen && !!id,
 					},
 				);
 
@@ -208,9 +208,14 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 	);
 
 	const { data: canGenerateTraefikMeDomains } =
-		api.domain.canGenerateTraefikMeDomains.useQuery({
-			serverId: application?.serverId || "",
-		});
+		api.domain.canGenerateTraefikMeDomains.useQuery(
+			{
+				serverId: application?.serverId || "",
+			},
+			{
+				enabled: isOpen,
+			},
+		);
 
 	const {
 		data: services,
@@ -225,7 +230,7 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 		{
 			retry: false,
 			refetchOnWindowFocus: false,
-			enabled: type === "compose" && !!id,
+			enabled: isOpen && type === "compose" && !!id,
 		},
 	);
 

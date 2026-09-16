@@ -8,10 +8,12 @@ RUN corepack prepare pnpm@10.34.5 --activate
 
 FROM docker:29.7.2-cli@sha256:3f4743208d2338c934d7b8bcfbe1bb54c0b2355c510ad5e0f31c0c4a54bd704e AS docker-cli
 
-FROM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
+# All patched tools disable CGO and target the existing Linux AMD64 release.
+ENV GOOS=linux GOARCH=amd64
 ARG X_CRYPTO_VERSION=v0.55.0
 
-ARG RCLONE_REVISION=9ee9d0a0cafd5e5fe3b271d2280b090ab6e64048
+ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce
 RUN git clone --filter=blob:none https://github.com/rclone/rclone.git /src/rclone \
     && git -C /src/rclone checkout "$RCLONE_REVISION" \
     && test "$(git -C /src/rclone rev-parse HEAD)" = "$RCLONE_REVISION"
@@ -19,7 +21,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd /src/rclone \
     && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
-    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.0" -o /out/rclone .
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.1" -o /out/rclone .
 
 ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709
 RUN git clone --filter=blob:none https://github.com/buildpacks/pack.git /src/pack \
@@ -51,11 +53,17 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-w -X github.com/docker/compose/v5/internal.Version=v5.5.0" -o /out/docker-compose ./cmd
 
-RUN for binary in rclone pack docker-buildx docker-compose; do \
+RUN set -eu; for binary in rclone pack docker-buildx docker-compose; do \
       go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.55\.0'; \
+      go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOOS=linux'; \
+      go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOARCH=amd64'; \
     done
 
-FROM base AS build
+# Compile JavaScript on the builder architecture; runtime dependencies stay target-native.
+FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN npm install -g npm@12.0.1 && corepack enable && corepack prepare pnpm@10.34.5 --activate
 WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y python3 make g++ git python3-pip pkg-config libsecret-1-dev && rm -rf /var/lib/apt/lists/*
@@ -78,6 +86,22 @@ RUN pnpm --filter=@dokploy/server build
 RUN pnpm --filter=./apps/dokploy run build
 RUN test -f /usr/src/app/apps/dokploy/dist/caddy-migration-rollback.mjs
 
+# Install native add-ons for the runtime architecture before packaging the built app.
+FROM base AS package
+WORKDIR /usr/src/app
+RUN apt-get update && apt-get install -y python3 make g++ git python3-pip pkg-config libsecret-1-dev && rm -rf /var/lib/apt/lists/*
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/dokploy/package.json ./apps/dokploy/package.json
+COPY apps/schedules/package.json ./apps/schedules/package.json
+COPY packages/server/package.json ./packages/server/package.json
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+COPY --from=build /usr/src/app/packages/server/dist ./packages/server/dist
+COPY --from=build /usr/src/app/packages/server/package.json ./packages/server/package.json
+COPY --from=build /usr/src/app/apps/dokploy/.next ./apps/dokploy/.next
+COPY --from=build /usr/src/app/apps/dokploy/dist ./apps/dokploy/dist
+ENV NODE_ENV=production
 RUN pnpm --filter=./apps/dokploy --prod deploy --legacy /prod/dokploy
 
 RUN cp -R /usr/src/app/apps/dokploy/.next /prod/dokploy/.next
@@ -101,15 +125,15 @@ COPY apps/dokploy/docker/build-admission/verify-builder-env-transport /usr/local
 RUN chmod 0755 /usr/local/bin/dokploy-host-capacity-gate /usr/local/libexec/dokploy-build-admission/df /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
 
 # Copy only the necessary files
-COPY --from=build /prod/dokploy/.next ./.next
-COPY --from=build /prod/dokploy/dist ./dist
-COPY --from=build /prod/dokploy/next.config.mjs ./next.config.mjs
-COPY --from=build /prod/dokploy/public ./public
-COPY --from=build /prod/dokploy/package.json ./package.json
-COPY --from=build /prod/dokploy/drizzle ./drizzle
+COPY --from=package /prod/dokploy/.next ./.next
+COPY --from=package /prod/dokploy/dist ./dist
+COPY --from=package /prod/dokploy/next.config.mjs ./next.config.mjs
+COPY --from=package /prod/dokploy/public ./public
+COPY --from=package /prod/dokploy/package.json ./package.json
+COPY --from=package /prod/dokploy/drizzle ./drizzle
 COPY .env.production ./.env
-COPY --from=build /prod/dokploy/components.json ./components.json
-COPY --from=build /prod/dokploy/node_modules ./node_modules
+COPY --from=package /prod/dokploy/components.json ./components.json
+COPY --from=package /prod/dokploy/node_modules ./node_modules
 RUN test -f /app/dist/caddy-migration-rollback.mjs \
   && node -r dotenv/config /app/dist/caddy-migration-rollback.mjs --help | grep -q "Usage: caddy-migration-rollback"
 
