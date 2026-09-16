@@ -22,17 +22,20 @@ current_snapshot = json.loads(
     (ROOT / "apps/dokploy/drizzle/meta/0190_snapshot.json").read_text()
 )
 
-assert package["version"] == "v0.30.5"
-assert [entry["tag"] for entry in journal[-5:]] == [
+assert package["version"] == "v0.30.6"
+assert [entry["tag"] for entry in journal[-10:]] == [
     "0186_heavy_mathemanic",
     "0187_grey_domino",
     "0188_crazy_lionheart",
     "0189_dockhand_image_only_revision",
     "0190_upstream_v0305",
+    "0191_cool_christian_walker",
+    "0192_light_lake",
+    "0193_chemical_the_liberteens",
+    "0194_acoustic_prima",
+    "0195_classy_whirlwind",
 ]
-assert [entry["when"] for entry in journal[-5:]] == sorted(
-    entry["when"] for entry in journal[-5:]
-)
+assert all(a["when"] < b["when"] for a, b in zip(journal[-10:], journal[-9:]))
 for statement in (
     'ADD VALUE \'porkbun\'',
     'ADD VALUE \'phase\'',
@@ -47,6 +50,23 @@ assert "public.immutableReleaseRequest" in current_snapshot["tables"]
 assert "releaseConfigRevision" in current_snapshot["tables"]["public.application"]["columns"]
 assert "dockerId" in current_snapshot["tables"]["public.network"]["columns"]
 assert "onboardingCompletedAt" in current_snapshot["tables"]["public.user"]["columns"]
+
+# Drizzle skips migrations older than the installed timestamp; preserve the fork chain.
+for number in range(191, 196):
+    snapshot = json.loads(
+        (ROOT / f"apps/dokploy/drizzle/meta/{number:04}_snapshot.json").read_text()
+    )
+    assert snapshot["prevId"] == current_snapshot["id"]
+    assert snapshot["tables"]["public.immutableReleaseRequest"] == current_snapshot["tables"]["public.immutableReleaseRequest"]
+    for table, columns in {
+        "public.application": ("releaseConfigRevision",),
+        "public.server": ("webServerProvider", "caddyTrustedProxyConfig"),
+        "public.webServerSettings": ("webServerProvider", "caddyTrustedProxyConfig", "requestLogsEnabled"),
+    }.items():
+        for column in columns:
+            assert snapshot["tables"][table]["columns"][column] == current_snapshot["tables"][table]["columns"][column]
+    assert snapshot["enums"]["public.webServerProvider"] == current_snapshot["enums"]["public.webServerProvider"]
+    current_snapshot = snapshot
 
 assert "ghcr.io/masonjames/dokploy" in workflow
 assert "type=raw,value=latest" not in workflow

@@ -63,7 +63,7 @@ const baseSettings: WebServerSettings = {
 		docsUrl: null,
 		errorPageTitle: null,
 		errorPageDescription: null,
-		metaTitle: null,
+		ogImageUrl: null,
 		footerText: null,
 	},
 	cleanupCacheApplications: false,
