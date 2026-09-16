@@ -113,6 +113,12 @@ for binary in ("docker-buildx", "docker-compose", "rclone", "pack"):
 assert 'org.opencontainers.image.revision="$SOURCE_REVISION"' in dockerfile
 assert dockerfile.index("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./") < dockerfile.index("pnpm install --frozen-lockfile")
 assert dockerfile.index("pnpm install --frozen-lockfile") < dockerfile.index("COPY . .")
+assert "FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:" in dockerfile
+package_stage = dockerfile.split("FROM base AS package\n", 1)[1].split("FROM base AS dokploy", 1)[0]
+assert "pnpm install --frozen-lockfile" in package_stage
+assert "COPY --from=build /usr/src/app/packages/server/dist" in package_stage
+assert "COPY --from=package /prod/dokploy/node_modules ./node_modules" in dockerfile
+assert "COPY --from=build /prod/dokploy/node_modules" not in dockerfile
 
 for match in re.finditer(r"uses:\s+[^\s@]+@([^\s#]+)", workflow):
     ref = match.group(1)

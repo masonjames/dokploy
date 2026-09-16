@@ -55,7 +55,11 @@ RUN for binary in rclone pack docker-buildx docker-compose; do \
       go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.55\.0'; \
     done
 
-FROM base AS build
+# Compile JavaScript on the builder architecture; runtime dependencies stay target-native.
+FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN npm install -g npm@12.0.1 && corepack enable && corepack prepare pnpm@10.34.5 --activate
 WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y python3 make g++ git python3-pip pkg-config libsecret-1-dev && rm -rf /var/lib/apt/lists/*
@@ -78,6 +82,22 @@ RUN pnpm --filter=@dokploy/server build
 RUN pnpm --filter=./apps/dokploy run build
 RUN test -f /usr/src/app/apps/dokploy/dist/caddy-migration-rollback.mjs
 
+# Install native add-ons for the runtime architecture before packaging the built app.
+FROM base AS package
+WORKDIR /usr/src/app
+RUN apt-get update && apt-get install -y python3 make g++ git python3-pip pkg-config libsecret-1-dev && rm -rf /var/lib/apt/lists/*
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/dokploy/package.json ./apps/dokploy/package.json
+COPY apps/schedules/package.json ./apps/schedules/package.json
+COPY packages/server/package.json ./packages/server/package.json
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+COPY --from=build /usr/src/app/packages/server/dist ./packages/server/dist
+COPY --from=build /usr/src/app/packages/server/package.json ./packages/server/package.json
+COPY --from=build /usr/src/app/apps/dokploy/.next ./apps/dokploy/.next
+COPY --from=build /usr/src/app/apps/dokploy/dist ./apps/dokploy/dist
+ENV NODE_ENV=production
 RUN pnpm --filter=./apps/dokploy --prod deploy --legacy /prod/dokploy
 
 RUN cp -R /usr/src/app/apps/dokploy/.next /prod/dokploy/.next
@@ -101,15 +121,15 @@ COPY apps/dokploy/docker/build-admission/verify-builder-env-transport /usr/local
 RUN chmod 0755 /usr/local/bin/dokploy-host-capacity-gate /usr/local/libexec/dokploy-build-admission/df /usr/local/libexec/dokploy-build-admission/verify-builder-env-transport
 
 # Copy only the necessary files
-COPY --from=build /prod/dokploy/.next ./.next
-COPY --from=build /prod/dokploy/dist ./dist
-COPY --from=build /prod/dokploy/next.config.mjs ./next.config.mjs
-COPY --from=build /prod/dokploy/public ./public
-COPY --from=build /prod/dokploy/package.json ./package.json
-COPY --from=build /prod/dokploy/drizzle ./drizzle
+COPY --from=package /prod/dokploy/.next ./.next
+COPY --from=package /prod/dokploy/dist ./dist
+COPY --from=package /prod/dokploy/next.config.mjs ./next.config.mjs
+COPY --from=package /prod/dokploy/public ./public
+COPY --from=package /prod/dokploy/package.json ./package.json
+COPY --from=package /prod/dokploy/drizzle ./drizzle
 COPY .env.production ./.env
-COPY --from=build /prod/dokploy/components.json ./components.json
-COPY --from=build /prod/dokploy/node_modules ./node_modules
+COPY --from=package /prod/dokploy/components.json ./components.json
+COPY --from=package /prod/dokploy/node_modules ./node_modules
 RUN test -f /app/dist/caddy-migration-rollback.mjs \
   && node -r dotenv/config /app/dist/caddy-migration-rollback.mjs --help | grep -q "Usage: caddy-migration-rollback"
 
