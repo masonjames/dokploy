@@ -27,7 +27,7 @@ import {
 	removeMonitoringDirectory,
 	removePreviewDeployment,
 	removeService,
-	removeTraefikConfig,
+	removeWebServerAppRoutes,
 	reserveImmutableImageDeployment,
 	resolveWebServerProvider,
 	startService,
@@ -397,7 +397,10 @@ export const applicationRouter = createTRPCRouter({
 						application.serverId,
 					),
 				async () =>
-					await removeTraefikConfig(application.appName, application.serverId),
+					await removeWebServerAppRoutes(
+						application.appName,
+						application.serverId,
+					),
 				async () =>
 					await removeService(application?.appName, application.serverId),
 			];
