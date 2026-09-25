@@ -12,9 +12,9 @@ import { generatePassword } from "../templates";
 import { removeService } from "../utils/docker/utils";
 import { removeDirectoryCode } from "../utils/filesystem/directory";
 import { authGithub } from "../utils/providers/github";
-import { removeTraefikConfig } from "../utils/traefik/application";
 import {
 	manageWebServerDomain,
+	removeWebServerAppRoutes,
 	removeWebServerDomain,
 } from "../utils/web-server/domain";
 import { findApplicationById } from "./application";
@@ -64,7 +64,10 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 				previewDeployment.domain.uniqueConfigKey,
 			);
 		} else {
-			await removeTraefikConfig(application?.appName, application?.serverId);
+			await removeWebServerAppRoutes(
+				application?.appName,
+				application?.serverId,
+			);
 		}
 
 		const cleanupOperations = [

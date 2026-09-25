@@ -66,3 +66,17 @@ describe("compose domain creation call-site contract", () => {
 		}
 	});
 });
+
+describe("service deletion route cleanup contract", () => {
+	test("application, compose and preview deletion remove provider routes", () => {
+		for (const file of [
+			"../../server/api/routers/application.ts",
+			"../../server/api/routers/compose.ts",
+			"../../../../packages/server/src/services/preview-deployment.ts",
+		]) {
+			const source = readSource(file);
+			expect(source).toContain("removeWebServerAppRoutes(");
+			expect(source).not.toContain("await removeTraefikConfig(");
+		}
+	});
+});

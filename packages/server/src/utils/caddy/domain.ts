@@ -213,3 +213,36 @@ export const removeCaddyDomain = async (
 		}
 	});
 };
+
+// Removes every Dokploy-generated fragment for an application or compose app,
+// so deleting the service does not leave routes behind in the Caddy config.
+export const removeCaddyAppRouteFragments = async (
+	appName: string,
+	serverId?: string | null,
+) => {
+	const options = { serverId: serverId || undefined };
+	const owned = (fragment: CaddyRouteFragment) =>
+		(fragment.source === "dokploy-application" &&
+			fragment.id.startsWith(`application.${appName}.`)) ||
+		(fragment.source === "dokploy-compose" &&
+			fragment.id.startsWith(`compose.${appName}.`));
+	await withCaddyConfigLock(options.serverId, async () => {
+		const previousFragments = await readCaddyRouteFragments(options);
+		const stale = previousFragments.filter(owned);
+		if (stale.length === 0) {
+			return;
+		}
+		try {
+			for (const fragment of stale) {
+				await removeCaddyRouteFragment(fragment.id, options);
+			}
+			await compileWriteAndReloadCaddyConfigSafelyLockHeld({
+				serverId: options.serverId,
+				...(await getCaddyCompileSettings(options.serverId)),
+			});
+		} catch (error) {
+			await restoreCaddyRouteFragments(previousFragments, options);
+			throw error;
+		}
+	});
+};

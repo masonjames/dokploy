@@ -28,6 +28,7 @@ import {
 	removeComposeDirectory,
 	removeComposeDomainsForWebServer,
 	removeDeploymentsByComposeId,
+	removeWebServerAppRoutes,
 	startCompose,
 	stopCompose,
 	updateCompose,
@@ -256,6 +257,10 @@ export const composeRouter = createTRPCRouter({
 			const cleanup = await removeCompose(composeResult, input.deleteVolumes);
 			await removeDeploymentsByComposeId(composeResult);
 			await removeComposeDirectory(
+				composeResult.appName,
+				composeResult.serverId,
+			);
+			await removeWebServerAppRoutes(
 				composeResult.appName,
 				composeResult.serverId,
 			);

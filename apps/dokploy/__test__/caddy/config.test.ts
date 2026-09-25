@@ -31,6 +31,7 @@ import {
 	normalizeCaddyTrustedProxySettings,
 	paths,
 	readCaddyRouteFragments,
+	removeCaddyAppRouteFragments,
 	removeCaddyDomain,
 	updateServerCaddy,
 	validateCaddyConfigFileWithImage,
@@ -933,4 +934,74 @@ test("restores removed fragments when Caddy domain removal reload fails", async 
 	).rejects.toThrow("validation failed");
 
 	expect(await readCaddyRouteFragments()).toEqual([existingFragment]);
+});
+
+const fragment = (
+	id: string,
+	source: CaddyRouteFragment["source"],
+): CaddyRouteFragment => ({
+	version: 1,
+	id,
+	source,
+	routes: [route({ id: `${id}-route`, source, hosts: [`${id}.example.com`] })],
+});
+
+test("removes every generated fragment owned by a deleted app and nothing else", async () => {
+	const owned = [
+		fragment("application.my-app.7", "dokploy-application"),
+		fragment("application.my-app.8", "dokploy-application"),
+		fragment("compose.my-app.9", "dokploy-compose"),
+	];
+	const kept = [
+		fragment("application.my-app-2.7", "dokploy-application"),
+		fragment("compose.other-app.3", "dokploy-compose"),
+		fragment("migration.traefik-dynamic.my-app", "traefik-dynamic-file"),
+	];
+	for (const item of [...owned, ...kept]) {
+		await writeCaddyRouteFragment(item);
+	}
+
+	await removeCaddyAppRouteFragments("my-app");
+
+	expect(
+		(await readCaddyRouteFragments()).map((item) => item.id).sort(),
+	).toEqual(kept.map((item) => item.id).sort());
+	expect(
+		execAsyncMock.mock.calls.some(([command]) =>
+			String(command).includes("caddy validate"),
+		),
+	).toBe(true);
+});
+
+test("skips the Caddy reload when a deleted app owns no fragments", async () => {
+	await writeCaddyRouteFragment(
+		fragment("application.other-app.1", "dokploy-application"),
+	);
+
+	await removeCaddyAppRouteFragments("my-app");
+
+	expect(await readCaddyRouteFragments()).toHaveLength(1);
+	expect(execAsyncMock).not.toHaveBeenCalled();
+});
+
+test("restores fragments when app route removal reload fails", async () => {
+	const existing = [
+		fragment("application.my-app.7", "dokploy-application"),
+		fragment("compose.other-app.3", "dokploy-compose"),
+	];
+	for (const item of existing) {
+		await writeCaddyRouteFragment(item);
+	}
+	execAsyncMock.mockImplementation(async (command: string) => {
+		if (command.includes("caddy validate")) {
+			throw new Error("validation failed");
+		}
+		return { stdout: "dokploy-caddy\n", stderr: "" };
+	});
+
+	await expect(removeCaddyAppRouteFragments("my-app")).rejects.toThrow(
+		"validation failed",
+	);
+
+	expect(await readCaddyRouteFragments()).toEqual(existing);
 });
