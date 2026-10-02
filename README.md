@@ -1,3 +1,5 @@
+> **This is a fork of [Dokploy](https://github.com/Dokploy/dokploy)**, maintained by Mason James on the `mj/prod-caddy` branch. It is not affiliated with, endorsed by or supported by Dokploy. Its main addition is Caddy as an optional web server, offered upstream in [Dokploy#5567](https://github.com/Dokploy/dokploy/pull/5567). What it changes, and how it is licensed, is in [FORK.md](FORK.md). For Dokploy itself, use the upstream project.
+
 <div align="center">
   <a href="https://dokploy.com">
     <img src=".github/sponsors/logo.png" alt="Dokploy - Open Source Alternative to Vercel, Heroku and Netlify." width="100%"  />
