@@ -13,7 +13,6 @@ interface Props {
 }
 
 export const ShowCaddyFile = ({ path, serverId }: Props) => {
-	// Dokploy renders the Caddyfile from the database on every change.
 	const generated = path.endsWith("/Caddyfile");
 	const { data, isLoading, refetch } = api.settings.readTraefikFile.useQuery(
 		{ path, serverId },
@@ -61,13 +60,14 @@ export const ShowCaddyFile = ({ path, serverId }: Props) => {
 						isLoading={isPending}
 						disabled={!value.trim()}
 						onClick={() =>
-							mutateAsync({ path, traefikConfig: value, serverId }).then(
-								() => {
-									toast.success("Caddy config updated");
+							mutateAsync({ path, traefikConfig: value, serverId })
+								.then(() => {
+									toast.success("Caddy config Updated");
 									refetch();
-								},
-								() => {},
-							)
+								})
+								.catch(() => {
+									toast.error("Error updating the Caddy config");
+								})
 						}
 					>
 						Update

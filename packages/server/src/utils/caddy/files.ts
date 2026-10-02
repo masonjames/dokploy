@@ -1,16 +1,16 @@
-import { writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { paths } from "@dokploy/server/constants";
 import { getWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import { TRPCError } from "@trpc/server";
 import { quote } from "shell-quote";
-import {
-	execAsync,
-	execAsyncRemote,
-	writeFileRemote,
-} from "../process/execAsync";
 import { readConfigInPath } from "../traefik/application";
-import { applyCaddy, caddySwitch, withCaddyQueue } from "./sync";
+import {
+	applyCaddy,
+	caddySwitch,
+	runOn,
+	withCaddyQueue,
+	writeOn,
+} from "./sync";
 
 // The admin's side of Caddy's folder. data/ and config/ next to it hold
 // private keys and must never be listed, read or written through the browser.
@@ -47,10 +47,10 @@ export const caddyFilePath = (file: string, serverId?: string | null) => {
 
 export const listCaddyFiles = async (serverId?: string | null) => {
 	const root = paths(!!serverId).MAIN_CADDY_PATH;
-	const command = `cd ${quote([root])} && ls -1 global/*.caddy sites/*.caddy 2>/dev/null; true`;
-	const { stdout } = await (serverId
-		? execAsyncRemote(serverId, command)
-		: execAsync(command));
+	const { stdout } = await runOn(
+		serverId,
+		`cd ${quote([root])} && ls -1 global/*.caddy sites/*.caddy 2>/dev/null; true`,
+	);
 	const names = stdout.split("\n").filter((name) => EDITABLE.test(name));
 	const file = (name: string) => ({
 		id: `${root}/${name}`,
@@ -93,19 +93,15 @@ export const saveCaddyFile = async (
 			"A switch is running on this server. Save again when it is done",
 		);
 	}
-	const write = async (text: string) => {
-		if (serverId) await writeFileRemote(serverId, target, text);
-		else writeFileSync(target, text);
-	};
 	// In the queue, so that no sync and no other save runs between the write
 	// and Caddy's answer.
 	await withCaddyQueue(serverId, async () => {
 		const previous = await readConfigInPath(target, serverId ?? undefined);
-		await write(content);
+		await writeOn(serverId, target, content);
 		try {
 			await applyCaddy(serverId, true);
 		} catch (error) {
-			await write(previous ?? "");
+			await writeOn(serverId, target, previous ?? "");
 			throw refuse(
 				`Caddy did not accept this file, so the previous version was kept. ${error instanceof Error ? error.message : String(error)}`,
 			);

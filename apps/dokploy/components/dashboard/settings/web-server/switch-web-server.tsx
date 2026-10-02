@@ -42,10 +42,7 @@ export const SwitchWebServer = ({ children, serverId, provider }: Props) => {
 	const [open, setOpen] = useState(false);
 	const [acknowledged, setAcknowledged] = useState(false);
 	const [switching, setSwitching] = useState(false);
-	const [failure, setFailure] = useState<{
-		serving: Provider;
-		message: string;
-	}>();
+	const [failure, setFailure] = useState<string>();
 	const utils = api.useUtils();
 
 	const check = api.settings.checkWebServerSwitch.useQuery(
@@ -76,16 +73,25 @@ export const SwitchWebServer = ({ children, serverId, provider }: Props) => {
 		setSwitching(true);
 		try {
 			await switchWebServer({ provider: target, serverId, acknowledged });
-			let outcome: Awaited<ReturnType<typeof pollSwitch>>;
-			do {
+			let outcome = await pollSwitch();
+			// Ten minutes: longer than a switch takes, the image pull included.
+			for (
+				let polls = 0;
+				polls < 300 && (!outcome || outcome.status === "running");
+				polls++
+			) {
 				await new Promise((resolve) => setTimeout(resolve, 2000));
 				outcome = await pollSwitch();
-			} while (!outcome || outcome.status === "running");
-			if (outcome.status === "done") {
+			}
+			if (!outcome || outcome.status === "running") {
+				toast.error(
+					"Dokploy has not reported how the switch ended. Reload the page to see which proxy serves",
+				);
+			} else if (outcome.status === "done") {
 				toast.success(outcome.message || `${names[target]} is serving`);
 				setOpen(false);
 			} else {
-				setFailure(outcome);
+				setFailure(outcome.message || `${names[outcome.serving]} is serving`);
 			}
 		} catch (error) {
 			toast.error((error as Error).message);
@@ -126,12 +132,10 @@ export const SwitchWebServer = ({ children, serverId, provider }: Props) => {
 				<div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
 					{failure && (
 						<AlertBlock type="error">
-							The switch did not complete. {names[failure.serving]} is serving.
-							{failure.message && (
-								<pre className="pt-2 font-mono text-xs whitespace-pre-wrap">
-									{failure.message}
-								</pre>
-							)}
+							The switch did not complete.
+							<pre className="pt-2 font-mono text-xs whitespace-pre-wrap">
+								{failure}
+							</pre>
 						</AlertBlock>
 					)}
 					{check.isFetching ? (
@@ -199,7 +203,6 @@ export const SwitchWebServer = ({ children, serverId, provider }: Props) => {
 
 				{switching && (
 					<AlertBlock type="info">
-						Switching.{" "}
 						{serverId ? "Applications" : "The dashboard and applications"} on
 						this server may be unreachable for a moment. If {names[target]} does
 						not start, {names[provider]} comes back on its own.

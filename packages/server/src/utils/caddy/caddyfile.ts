@@ -1,5 +1,8 @@
 import { createPrivateKey, X509Certificate } from "node:crypto";
 
+// The stock image, pinned: the renderer is tested against this version.
+export const CADDY_IMAGE = "caddy:2.11.4";
+
 export interface CaddyRoute {
 	host: string;
 	https: boolean;
@@ -14,8 +17,9 @@ export interface CaddyRoute {
 	stripPrefix: string | null;
 	addPrefix: string | null;
 	uniqueConfigKey: number;
-	// Set when the domain depends on something only Traefik can enforce. The
-	// route then answers 503 instead of being served without it.
+	// Why the domain needs Traefik, when it depends on something only Traefik
+	// can enforce. The route then answers 503 with that sentence instead of
+	// being served without it.
 	unsupported?: string;
 	upstreams: string[];
 	users: { username: string; hash: string }[];
@@ -131,11 +135,7 @@ const redirectLines = (redirect: CaddyRoute["redirects"][number]) => {
 };
 
 const routeLines = (route: CaddyRoute) => {
-	if (route.unsupported) {
-		return [
-			`respond ${quote(`${route.unsupported} is not available with Caddy`)} 503`,
-		];
-	}
+	if (route.unsupported) return [`respond ${quote(route.unsupported)} 503`];
 	if (
 		!route.upstreams.length ||
 		!route.upstreams.every((upstream) => UPSTREAM.test(upstream))
@@ -258,7 +258,8 @@ export const renderCaddyfile = ({
 	const usable = certificates.flatMap((certificate) => {
 		try {
 			const x509 = new X509Certificate(certificate.certificateData);
-			const tls = `tls ${quote(certificate.certFile)} ${quote(certificate.keyFile)}`;
+			// Caddy expands placeholders in both paths when it loads the pair.
+			const tls = `tls ${quote(escapePlaceholders(certificate.certFile))} ${quote(escapePlaceholders(certificate.keyFile))}`;
 			return x509.checkPrivateKey(createPrivateKey(certificate.privateKey))
 				? [{ x509, tls }]
 				: [];
@@ -294,7 +295,9 @@ export const renderCaddyfile = ({
 			refused.push(route);
 		}
 		if (path && !writable(path)) {
-			// The route has no place to keep, so the whole host is refused.
+			// Without a matcher the route cannot hold its place among the
+			// others, so the whole host is refused instead of letting its
+			// requests reach another route.
 			unwritable.add(`${route.https}${host}`);
 			if (!refused.includes(route)) refused.push(route);
 		}

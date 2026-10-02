@@ -98,7 +98,6 @@ const apiWebServerSwitch = z.object({
 	serverId: z.string().optional(),
 });
 
-// Caddy is for self-hosted instances, and for the organization's own servers.
 const assertCanManageWebServer = async (
 	serverId: string | undefined,
 	organizationId: string,
@@ -153,6 +152,10 @@ export const settingsRouter = createTRPCRouter({
 		.input(apiServerSchema)
 		.mutation(async ({ input, ctx }) => {
 			if ((await getWebServerProvider(input?.serverId)) === "caddy") {
+				await assertCanManageWebServer(
+					input?.serverId,
+					ctx.session.activeOrganizationId,
+				);
 				// A reload drops no connection, so Caddy's answer is waited for.
 				await syncCaddy(input?.serverId, true);
 				await audit(ctx, {
@@ -690,7 +693,8 @@ export const settingsRouter = createTRPCRouter({
 		.input(apiModifyTraefikConfig)
 		.mutation(async ({ input, ctx }) => {
 			await checkPermission(ctx, { traefikFiles: ["write"] });
-			if (isCaddyPath(input.path, input.serverId)) {
+			const caddy = isCaddyPath(input.path, input.serverId);
+			if (caddy) {
 				await assertCanManageWebServer(
 					input.serverId,
 					ctx.session.activeOrganizationId,
@@ -707,7 +711,7 @@ export const settingsRouter = createTRPCRouter({
 			await audit(ctx, {
 				action: "update",
 				resourceType: "settings",
-				resourceName: "traefik-file",
+				resourceName: caddy ? "caddy-file" : "traefik-file",
 			});
 			return true;
 		}),

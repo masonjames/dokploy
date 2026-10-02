@@ -209,11 +209,11 @@ Per-node admission and convergence proof are a separate control. The one-time
 bootstrap pull in `apps/dokploy/setup.ts` is also outside runtime admission and
 must run only under an independently approved bootstrap procedure.
 
-The Caddy provider is outside admission. Switching a server to Caddy pulls
-the pinned `caddy` image in the switch script, and the dry run before it
-starts two short-lived containers from that image, which pulls it when it is
-absent. Neither holds the host lock or runs the capacity gate. On a server
-that already runs Caddy the image is present and nothing is pulled.
+The Caddy provider is outside admission. The dry run before a switch starts
+two short-lived containers from the pinned `caddy` image, which pulls it when
+the server does not have it, and the switch script pulls it only in that
+case. Neither holds the host lock or runs the capacity gate. A server that
+has the image under that tag pulls nothing.
 
 This control never prunes images, containers, volumes, logs, networks, or
 BuildKit cache. A capacity denial is an instruction to follow the separately

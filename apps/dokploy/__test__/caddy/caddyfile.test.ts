@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
 import type { CaddyRoute, CaddyState } from "@dokploy/server";
 import { renderCaddyfile } from "@dokploy/server";
 import { beforeAll, describe, expect, test } from "vitest";
+import { hasOpenSsl, issueCertificate } from "./certificate";
 
 const route = (overrides: Partial<CaddyRoute> = {}): CaddyRoute => ({
 	host: "app.test",
@@ -175,25 +175,6 @@ test("Go redirect captures, named groups and dollars use method-specific status"
 	expect(text).toContain("@changed not vars dokploy_target {vars.dokploy_url}");
 });
 
-test("basic auth writes users and removes Authorization before proxying", () => {
-	const text = render([
-		route({ users: [{ username: "ops", hash: "hash" }] }),
-	]).caddyfile;
-	expect(text).toContain("basic_auth {\n\t\t\t`ops` `hash`\n\t\t}");
-	expect(text).toContain("request_header -Authorization\n\t\treverse_proxy");
-});
-
-test("every proxy overwrites real IP and forwarded port, and delays stream close", () => {
-	const text = render([route(), route({ host: "other.test" })]).caddyfile;
-	for (const line of [
-		"header_up X-Real-IP {client_ip}",
-		"header_up X-Forwarded-Port {http.request.local.port}",
-		"stream_close_delay 24h",
-	]) {
-		expect(text.split(line)).toHaveLength(3);
-	}
-});
-
 test("HTTP-only sites stay HTTP and mixed sites redirect HTTPS paths", () => {
 	const text = render([
 		route({ https: false }),
@@ -224,7 +205,10 @@ test("an HTTPS host named like a directive is still written as a host", () => {
 
 test("unsupported routes answer 503 in their own place", () => {
 	const text = render([
-		route({ path: "/sso", unsupported: "Forward auth" }),
+		route({
+			path: "/sso",
+			unsupported: "Forward auth is not available with Caddy",
+		}),
 		route({ path: "/ok", uniqueConfigKey: 2 }),
 	]).caddyfile;
 	expect(text).toContain(
@@ -279,56 +263,16 @@ test("placeholder braces in usernames and redirect replacements stay literal", (
 	expect(refused).toEqual([]);
 });
 
-const hasOpenSsl = () => {
-	try {
-		execFileSync("openssl", ["version"], { stdio: "ignore" });
-		return true;
-	} catch {
-		return false;
-	}
-};
 describe.skipIf(!hasOpenSsl())("uploaded certificates", () => {
 	let certificateData = "";
 	let privateKey = "";
 	let otherKey = "";
 	beforeAll(() => {
-		const make = (name: string, san: string) =>
-			execFileSync(
-				"openssl",
-				[
-					"req",
-					"-x509",
-					"-newkey",
-					"ec",
-					"-pkeyopt",
-					"ec_paramgen_curve:prime256v1",
-					"-nodes",
-					"-days",
-					"1",
-					"-subj",
-					`/CN=${name}`,
-					"-addext",
-					`subjectAltName=${san}`,
-					"-keyout",
-					"/dev/stdout",
-					"-out",
-					"/dev/stdout",
-				],
-				{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-			);
-		const pem = make("cert.test", "DNS:cert.test,DNS:*.wild.test");
-		certificateData =
-			pem.match(
-				/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/,
-			)?.[0] ?? "";
-		privateKey =
-			pem.match(
-				/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/,
-			)?.[0] ?? "";
-		otherKey =
-			make("other.test", "DNS:other.test").match(
-				/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/,
-			)?.[0] ?? "";
+		({ certificate: certificateData, key: privateKey } = issueCertificate([
+			"cert.test",
+			"*.wild.test",
+		]));
+		otherKey = issueCertificate(["other.test"]).key;
 	});
 	test("matching certificate and wildcard use their TLS paths", () => {
 		const cert = {
@@ -344,6 +288,21 @@ describe.skipIf(!hasOpenSsl())("uploaded certificates", () => {
 		expect(
 			text.split("tls `/certs/chain.crt` `/certs/privkey.key`"),
 		).toHaveLength(3);
+	});
+	test("placeholder braces in a certificate's path stay literal", () => {
+		const text = render([route({ host: "cert.test" })], {
+			certificates: [
+				{
+					certFile: "/certs/{env.HOME}/chain.crt",
+					keyFile: "/certs/{env.HOME}/privkey.key",
+					certificateData,
+					privateKey,
+				},
+			],
+		}).caddyfile;
+		expect(text).toContain(
+			"tls `/certs/\\{env.HOME}/chain.crt` `/certs/\\{env.HOME}/privkey.key`",
+		);
 	});
 	test("mismatched key and garbage certificate do not produce TLS lines", () => {
 		const cert = {

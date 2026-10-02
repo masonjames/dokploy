@@ -58,7 +58,7 @@ export const ShowCaddyActions = ({ serverId }: Props) => {
 						onClick={() =>
 							reload({ serverId })
 								.then(
-									() => toast.success("Caddy loaded its configuration"),
+									() => toast.success("Caddy Reloaded"),
 									(error: Error) => toast.error(error.message),
 								)
 								.finally(() =>

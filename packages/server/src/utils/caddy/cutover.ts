@@ -1,7 +1,7 @@
 import { createPrivateKey, X509Certificate } from "node:crypto";
 import { quote } from "shell-quote";
 
-export interface CutoverOptions {
+interface CutoverOptions {
 	image: string;
 	caddy: string;
 	traefik: string;
@@ -77,7 +77,7 @@ export const certificateBundle = (acmeJson: string, now = new Date()) => {
  * folder appears whole or not at all, and a name Caddy already holds is left
  * alone: Caddy renews its own storage, so its copy is never the stale one.
  */
-export const UNPACK_CERTIFICATES = `if [ -f certificates.import ]; then
+const UNPACK_CERTIFICATES = `if [ -f certificates.import ]; then
 	umask 077
 	# The last line has no newline, and read reports that as a failure.
 	while read -r dir crt key json || [ -n "$dir" ]; do
@@ -107,7 +107,10 @@ const HELPERS = `fail() {
 # Docker also reports a container as running while it keeps restarting it.
 running() { [ "$(docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null)" = running ]; }
 # Running since it was started by hand, without Docker having had to restart it.
-started() { [ "$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$1" 2>/dev/null)" = "running 0" ]; }`;
+started() { [ "$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$1" 2>/dev/null)" = "running 0" ]; }
+# Takes the restart policy from the proxy that stops serving. One that is gone
+# has none to give up.
+release() { ! docker inspect "$1" >/dev/null 2>&1 || docker update --restart no "$1" >/dev/null; }`;
 
 /**
  * The switch from Traefik to Caddy as one script. Plain POSIX sh, because
@@ -126,6 +129,7 @@ reload() { docker exec "$caddy" caddy reload --config /etc/caddy/Caddyfile >/dev
 ${STALE_MARKER}
 if running "$caddy" && ! running "$traefik"; then
 	reload || fail "Caddy is running but rejected its configuration"
+	release "$traefik"
 	docker update --restart always "$caddy" >/dev/null
 	echo "Caddy is already serving"
 	exit 0
@@ -137,7 +141,10 @@ mkdir -p "$dir/global" "$dir/sites" "$dir/data" "$dir/config" || fail "could not
 [ -e "$dir/sites/custom.caddy" ] || echo "# Your own sites. Dokploy never changes this file." > "$dir/sites/custom.caddy"
 trap 'rm -f "$dir/${SWITCH_MARKER}"' EXIT
 : > "$dir/${SWITCH_MARKER}"
-docker pull -q "$image" >/dev/null || fail "could not pull $image"
+# The dry run validated with the image this server has. Pulling again could
+# start another build of the same tag.
+docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null ||
+	fail "could not pull $image"
 docker rm -f "$caddy" >/dev/null 2>&1
 # Caddy would resume a config saved by an earlier run instead of the new file.
 rm -f "$dir/config/caddy/autosave.json"
@@ -185,8 +192,7 @@ trap 'restore; exit 1' HUP INT TERM
 # short, a reboot included, the Docker daemon brings back exactly one proxy.
 # A stopped container with restart=always would come back with it and fight
 # the other for the ports.
-if docker update --restart no "$traefik" >/dev/null &&
-	docker update --restart always "$caddy" >/dev/null &&
+if release "$traefik" && docker update --restart always "$caddy" >/dev/null &&
 	docker stop "$traefik" >/dev/null && docker start "$caddy" >/dev/null && ready; then
 	echo "Caddy is serving"
 else
@@ -209,6 +215,7 @@ ${HELPERS}
 
 ${STALE_MARKER}
 if running "$traefik" && ! running "$caddy"; then
+	release "$caddy"
 	docker update --restart always "$traefik" >/dev/null
 	echo "Traefik is already serving"
 	exit 0
@@ -230,18 +237,18 @@ restore() {
 }
 trap 'restore; exit 1' HUP INT TERM
 docker stop "$caddy" >/dev/null 2>&1
+# The restart policies change hands together: whatever cuts this short, a
+# reboot included, the Docker daemon never brings back both proxies.
+release "$caddy" || {
+	docker start "$caddy" >/dev/null 2>&1
+	fail "could not change the restart policy of $caddy"
+}
 if ! docker inspect "$traefik" >/dev/null 2>&1; then
-	docker update --restart no "$caddy" >/dev/null 2>&1
 	echo missing
 	exit 0
 fi
-# The restart policies change hands together: whatever cuts this short, a
-# reboot included, the Docker daemon brings back one proxy.
-docker update --restart no "$caddy" >/dev/null 2>&1
-docker update --restart always "$traefik" >/dev/null
-docker start "$traefik" >/dev/null
-sleep 2
-if started "$traefik"; then
+if docker update --restart always "$traefik" >/dev/null &&
+	docker start "$traefik" >/dev/null && sleep 2 && started "$traefik"; then
 	echo "Traefik is serving"
 else
 	docker logs --tail 20 "$traefik" >&2

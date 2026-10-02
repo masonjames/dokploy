@@ -50,8 +50,8 @@ export const getWebServerProvider = async (
 };
 
 /**
- * Record which proxy serves a server's domains. Only the switch calls this,
- * after or just before it has changed which one runs
+ * Record which proxy serves a server's domains. This changes nothing on the
+ * server: the switch does that, and records it here
  */
 export const setWebServerProvider = async (
 	provider: WebServerProvider,

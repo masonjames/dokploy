@@ -7,7 +7,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 dockerfile = (ROOT / "Dockerfile").read_text()
 workflow = (ROOT / ".github/workflows/mason-immutable-release.yml").read_text()
-caddy_sync = (ROOT / "packages/server/src/utils/caddy/sync.ts").read_text()
+caddyfile = (ROOT / "packages/server/src/utils/caddy/caddyfile.ts").read_text()
 package = json.loads((ROOT / "apps/dokploy/package.json").read_text())
 journal = json.loads(
     (ROOT / "apps/dokploy/drizzle/meta/_journal.json").read_text()
@@ -88,7 +88,7 @@ assert workflow.index("Enforce critical vulnerability threshold before publicati
 assert "image-ref: local/mason-dokploy:${{ github.sha }}" in workflow
 assert re.search(
     r'^export const CADDY_IMAGE = "caddy:\d+\.\d+\.\d+";$',
-    caddy_sync,
+    caddyfile,
     re.MULTILINE,
 )
 

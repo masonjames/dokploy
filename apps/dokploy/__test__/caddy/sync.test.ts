@@ -8,10 +8,10 @@ import {
 } from "@dokploy/server/services/web-server-settings";
 import {
 	assertCaddyAcceptsRedirect,
-	caddySwitch,
 	caddySyncError,
 	loadCaddyState,
 	parseCaddyLookup,
+	recordCaddySwitch,
 	syncCaddy,
 	withCaddyQueue,
 } from "@dokploy/server/utils/caddy/sync";
@@ -236,11 +236,19 @@ it("does not make a save wait for a running switch", async () => {
 				release = resolve;
 			}),
 	);
-	caddySwitch(null, { target: "traefik", status: "running", message: "" });
+	recordCaddySwitch(null, {
+		target: "traefik",
+		status: "running",
+		message: "",
+	});
 	// Resolves while the switch still holds the queue.
 	await syncCaddy();
 	expect(execAsync).not.toHaveBeenCalled();
-	caddySwitch(null, { target: "traefik", status: "failed", message: "" });
+	recordCaddySwitch(null, {
+		target: "traefik",
+		status: "failed",
+		message: "",
+	});
 	release();
 	await switching;
 	// The sync that was asked for runs once the switch has let go.
@@ -365,7 +373,9 @@ it("filters domains and adds the dashboard only locally", async () => {
 		https: true,
 		upstreams: [`dokploy:${process.env.PORT || 3000}`],
 	});
-	expect(local.routes[2]?.unsupported).toBe("Forward auth");
+	expect(local.routes[2]?.unsupported).toBe(
+		"Forward auth is not available with Caddy",
+	);
 	const remote = await loadCaddyState("remote");
 	expect(remote.email).toBe(local.email);
 	expect(remote.routes.map((route) => route.uniqueConfigKey)).toEqual([4]);

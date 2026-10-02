@@ -39,9 +39,8 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 			retry: 2,
 		},
 	);
-	// The entries come from the folder of the proxy this server runs.
-	const isCaddy = !!directories?.[0]?.id.includes("/caddy/");
-	const name = isCaddy ? "Caddy" : "Traefik";
+	// A Caddy server lists Caddy's own folder, which starts with the Caddyfile.
+	const isCaddy = directories?.[0]?.name === "Caddyfile";
 
 	return (
 		<div className="w-full">
@@ -50,11 +49,12 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 					<CardHeader className="">
 						<CardTitle className="text-xl flex flex-row gap-2">
 							<FileIcon className="size-6 text-muted-foreground self-center" />
-							{name} File System
+							{isCaddy ? "Caddy" : "Traefik"} File System
 						</CardTitle>
 						<CardDescription>
-							Manage all the files and directories in '/etc/dokploy/
-							{name.toLowerCase()}'.
+							{isCaddy
+								? "Your own Caddy configuration, in global/ and sites/ under '/etc/dokploy/caddy'."
+								: "Manage all the files and directories in '/etc/dokploy/traefik'."}
 						</CardDescription>
 
 						{isCaddy ? (

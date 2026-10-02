@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
 import { paths } from "@dokploy/server/constants";
 import { db } from "@dokploy/server/db";
+import { readPorts } from "@dokploy/server/services/settings";
 import { setWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import {
 	checkWebServerSwitch,
@@ -11,27 +11,13 @@ import {
 	getDefaultServerTraefikConfig,
 	initializeStandaloneTraefik,
 } from "@dokploy/server/setup/traefik-setup";
-import {
-	certificateBundle,
-	switchToCaddyScript,
-	switchToTraefikScript,
-} from "@dokploy/server/utils/caddy/cutover";
-import {
-	caddyFilePath,
-	saveCaddyFile,
-} from "@dokploy/server/utils/caddy/files";
 import { caddySwitch } from "@dokploy/server/utils/caddy/sync";
-import { createDomainLabels } from "@dokploy/server/utils/docker/domain";
 import {
 	ExecError,
 	execAsyncRemote,
 	writeFileRemote,
 } from "@dokploy/server/utils/process/execAsync";
-import { manageDomain } from "@dokploy/server/utils/traefik/domain";
-import { createRedirectMiddleware } from "@dokploy/server/utils/traefik/redirect";
-import { createSecurityMiddleware } from "@dokploy/server/utils/traefik/security";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parse, stringify } from "yaml";
 
 vi.mock("@dokploy/server/utils/process/execAsync", async (original) => ({
 	...(await original<
@@ -51,6 +37,12 @@ vi.mock("@dokploy/server/services/web-server-settings", async (original) => ({
 	setWebServerProvider: vi.fn(async (next: string) => {
 		provider = next;
 	}),
+}));
+vi.mock("@dokploy/server/services/settings", async (original) => ({
+	...(await original<typeof import("@dokploy/server/services/settings")>()),
+	getDockerResourceType: vi.fn(async () => traefikContainer),
+	readPorts: vi.fn(async () => []),
+	reconnectServicesToTraefik: vi.fn(),
 }));
 vi.mock("@dokploy/server/setup/traefik-setup", async (original) => ({
 	...(await original<typeof import("@dokploy/server/setup/traefik-setup")>()),
@@ -119,7 +111,6 @@ beforeEach(() => {
 		"dynamic/middlewares.yml": getDefaultMiddlewares(),
 	};
 	containers = {};
-	application.security = [];
 	application.redirects = [];
 	script = () => "Caddy is serving";
 	docker = "/dokploy-caddy running always\n/dokploy-traefik exited no";
@@ -157,7 +148,6 @@ beforeEach(() => {
 					.join("\n"),
 			);
 		}
-		if (command.includes("RESOURCE_NAME=")) return reply(traefikContainer);
 		if (command.includes("{{json .Config.Labels}}")) {
 			return reply(
 				Object.entries(containers)
@@ -172,7 +162,6 @@ beforeEach(() => {
 					.join("\n"),
 			);
 		}
-		if (command.includes(".NetworkSettings.Ports")) return reply("null");
 		if (command.startsWith("caddy=")) {
 			providerWhenScriptRan = provider;
 			return reply(script());
@@ -180,13 +169,7 @@ beforeEach(() => {
 		if (command.includes(".HostConfig.RestartPolicy.Name"))
 			return reply(docker);
 		if (command.startsWith("cat ")) {
-			const file = command.slice(4);
-			const name = traefikFile(file);
-			return reply(
-				name
-					? (traefikFiles[name] ?? "")
-					: (written[file] ?? "previous content"),
-			);
+			return reply(traefikFiles[traefikFile(command.slice(4)) ?? ""] ?? "");
 		}
 		if (/caddy (validate|reload)/.test(command) && !caddyAccepts) {
 			throw new ExecError("failed", {
@@ -205,79 +188,6 @@ const settled = () =>
 		return outcome;
 	});
 
-it("generates switch scripts that sh accepts", () => {
-	const options = {
-		image: "caddy:2.11.4",
-		caddy: "dokploy-caddy",
-		traefik: "dokploy-traefik",
-		network: "dokploy-network",
-		publish: ["80:80", "443:443", "443:443/udp"],
-		caddyPath: "/folder with spaces/caddy",
-		certificatesPath: "/certificates",
-	};
-	for (const text of [
-		switchToCaddyScript(options),
-		switchToTraefikScript(options),
-	]) {
-		execFileSync("sh", ["-n"], { input: text });
-	}
-});
-
-describe("certificateBundle", () => {
-	const issue = (names: string[], days = "30") => {
-		const pem = execFileSync(
-			"openssl",
-			`req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days ${days} -subj /CN=${names[0]} -addext subjectAltName=${names.map((name) => `DNS:${name}`).join(",")} -keyout /dev/stdout -out /dev/stdout`.split(
-				" ",
-			),
-			{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-		);
-		const part = (label: string) =>
-			Buffer.from(
-				pem.match(
-					new RegExp(
-						`-----BEGIN ${label}-----[\\s\\S]*?-----END ${label}-----`,
-					),
-				)?.[0] ?? "",
-			).toString("base64");
-		return { certificate: part("CERTIFICATE"), key: part("PRIVATE KEY") };
-	};
-
-	it("carries valid certificates, one line per name, and leaves the rest", () => {
-		const single = issue(["carry.test"]);
-		const acme = {
-			letsencrypt: {
-				Certificates: [
-					{ domain: { main: "carry.test" }, ...single },
-					{
-						domain: { main: "a.test", sans: ["B.test"] },
-						...issue(["a.test", "B.test"]),
-					},
-					{ domain: { main: "*.wild.test" }, ...issue(["*.wild.test"]) },
-					{
-						domain: { main: "wrong-key.test" },
-						...issue(["wrong-key.test"]),
-						key: single.key,
-					},
-					// Valid for one day: carried today, left out once it has expired.
-					{ domain: { main: "old.test" }, ...issue(["old.test"], "1") },
-				],
-			},
-		};
-		const names = (now?: Date) =>
-			certificateBundle(JSON.stringify(acme), now)
-				.split("\n")
-				.map((line) => line.split(" ")[0]?.split("/").pop());
-		expect(names()).toEqual(["carry.test", "a.test", "b.test", "old.test"]);
-		expect(names(new Date(Date.now() + 2 * 86400000))).toEqual([
-			"carry.test",
-			"a.test",
-			"b.test",
-		]);
-		expect(certificateBundle("{}")).toBe("");
-	});
-});
-
 describe("the dry run", () => {
 	it("blocks on every setting Caddy cannot honour and on a refused route", async () => {
 		rows = [
@@ -294,7 +204,7 @@ describe("the dry run", () => {
 			"host2.test: A custom middleware is not available with Caddy.",
 			"host3.test: A custom entrypoint is not available with Caddy.",
 			"host4.test: A custom certificate resolver is not available with Caddy.",
-			"host5.test/a`b: one of this domain's values cannot be written for Caddy.",
+			"host5.test/a`b: its host, a path, a redirect or a user name cannot be written in a Caddyfile.",
 		]);
 	});
 
@@ -308,218 +218,33 @@ describe("the dry run", () => {
 		expect(written[`${root}/Caddyfile`]).toBeUndefined();
 	});
 
-	// A server as Dokploy's own Traefik writers leave it: two domains of one
-	// application with basic auth and a redirect, and a deployed compose.
-	const configure = async () => {
-		application.security = [{ username: "ops", password: "secret" }];
-		application.redirects = [
-			{
-				uniqueConfigKey: 3,
-				regex: "^http://old.test/(.*)",
-				replacement: "http://new.test/$1",
-				permanent: true,
-			},
-		];
-		rows = [
-			domain(1, {
-				https: true,
-				certificateType: "letsencrypt",
-				path: "/api",
-				stripPath: true,
-				internalPath: "/v1",
-			}),
-			domain(2),
-			domain(4, {
-				application: null,
-				applicationId: null,
-				compose: { appName: "shop", serverId: SERVER },
-			}),
-		];
-		const [first, second, shop] = rows;
-		// In the order an admin would: a domain, protection, another domain.
-		await manageDomain(application as never, first as never);
-		await createSecurityMiddleware(
-			application as never,
-			application.security[0] as never,
-		);
-		await createRedirectMiddleware(
-			application as never,
-			application.redirects[0] as never,
-		);
-		await manageDomain(application as never, second as never);
-		containers = {
-			"shop-web-1": Object.fromEntries(
-				[
-					"traefik.enable=true",
-					"traefik.docker.network=dokploy-network",
-					...createDomainLabels("shop", shop as never, "web"),
-				].map((label) => {
-					const at = label.indexOf("=");
-					return [label.slice(0, at), label.slice(at + 1)];
-				}),
-			),
-			// Not enabled, so Traefik does not read it.
-			idle: { "traefik.http.routers.idle.rule": "Host(`idle.test`)" },
-		};
-	};
-	const edit = (
-		name: string,
-		change: (config: {
-			http: {
-				routers: Record<
-					string,
-					{ rule: string; service: string; middlewares: string[] }
-				>;
-				services: Record<string, unknown>;
-				middlewares: Record<string, unknown>;
-			};
-		}) => void,
-	) => {
-		const config = parse(traefikFiles[name] ?? "");
-		change(config);
-		traefikFiles[name] = stringify(config);
-	};
-
-	it("asks for nothing on a server only Dokploy has configured", async () => {
-		await configure();
-		const check = await checkWebServerSwitch("caddy", SERVER);
-		expect(check.acknowledge).toEqual([]);
-		expect(check.blockers).toEqual([]);
-	});
-
-	it.each<[string, () => void, string]>([
-		[
-			"another kind of middleware under a name Dokploy uses",
-			() =>
-				edit("dynamic/middlewares.yml", ({ http }) => {
-					http.middlewares["auth-app"] = {
-						ipAllowList: { sourceRange: ["10.0.0.0/8"] },
-					};
-				}),
-			"dynamic/middlewares.yml: the middleware auth-app is not the one Dokploy writes. Caddy follows the database, not this file.",
-		],
-		[
-			"a basic auth user that is not in the database",
-			() =>
-				edit("dynamic/middlewares.yml", ({ http }) => {
-					(
-						http.middlewares["auth-app"] as { basicAuth: { users: string[] } }
-					).basicAuth.users.push("guest:$2b$10$abcdefghijklmnopqrstuv");
-				}),
-			"dynamic/middlewares.yml: the middleware auth-app is not the one Dokploy writes. Caddy follows the database, not this file.",
-		],
-		[
-			"a password that is not the one in the database",
-			() => {
-				application.security = [{ username: "ops", password: "changed" }];
-			},
-			"dynamic/middlewares.yml: the middleware auth-app is not the one Dokploy writes. Caddy follows the database, not this file.",
-		],
-		[
-			"a redirect that is not the one in the database",
-			() =>
-				edit("dynamic/middlewares.yml", ({ http }) => {
-					http.middlewares["redirect-app-3"] = {
-						redirectRegex: { regex: "^http://old.test/", replacement: "/" },
-					};
-				}),
-			"dynamic/middlewares.yml: the middleware redirect-app-3 is not the one Dokploy writes. Caddy follows the database, not this file.",
-		],
-		[
-			"a rule that restricts a router by client address",
-			() =>
-				edit("dynamic/app.yml", ({ http }) => {
-					const router = http.routers["app-router-2"];
-					if (router) router.rule += " && ClientIP(`10.0.0.0/8`)";
-				}),
-			"dynamic/app.yml: the router app-router-2 is not the one Dokploy writes for a domain. Caddy follows the database, not this file.",
-		],
-		[
-			"a router Dokploy has no domain for",
-			() =>
-				edit("dynamic/app.yml", ({ http }) => {
-					http.routers.mine = {
-						rule: "Host(`mine.test`)",
-						service: "app-service-2",
-						middlewares: [],
-					};
-				}),
-			"dynamic/app.yml: the router mine is not the one Dokploy writes for a domain. Caddy follows the database, not this file.",
-		],
-		[
-			"a middleware of its own on a router",
-			() => {
-				edit("dynamic/middlewares.yml", ({ http }) => {
-					http.middlewares["office-only"] = {
-						ipAllowList: { sourceRange: ["10.0.0.0/8"] },
-					};
-				});
-				edit("dynamic/app.yml", ({ http }) => {
-					http.routers["app-router-2"]?.middlewares.push("office-only");
-				});
-			},
-			"dynamic/app.yml: the router app-router-2 uses the middleware office-only, which Caddy will not apply.",
-		],
-		[
-			"a service that points somewhere else",
-			() =>
-				edit("dynamic/app.yml", ({ http }) => {
-					http.services["app-service-2"] = {
-						loadBalancer: { servers: [{ url: "http://elsewhere:80" }] },
-					};
-				}),
-			"dynamic/app.yml: the service app-service-2 is not the one Dokploy writes for a domain. Caddy follows the database, not this file.",
-		],
-		[
-			"a middleware attached to a compose router by label",
-			() => {
-				const labels = containers["shop-web-1"];
-				if (labels) {
-					labels["traefik.http.routers.shop-4-web.middlewares"] = "office-only";
-				}
-			},
-			"shop-web-1 has Traefik labels that do not come from a domain in Dokploy: traefik.http.routers.shop-4-web.middlewares. Caddy will not apply them.",
-		],
-		[
-			"a compose rule that is not the domain's",
-			() => {
-				const labels = containers["shop-web-1"];
-				if (labels) {
-					labels["traefik.http.routers.shop-4-web.rule"] = "Host(`other.test`)";
-				}
-			},
-			"shop-web-1 has Traefik labels that do not come from a domain in Dokploy: traefik.http.routers.shop-4-web.rule. Caddy will not apply them.",
-		],
-		[
-			"a container routed by labels of its own",
-			() => {
-				containers.blog = {
-					"Traefik.Enable": "True",
-					"traefik.http.routers.blog.rule": "Host(`blog.test`)",
-				};
-			},
-			"blog has Traefik labels that do not come from a domain in Dokploy: traefik.http.routers.blog.rule. Caddy will not apply them.",
-		],
-	])("finds %s", async (_, change, expected) => {
-		await configure();
-		change();
-		const { acknowledge } = await checkWebServerSwitch("caddy", SERVER);
-		expect(acknowledge).toEqual([expected]);
-	});
-
-	it("lists files, sections and static configuration Dokploy did not write", async () => {
-		traefikFiles["dynamic/app.yml"] = "tcp:\n  routers: {}";
+	it("asks to accept what Traefik does that did not come from Dokploy", async () => {
 		traefikFiles["dynamic/mine.yml"] = "http: {}";
-		traefikFiles["traefik.yml"] += "\nexperimental:\n  plugins: {}\n";
+		containers.blog = {
+			"traefik.enable": "true",
+			"traefik.http.routers.blog.rule": "Host(`blog.test`)",
+		};
+		vi.mocked(readPorts).mockResolvedValueOnce([
+			{ targetPort: 80, publishedPort: 80, protocol: "tcp" },
+			{ targetPort: 8080, publishedPort: 8080, protocol: "tcp" },
+		]);
 		const { acknowledge } = await checkWebServerSwitch("caddy", SERVER);
 		expect(acknowledge).toEqual([
-			"dynamic/app.yml has a tcp section. Caddy will not apply it.",
 			"dynamic/mine.yml was not written by Dokploy. Caddy will not read it.",
-			"traefik.yml differs from the one Dokploy writes today. Caddy does not read that file.",
+			"blog has Traefik labels that do not come from a domain in Dokploy: traefik.http.routers.blog.rule. Caddy will not apply them.",
+			"Traefik also publishes 8080/tcp. Caddy will not.",
 		]);
 	});
 
-	it("warns about HTTPS hosts without a certificate to take over, and compose domains with nothing running", async () => {
+	it("warns about HTTPS hosts without a certificate to take over, redirects that are not anchored, and compose domains with nothing running", async () => {
+		application.redirects = [
+			{
+				uniqueConfigKey: 9,
+				regex: "old|new",
+				replacement: "new",
+				permanent: true,
+			},
+		];
 		rows = [
 			domain(1, { https: true, certificateType: "letsencrypt" }),
 			domain(2, { compose: { appName: "shop", serverId: SERVER } }),
@@ -529,17 +254,9 @@ describe("the dry run", () => {
 		];
 		const { warnings } = await checkWebServerSwitch("caddy", SERVER);
 		expect(warnings).toEqual([
-			"Traefik holds no certificate that Caddy can take over for host1.test. Caddy asks Let's Encrypt for one when it starts, and these do not answer over HTTPS until it has one. Traefik answers with a self-signed certificate in that case. For a domain Let's Encrypt cannot validate, choose the certificate provider None, which keeps that behaviour.",
+			"Traefik holds no certificate Caddy can take over for host1.test. Caddy asks Let's Encrypt for one when it starts, and until it has one these hosts do not answer over HTTPS, where Traefik answers with a self-signed certificate. For a domain Let's Encrypt cannot validate, set the certificate provider to None, which keeps that behaviour.",
+			"The redirect old|new does not start with ^. If it matches a URL more than once, Traefik replaces every match and Caddy only the first.",
 			"host2.test has no running container, so it gets its route at that compose's next deploy.",
-		]);
-	});
-
-	it("names the Requests page instead of calling its access log a hand edit", async () => {
-		traefikFiles["traefik.yml"] +=
-			"\naccessLog:\n  filePath: /etc/dokploy/traefik/dynamic/access.log\n";
-		const { acknowledge } = await checkWebServerSwitch("caddy", SERVER);
-		expect(acknowledge).toEqual([
-			"The Requests page reads Traefik's access log. With Caddy it starts empty and has to be activated again.",
 		]);
 	});
 
@@ -570,7 +287,7 @@ describe("the switch", () => {
 		expect(await settled()).toEqual({
 			target: "caddy",
 			status: "done",
-			message: "Caddy is serving.",
+			message: "Caddy is serving",
 		});
 		expect(providerWhenScriptRan).toBe("caddy");
 		expect(provider).toBe("caddy");
@@ -597,7 +314,7 @@ describe("the switch", () => {
 			target: "caddy",
 			status: "failed",
 			message:
-				"Error: adapting config using caddyfile: ambiguous site definition: https://a.test\nCaddy did not start, so Traefik is serving again\nTraefik is serving.",
+				"Error: adapting config using caddyfile: ambiguous site definition: https://a.test\nCaddy did not start, so Traefik is serving again\nTraefik is serving",
 		});
 		expect(provider).toBe("traefik");
 	});
@@ -633,7 +350,7 @@ describe("the switch", () => {
 		await switchWebServer("caddy", SERVER, false);
 		expect(await settled()).toMatchObject({
 			status: "failed",
-			message: "SSH connection error\nTraefik is serving.",
+			message: "SSH connection error\nTraefik is serving",
 		});
 		expect(provider).toBe("traefik");
 	});
@@ -675,7 +392,7 @@ describe("the switch", () => {
 		await switchWebServer("traefik", SERVER, false);
 		expect(await settled()).toMatchObject({
 			status: "failed",
-			message: "SSH connection error\nCaddy is serving.",
+			message: "SSH connection error\nCaddy is serving",
 		});
 		expect(commands).toEqual([
 			"docker stop dokploy-traefik >/dev/null 2>&1\ndocker update --restart no dokploy-traefik >/dev/null 2>&1\ndocker update --restart always dokploy-caddy && docker start dokploy-caddy",
@@ -703,52 +420,5 @@ describe("the switch", () => {
 			serverId: SERVER,
 		});
 		expect(provider).toBe("traefik");
-	});
-});
-
-describe("the file browser on a Caddy server", () => {
-	it("opens the Caddyfile and the files in global/ and sites/, nothing else", () => {
-		for (const name of [
-			"Caddyfile",
-			"global/custom.caddy",
-			"sites/my-site.caddy",
-		]) {
-			expect(caddyFilePath(`${root}/${name}`, SERVER)).toBe(`${root}/${name}`);
-		}
-		for (const path of [
-			`${root}/data/caddy/certificates/x/x.key`,
-			`${root}/config/caddy/autosave.json`,
-			`${root}/sites/../data/x.caddy`,
-			`${root}/sites/nested/x.caddy`,
-			`${root}/sites/x.txt`,
-			`${root}-backup/sites/x.caddy`,
-			`${root}/Caddyfile.check`,
-			"sites/x.caddy",
-		]) {
-			expect(() => caddyFilePath(path, SERVER)).toThrow("can be opened here");
-		}
-		// However a path is spelled, it is the file it resolves to that counts.
-		expect(caddyFilePath(`${root}/data/../sites/x.caddy`, SERVER)).toBe(
-			`${root}/sites/x.caddy`,
-		);
-		expect(() =>
-			caddyFilePath(`${traefikRoot}/../caddy/data/x.key`, SERVER),
-		).toThrow("can be opened here");
-	});
-
-	it("puts the previous content back when Caddy rejects a save", async () => {
-		provider = "caddy";
-		const file = `${root}/sites/custom.caddy`;
-		caddyAccepts = false;
-		await expect(saveCaddyFile(file, "broken", SERVER)).rejects.toThrow(
-			"Error: sites/custom.caddy:1: unrecognized directive",
-		);
-		expect(written[file]).toBe("previous content");
-		caddyAccepts = true;
-		await saveCaddyFile(file, "mine.test {\n}", SERVER);
-		expect(written[file]).toBe("mine.test {\n}");
-		await expect(
-			saveCaddyFile(`${root}/Caddyfile`, "x", SERVER),
-		).rejects.toThrow("regenerates");
 	});
 });

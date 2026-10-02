@@ -22,14 +22,24 @@ import {
 import { type CaddyState, renderCaddyfile } from "./caddyfile";
 
 export const CADDY_CONTAINER = "dokploy-caddy";
-// The stock image, pinned: the renderer is tested against this version.
-export const CADDY_IMAGE = "caddy:2.11.4";
 
 // Caddy's folder is mounted at /etc/caddy, so on the host this is access.log
 // in that folder.
 export const CADDY_REQUEST_LOG = "/etc/caddy/access.log";
 
-export interface WebServerSwitchOutcome {
+export const runOn = (serverId: string | null | undefined, command: string) =>
+	serverId ? execAsyncRemote(serverId, command) : execAsync(command);
+
+export const writeOn = async (
+	serverId: string | null | undefined,
+	file: string,
+	content: string,
+) => {
+	if (serverId) await writeFileRemote(serverId, file, content);
+	else writeFileSync(file, content);
+};
+
+interface WebServerSwitchOutcome {
 	target: "traefik" | "caddy";
 	status: "running" | "done" | "failed";
 	message: string;
@@ -71,12 +81,14 @@ const queueKey = (serverId?: string | null) => serverId ?? "dokploy";
  * How the last provider switch on a server went, for as long as this process
  * remembers it.
  */
-export const caddySwitch = (
-	serverId?: string | null,
-	outcome?: WebServerSwitchOutcome,
+export const caddySwitch = (serverId?: string | null) =>
+	state.switches.get(queueKey(serverId));
+
+export const recordCaddySwitch = (
+	serverId: string | null | undefined,
+	outcome: WebServerSwitchOutcome,
 ) => {
-	if (outcome) state.switches.set(queueKey(serverId), outcome);
-	return state.switches.get(queueKey(serverId));
+	state.switches.set(queueKey(serverId), outcome);
 };
 
 /**
@@ -114,7 +126,7 @@ export const withCaddyQueue = <T>(
  * `caddySyncError` reports that until a sync succeeds.
  */
 export const syncCaddy = async (serverId?: string | null, force = false) => {
-	if (IS_CLOUD || (await getWebServerProvider(serverId)) !== "caddy") return;
+	if ((await getWebServerProvider(serverId)) !== "caddy") return;
 	const key = queueKey(serverId);
 	if (force) state.forced.add(key);
 	let waiting = state.waiting.get(key);
@@ -180,7 +192,7 @@ const routerLabelKeys = (labels: string) =>
  * Traefik router labels, and which uploaded certificate folders exist. It
  * prints names and label keys only, so the output stays small.
  */
-export const caddyLookupCommand = (certificatesPath: string) => `set -e
+const caddyLookupCommand = (certificatesPath: string) => `set -e
 containers=$(docker ps -q)
 # A container can stop between the two commands. The others are still reported.
 [ -z "$containers" ] || docker inspect -f '{{.Name}}${routerLabelKeys(".Config.Labels")}' $containers 2>/dev/null || true
@@ -211,11 +223,11 @@ export const parseCaddyLookup = (output: string) => {
 	return { targets, folders };
 };
 
-export const lookupCaddy = async (serverId?: string | null) => {
-	const command = caddyLookupCommand(paths(!!serverId).CERTIFICATES_PATH);
-	const { stdout } = await (serverId
-		? execAsyncRemote(serverId, command)
-		: execAsync(command));
+const lookupCaddy = async (serverId?: string | null) => {
+	const { stdout } = await runOn(
+		serverId,
+		caddyLookupCommand(paths(!!serverId).CERTIFICATES_PATH),
+	);
 	return parseCaddyLookup(stdout);
 };
 
@@ -312,8 +324,9 @@ export const loadCaddyState = async (
 	for (const domain of domains) {
 		const { path, internalPath, uniqueConfigKey } = domain;
 		// A compose domain is served by whatever carries the router label
-		// Dokploy injected at deploy. On nothing yet, it has no route, as with
-		// Traefik before a deploy.
+		// Dokploy injected at deploy. On nothing yet, it has no route, and
+		// after its service changes it stays where it is until the next
+		// deploy, both as with Traefik.
 		const names = domain.compose
 			? (targets.get(
 					`traefik.http.routers.${domain.compose.appName}-${uniqueConfigKey}-web.rule`,
@@ -422,13 +435,8 @@ export const applyCaddy = async (
 	// timeout runs inside the container, where it always exists.
 	const reload = `docker exec ${CADDY_CONTAINER} timeout 60 caddy reload --config /etc/caddy/Caddyfile${force ? " --force" : ""}`;
 	try {
-		if (serverId) {
-			await writeFileRemote(serverId, file, caddyfile);
-			await execAsyncRemote(serverId, reload);
-		} else {
-			writeFileSync(file, caddyfile);
-			await execAsync(reload);
-		}
+		await writeOn(serverId, file, caddyfile);
+		await runOn(serverId, reload);
 		state.applied.set(key, caddyfile);
 		state.failed.delete(key);
 	} catch (error) {
@@ -438,8 +446,7 @@ export const applyCaddy = async (
 };
 
 /**
- * What a domain uses that only Traefik can provide, phrased to be followed by
- * "is not available with Caddy".
+ * What a domain uses that only Traefik can provide, as a sentence.
  */
 export const caddyUnsupported = (
 	domain: Partial<
@@ -452,13 +459,12 @@ export const caddyUnsupported = (
 		>
 	>,
 ) => {
-	if (domain.forwardAuthEnabled) return "Forward auth";
-	if (domain.middlewares?.length) return "A custom middleware";
-	if (domain.customEntrypoint) return "A custom entrypoint";
-	if (domain.certificateType === "custom") {
-		return "A custom certificate resolver";
-	}
-	return null;
+	const feature =
+		(domain.forwardAuthEnabled && "Forward auth") ||
+		(domain.middlewares?.length && "A custom middleware") ||
+		(domain.customEntrypoint && "A custom entrypoint") ||
+		(domain.certificateType === "custom" && "A custom certificate resolver");
+	return feature ? `${feature} is not available with Caddy` : null;
 };
 
 /**
@@ -471,10 +477,7 @@ export const assertCaddySupports = async (
 ) => {
 	const reason = caddyUnsupported(domain);
 	if (reason && (await getWebServerProvider(serverId)) === "caddy") {
-		throw new TRPCError({
-			code: "BAD_REQUEST",
-			message: `${reason} is not available with Caddy`,
-		});
+		throw new TRPCError({ code: "BAD_REQUEST", message: reason });
 	}
 };
 
@@ -511,7 +514,7 @@ export const assertCaddyAcceptsRedirect = async (
 	}
 	const command = `echo ${Buffer.from(caddyfile).toString("base64")} | base64 -d | docker exec -i ${CADDY_CONTAINER} caddy validate --adapter caddyfile --config -`;
 	try {
-		await (serverId ? execAsyncRemote(serverId, command) : execAsync(command));
+		await runOn(serverId, command);
 	} catch (error) {
 		const failure = caddyError(error);
 		const reason = /error parsing regexp: (.+?): `/.exec(failure.message)?.[1];
