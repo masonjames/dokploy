@@ -30,10 +30,7 @@ type ServiceStatus = {
 
 type HealthResult = {
 	postgres: ServiceStatus;
-	webServer: ServiceStatus & {
-		provider: "traefik" | "caddy";
-	};
-	traefik?: ServiceStatus;
+	traefik: ServiceStatus;
 };
 
 type ModalState = "idle" | "checking" | "results" | "updating";
@@ -58,11 +55,6 @@ const ServiceStatusItem = ({
 	</div>
 );
 
-const webServerLabels: Record<HealthResult["webServer"]["provider"], string> = {
-	traefik: "Traefik",
-	caddy: "Caddy",
-};
-
 export const UpdateWebServer = ({
 	buttonClassName,
 }: {
@@ -73,6 +65,8 @@ export const UpdateWebServer = ({
 	const [healthResult, setHealthResult] = useState<HealthResult | null>(null);
 
 	const { mutateAsync: updateServer } = api.settings.updateServer.useMutation();
+	const { data: webServer } = api.settings.getWebServerProvider.useQuery();
+	const proxy = webServer?.provider === "caddy" ? "Caddy" : "Traefik";
 	const { refetch: checkHealth } =
 		api.settings.checkInfrastructureHealth.useQuery(undefined, {
 			enabled: false,
@@ -96,7 +90,7 @@ export const UpdateWebServer = ({
 	const allHealthy =
 		healthResult &&
 		healthResult.postgres.status === "healthy" &&
-		healthResult.webServer.status === "healthy";
+		healthResult.traefik.status === "healthy";
 
 	const checkIsUpdateFinished = async () => {
 		try {
@@ -185,7 +179,7 @@ export const UpdateWebServer = ({
 							{modalState === "checking" && (
 								<span className="flex items-center gap-2">
 									<Loader2 className="animate-spin h-4 w-4" />
-									Checking PostgreSQL and the active web server...
+									Checking PostgreSQL and {proxy}...
 								</span>
 							)}
 
@@ -197,8 +191,8 @@ export const UpdateWebServer = ({
 											service={healthResult.postgres}
 										/>
 										<ServiceStatusItem
-											name={`Web server (${webServerLabels[healthResult.webServer.provider]})`}
-											service={healthResult.webServer}
+											name={proxy}
+											service={healthResult.traefik}
 										/>
 									</div>
 

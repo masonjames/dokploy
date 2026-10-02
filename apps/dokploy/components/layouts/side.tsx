@@ -204,10 +204,10 @@ const MENU: Menu = {
 		},
 		{
 			isSingle: true,
-			title: "Web Server Files",
+			title: "Traefik File System",
 			url: "/dashboard/traefik",
 			icon: GalleryVerticalEnd,
-			// `traefikFiles` is the legacy permission key for active web-server files.
+			// Only enabled for users with access to Traefik files
 			isEnabled: ({ permissions }) => !!permissions?.traefikFiles.read,
 		},
 		{

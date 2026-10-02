@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import { docker, paths } from "@dokploy/server/constants";
 import type { Compose } from "@dokploy/server/services/compose";
+import { getWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import {
 	type BuildAdmissionContext,
 	withHostBuildAdmission,
@@ -24,7 +25,6 @@ import {
 } from "../process/execAsync";
 import { spawnAsync } from "../process/spawnAsync";
 import { getRemoteDocker } from "../servers/remote-docker";
-import type { WebServerProvider } from "../web-server/providers";
 
 interface RegistryAuth {
 	username: string;
@@ -921,7 +921,7 @@ export const getComposeContainer = async (
 	}
 };
 
-export type ServiceHealthStatus = {
+type ServiceHealthStatus = {
 	status: "healthy" | "unhealthy";
 	message?: string;
 };
@@ -1084,11 +1084,13 @@ export const checkPostgresHealth = async (): Promise<ServiceHealthStatus> => {
 	}
 };
 
-const checkDockerResourceHealth = async (
-	resourceName: string,
-): Promise<ServiceHealthStatus> => {
+export const checkTraefikHealth = async (): Promise<ServiceHealthStatus> => {
+	const name =
+		(await getWebServerProvider()) === "caddy"
+			? "dokploy-caddy"
+			: "dokploy-traefik";
 	try {
-		const container = docker.getContainer(resourceName);
+		const container = docker.getContainer(name);
 		const info = await container.inspect();
 		if (!info.State.Running) {
 			return {
@@ -1099,21 +1101,6 @@ const checkDockerResourceHealth = async (
 		return { status: "healthy" };
 	} catch {
 		// Not a standalone container, check as swarm service
-		return checkSwarmServiceRunning(resourceName);
+		return checkSwarmServiceRunning(name);
 	}
-};
-
-export const checkTraefikHealth = async (): Promise<ServiceHealthStatus> => {
-	return checkDockerResourceHealth("dokploy-traefik");
-};
-
-export const checkWebServerHealth = async (
-	provider: WebServerProvider,
-): Promise<ServiceHealthStatus & { provider: WebServerProvider }> => {
-	const resourceName =
-		provider === "caddy" ? "dokploy-caddy" : "dokploy-traefik";
-	return {
-		provider,
-		...(await checkDockerResourceHealth(resourceName)),
-	};
 };

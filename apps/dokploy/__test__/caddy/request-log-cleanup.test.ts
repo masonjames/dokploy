@@ -1,10 +1,17 @@
+import { Readable } from "node:stream";
 import { beforeEach, expect, test, vi } from "vitest";
 
 const existsSyncMock = vi.hoisted(() => vi.fn());
+const createReadStreamMock = vi.hoisted(() => vi.fn());
+const statSyncMock = vi.hoisted(() => vi.fn());
+const caddySwitchMock = vi.hoisted(() => vi.fn());
+const getWebServerProviderMock = vi.hoisted(() => vi.fn());
+const syncCaddyMock = vi.hoisted(() => vi.fn());
+const syncCaddyInBackgroundMock = vi.hoisted(() => vi.fn());
+const readMonitoringConfigMock = vi.hoisted(() => vi.fn());
 const execAsyncMock = vi.hoisted(() => vi.fn());
 const getWebServerSettingsMock = vi.hoisted(() => vi.fn());
 const updateWebServerSettingsMock = vi.hoisted(() => vi.fn());
-const resolveWebServerProviderMock = vi.hoisted(() => vi.fn());
 const scheduleJobMock = vi.hoisted(() => vi.fn());
 const scheduledJobsMock = vi.hoisted(() => ({}) as Record<string, any>);
 let scheduledCallback: (() => Promise<void>) | undefined;
@@ -12,6 +19,8 @@ let scheduledCallback: (() => Promise<void>) | undefined;
 vi.mock("node:fs", () => ({
 	default: {
 		existsSync: existsSyncMock,
+		createReadStream: createReadStreamMock,
+		statSync: statSyncMock,
 	},
 	existsSync: existsSyncMock,
 }));
@@ -25,21 +34,35 @@ vi.mock("@dokploy/server/constants", () => ({
 	ACCESS_LOG_RETAINED_LINES: 1000,
 	paths: () => ({
 		DYNAMIC_TRAEFIK_PATH: "/etc/dokploy/traefik/dynamic",
-		CADDY_ACCESS_LOG_PATH: "/etc/dokploy/caddy/access.log",
+		MAIN_CADDY_PATH: "/etc/dokploy/caddy",
 	}),
 }));
 
 vi.mock("@dokploy/server/services/web-server-settings", () => ({
+	getWebServerProvider: getWebServerProviderMock,
 	getWebServerSettings: getWebServerSettingsMock,
 	updateWebServerSettings: updateWebServerSettingsMock,
-	resolveWebServerProvider: resolveWebServerProviderMock,
+}));
+
+vi.mock("@dokploy/server/utils/caddy/sync", () => ({
+	caddySwitch: caddySwitchMock,
+	syncCaddy: syncCaddyMock,
+	syncCaddyInBackground: syncCaddyInBackgroundMock,
+}));
+
+vi.mock("@dokploy/server/utils/traefik/application", () => ({
+	readMonitoringConfig: readMonitoringConfigMock,
 }));
 
 vi.mock("@dokploy/server/utils/process/execAsync", () => ({
 	execAsync: execAsyncMock,
 }));
 
-import { startLogCleanup } from "@dokploy/server/utils/access-log/handler";
+import {
+	readRequestLog,
+	setCaddyRequestLogs,
+	startLogCleanup,
+} from "@dokploy/server/utils/access-log/handler";
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -48,6 +71,8 @@ beforeEach(() => {
 	}
 	scheduledCallback = undefined;
 	existsSyncMock.mockReturnValue(true);
+	getWebServerProviderMock.mockResolvedValue("traefik");
+	statSyncMock.mockReturnValue({ size: 100 });
 	execAsyncMock.mockResolvedValue({ stdout: "", stderr: "" });
 	updateWebServerSettingsMock.mockResolvedValue({});
 	scheduleJobMock.mockImplementation((name, _cron, callback) => {
@@ -59,7 +84,6 @@ beforeEach(() => {
 });
 
 test("keeps Traefik access-log cleanup and signal behavior", async () => {
-	resolveWebServerProviderMock.mockResolvedValue("traefik");
 	execAsyncMock.mockImplementation(async (command: string) => {
 		if (command.startsWith("docker ps -q")) {
 			return { stdout: "abc123\n", stderr: "" };
@@ -85,8 +109,6 @@ test("keeps Traefik access-log cleanup and signal behavior", async () => {
 });
 
 test("skips Traefik log reopen when no running container is found", async () => {
-	resolveWebServerProviderMock.mockResolvedValue("traefik");
-
 	await startLogCleanup("0 0 * * *");
 	await scheduledCallback?.();
 
@@ -96,19 +118,17 @@ test("skips Traefik log reopen when no running container is found", async () => 
 	);
 });
 
-test("cleans Caddy access logs without signaling Traefik", async () => {
-	resolveWebServerProviderMock.mockResolvedValue("caddy");
+test("rewrites Caddy's log in place, which keeps Caddy writing to it", async () => {
+	getWebServerProviderMock.mockResolvedValue("caddy");
 
 	await startLogCleanup("0 0 * * *");
 	await scheduledCallback?.();
 
-	expect(execAsyncMock).toHaveBeenCalledTimes(1);
-	expect(execAsyncMock).toHaveBeenCalledWith(
-		"tail -n 1000 /etc/dokploy/caddy/access.log > /etc/dokploy/caddy/access.log.tmp && cat /etc/dokploy/caddy/access.log.tmp > /etc/dokploy/caddy/access.log && rm /etc/dokploy/caddy/access.log.tmp",
-	);
-	expect(execAsyncMock).not.toHaveBeenCalledWith(
-		"docker exec dokploy-traefik kill -USR1 1",
-	);
+	expect(execAsyncMock.mock.calls).toEqual([
+		[
+			"tail -n 1000 /etc/dokploy/caddy/access.log > /etc/dokploy/caddy/access.log.tmp && cat /etc/dokploy/caddy/access.log.tmp > /etc/dokploy/caddy/access.log && rm /etc/dokploy/caddy/access.log.tmp",
+		],
+	]);
 });
 
 test("does not persist invalid cleanup cron schedules", async () => {
@@ -121,4 +141,81 @@ test("does not persist invalid cleanup cron schedules", async () => {
 	expect(result).toBe(false);
 	expect(existingCancel).not.toHaveBeenCalled();
 	expect(updateWebServerSettingsMock).not.toHaveBeenCalled();
+});
+
+test("reads Traefik's log as upstream does", async () => {
+	readMonitoringConfigMock.mockResolvedValue("traefik lines");
+
+	expect(await readRequestLog(true)).toBe("traefik lines");
+	expect(readMonitoringConfigMock).toHaveBeenCalledWith(true);
+	expect(createReadStreamMock).not.toHaveBeenCalled();
+});
+
+test("reads the last lines of Caddy's log and skips what is not an entry", async () => {
+	getWebServerProviderMock.mockResolvedValue("caddy");
+	const entries = Array.from({ length: 1002 }, (_, n) => `{"n":${n}}`);
+	createReadStreamMock.mockReturnValue(
+		Readable.from([["half an entr", ...entries, ""].join("\n")]),
+	);
+
+	const log = await readRequestLog();
+
+	expect(createReadStreamMock).toHaveBeenCalledWith(
+		"/etc/dokploy/caddy/access.log",
+		{ encoding: "utf8", start: 0 },
+	);
+	expect(log?.split("\n").slice(0, 1)).toEqual(['{"n":2}']);
+	expect(log?.endsWith('{"n":1001}\n')).toBe(true);
+	expect(readMonitoringConfigMock).not.toHaveBeenCalled();
+});
+
+test("reads only the end of a large log, from the first whole entry", async () => {
+	getWebServerProviderMock.mockResolvedValue("caddy");
+	statSyncMock.mockReturnValue({ size: 5_000_000 });
+	createReadStreamMock.mockReturnValue(
+		Readable.from(['"tail":"of an entry"}\n{"n":1}\n{"n":2}\n']),
+	);
+
+	expect(await readRequestLog()).toBe('{"n":1}\n{"n":2}\n');
+	expect(createReadStreamMock).toHaveBeenCalledWith(
+		"/etc/dokploy/caddy/access.log",
+		{ encoding: "utf8", start: 5_000_000 - 1000 * 4096 },
+	);
+});
+
+test("turns Caddy's request log on once Caddy has loaded it", async () => {
+	getWebServerSettingsMock.mockResolvedValue({ requestLogsEnabled: false });
+
+	await setCaddyRequestLogs(true);
+
+	expect(updateWebServerSettingsMock.mock.calls).toEqual([
+		[{ requestLogsEnabled: true }],
+	]);
+	expect(syncCaddyMock).toHaveBeenCalledWith(null, true);
+});
+
+test("takes the change back when Caddy refuses it", async () => {
+	getWebServerSettingsMock.mockResolvedValue({ requestLogsEnabled: false });
+	syncCaddyMock.mockRejectedValueOnce(new Error("Caddy did not load it"));
+
+	await expect(setCaddyRequestLogs(true)).rejects.toThrow(
+		"Caddy did not load it",
+	);
+
+	expect(updateWebServerSettingsMock.mock.calls).toEqual([
+		[{ requestLogsEnabled: true }],
+		[{ requestLogsEnabled: false }],
+	]);
+	expect(syncCaddyInBackgroundMock).toHaveBeenCalledOnce();
+});
+
+test("is refused while a switch is running, when Caddy's answer would be lost", async () => {
+	caddySwitchMock.mockReturnValueOnce({ status: "running" });
+
+	await expect(setCaddyRequestLogs(true)).rejects.toThrow(
+		"A switch is running on this server",
+	);
+
+	expect(updateWebServerSettingsMock).not.toHaveBeenCalled();
+	expect(syncCaddyMock).not.toHaveBeenCalled();
 });

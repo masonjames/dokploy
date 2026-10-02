@@ -1,9 +1,14 @@
 import {
+	assertTraefikProvider,
 	CLEANUP_CRON_JOB,
+	caddyFilePath,
+	caddySwitch,
+	caddySyncError,
 	checkGPUStatus,
 	checkPortInUse,
 	checkPostgresHealth,
-	checkWebServerHealth,
+	checkTraefikHealth,
+	checkWebServerSwitch,
 	cleanupAll,
 	cleanupAllBackground,
 	cleanupBuilders,
@@ -11,17 +16,18 @@ import {
 	cleanupImages,
 	cleanupSystem,
 	cleanupVolumes,
-	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	dispatchDokployUpdate,
 	findServerById,
-	getCaddyCompileSettings,
 	getDockerDiskUsage,
 	getDokployImageTag,
 	getLogCleanupStatus,
 	getUpdateData,
+	getWebServerProvider,
 	getWebServerSettings,
 	IS_CLOUD,
+	isCaddyPath,
+	listCaddyFiles,
 	parseRawConfig,
 	paths,
 	prepareEnvironmentVariables,
@@ -32,16 +38,19 @@ import {
 	readEnvironmentVariables,
 	readMainConfig,
 	readPorts,
+	readRequestLog,
 	recreateDirectory,
 	reloadDockerResource,
-	resolveWebServerProvider,
+	saveCaddyFile,
 	sendDockerCleanupNotifications,
+	setCaddyRequestLogs,
 	setupGPUSupport,
 	startLogCleanup,
 	stopLogCleanup,
+	switchWebServer,
+	syncCaddy,
 	updateLetsEncryptEmail,
 	updateServerById,
-	updateServerCaddy,
 	updateServerTraefik,
 	updateWebServerSettings,
 	writeConfig,
@@ -83,15 +92,31 @@ import {
 	protectedProcedure,
 	publicProcedure,
 } from "../trpc";
-import {
-	ensureServerAccess,
-	getRequestAnalyticsState,
-	readActiveRequestAccessLog,
-	webServerProcedures,
-} from "./web-server";
+
+const apiWebServerSwitch = z.object({
+	provider: z.enum(["traefik", "caddy"]),
+	serverId: z.string().optional(),
+});
+
+const assertCanManageWebServer = async (
+	serverId: string | undefined,
+	organizationId: string,
+) => {
+	if (IS_CLOUD) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "Caddy is not available on Dokploy Cloud",
+		});
+	}
+	if (
+		serverId &&
+		(await findServerById(serverId)).organizationId !== organizationId
+	) {
+		throw new TRPCError({ code: "UNAUTHORIZED" });
+	}
+};
 
 export const settingsRouter = createTRPCRouter({
-	...webServerProcedures,
 	getWebServerSettings: protectedProcedure.query(async () => {
 		if (IS_CLOUD) {
 			return null;
@@ -126,6 +151,20 @@ export const settingsRouter = createTRPCRouter({
 	reloadTraefik: adminProcedure
 		.input(apiServerSchema)
 		.mutation(async ({ input, ctx }) => {
+			if ((await getWebServerProvider(input?.serverId)) === "caddy") {
+				await assertCanManageWebServer(
+					input?.serverId,
+					ctx.session.activeOrganizationId,
+				);
+				// A reload drops no connection, so Caddy's answer is waited for.
+				await syncCaddy(input?.serverId, true);
+				await audit(ctx, {
+					action: "reload",
+					resourceType: "settings",
+					resourceName: "dokploy-caddy",
+				});
+				return true;
+			}
 			// Run in background so the request returns immediately; avoids proxy timeouts.
 			void reloadDockerResource("dokploy-traefik", input?.serverId).catch(
 				(err) => {
@@ -139,19 +178,49 @@ export const settingsRouter = createTRPCRouter({
 			});
 			return true;
 		}),
+	getWebServerProvider: adminProcedure
+		.input(apiServerSchema)
+		.query(async ({ input, ctx }) => {
+			await assertCanManageWebServer(
+				input?.serverId,
+				ctx.session.activeOrganizationId,
+			);
+			const provider = await getWebServerProvider(input?.serverId);
+			return {
+				provider,
+				lastSwitch: caddySwitch(input?.serverId),
+				syncError:
+					provider === "caddy" ? caddySyncError(input?.serverId) : undefined,
+			};
+		}),
+	checkWebServerSwitch: adminProcedure
+		.input(apiWebServerSwitch)
+		.query(async ({ input, ctx }) => {
+			await assertCanManageWebServer(
+				input.serverId,
+				ctx.session.activeOrganizationId,
+			);
+			return checkWebServerSwitch(input.provider, input.serverId);
+		}),
+	switchWebServer: adminProcedure
+		.input(apiWebServerSwitch.extend({ acknowledged: z.boolean() }))
+		.mutation(async ({ input, ctx }) => {
+			await assertCanManageWebServer(
+				input.serverId,
+				ctx.session.activeOrganizationId,
+			);
+			await switchWebServer(input.provider, input.serverId, input.acknowledged);
+			await audit(ctx, {
+				action: "update",
+				resourceType: "settings",
+				resourceId: input.serverId,
+				resourceName: `web-server-${input.provider}`,
+			});
+			return true;
+		}),
 	toggleDashboard: adminProcedure
 		.input(apiEnableDashboard)
 		.mutation(async ({ input, ctx }) => {
-			await ensureServerAccess(ctx, input.serverId);
-			const provider = await resolveWebServerProvider(input.serverId);
-			if (provider !== "traefik") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message:
-						"The dashboard toggle is only available for Traefik. The Caddy admin API is kept local-only and is not exposed through Dokploy.",
-				});
-			}
-
 			const ports = await readPorts("dokploy-traefik", input.serverId);
 			const env = await readEnvironmentVariables(
 				"dokploy-traefik",
@@ -305,14 +374,6 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
-			const previousSettings = await getWebServerSettings();
-			if (!previousSettings) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Web server settings not found",
-				});
-			}
-
 			const settings = await updateWebServerSettings({
 				host: input.host,
 				letsEncryptEmail: input.letsEncryptEmail,
@@ -327,25 +388,11 @@ export const settingsRouter = createTRPCRouter({
 				});
 			}
 
-			const provider = await resolveWebServerProvider();
-			if (provider === "caddy") {
-				try {
-					await updateServerCaddy(settings, input.host);
-				} catch (error) {
-					await updateWebServerSettings({
-						host: previousSettings.host,
-						letsEncryptEmail: previousSettings.letsEncryptEmail,
-						certificateType: previousSettings.certificateType,
-						https: previousSettings.https,
-					});
-					throw error;
-				}
-			} else {
-				updateServerTraefik(settings, input.host);
-				if (input.letsEncryptEmail) {
-					updateLetsEncryptEmail(input.letsEncryptEmail);
-				}
+			updateServerTraefik(settings, input.host);
+			if (input.letsEncryptEmail) {
+				updateLetsEncryptEmail(input.letsEncryptEmail);
 			}
+			await syncCaddy();
 
 			await audit(ctx, {
 				action: "update",
@@ -533,6 +580,7 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
+			await assertTraefikProvider();
 			writeMainConfig(input.traefikConfig);
 			await audit(ctx, {
 				action: "update",
@@ -555,6 +603,7 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
+			await assertTraefikProvider();
 			writeConfig("dokploy", input.traefikConfig);
 			await audit(ctx, {
 				action: "update",
@@ -578,6 +627,7 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
+			await assertTraefikProvider();
 			writeConfig("middlewares", input.traefikConfig);
 			await audit(ctx, {
 				action: "update",
@@ -624,6 +674,13 @@ export const settingsRouter = createTRPCRouter({
 		.query(async ({ ctx, input }) => {
 			try {
 				await checkPermission(ctx, { traefikFiles: ["read"] });
+				if ((await getWebServerProvider(input?.serverId)) === "caddy") {
+					await assertCanManageWebServer(
+						input?.serverId,
+						ctx.session.activeOrganizationId,
+					);
+					return listCaddyFiles(input?.serverId);
+				}
 				const { MAIN_TRAEFIK_PATH } = paths(!!input?.serverId);
 				const result = await readDirectory(MAIN_TRAEFIK_PATH, input?.serverId);
 				return result || [];
@@ -636,15 +693,25 @@ export const settingsRouter = createTRPCRouter({
 		.input(apiModifyTraefikConfig)
 		.mutation(async ({ input, ctx }) => {
 			await checkPermission(ctx, { traefikFiles: ["write"] });
-			await writeTraefikConfigInPath(
-				input.path,
-				input.traefikConfig,
-				input?.serverId,
-			);
+			const caddy = isCaddyPath(input.path, input.serverId);
+			if (caddy) {
+				await assertCanManageWebServer(
+					input.serverId,
+					ctx.session.activeOrganizationId,
+				);
+				await saveCaddyFile(input.path, input.traefikConfig, input.serverId);
+			} else {
+				await assertTraefikProvider(input.serverId);
+				await writeTraefikConfigInPath(
+					input.path,
+					input.traefikConfig,
+					input?.serverId,
+				);
+			}
 			await audit(ctx, {
 				action: "update",
 				resourceType: "settings",
-				resourceName: "traefik-file",
+				resourceName: caddy ? "caddy-file" : "traefik-file",
 			});
 			return true;
 		}),
@@ -662,7 +729,12 @@ export const settingsRouter = createTRPCRouter({
 				}
 			}
 
-			return readConfigInPath(input.path, input.serverId);
+			return readConfigInPath(
+				isCaddyPath(input.path, input.serverId)
+					? caddyFilePath(input.path, input.serverId)
+					: input.path,
+				input.serverId,
+			);
 		}),
 	getIp: protectedProcedure.query(async () => {
 		if (IS_CLOUD) {
@@ -785,6 +857,7 @@ export const settingsRouter = createTRPCRouter({
 			);
 			return envVars;
 		}),
+
 	writeTraefikEnv: adminProcedure
 		.input(z.object({ env: z.string(), serverId: z.string().optional() }))
 		.mutation(async ({ input, ctx }) => {
@@ -812,6 +885,7 @@ export const settingsRouter = createTRPCRouter({
 			const ports = await readPorts("dokploy-traefik", input?.serverId);
 			return ports.some((port) => port.targetPort === 8080);
 		}),
+
 	readStatsLogs: protectedProcedure
 		.meta({
 			openapi: {
@@ -829,7 +903,7 @@ export const settingsRouter = createTRPCRouter({
 					totalCount: 0,
 				};
 			}
-			const rawConfig = await readActiveRequestAccessLog(
+			const rawConfig = await readRequestLog(
 				!!input.dateRange?.start && !!input.dateRange?.end,
 			);
 
@@ -869,14 +943,29 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return [];
 			}
-			const rawConfig = await readActiveRequestAccessLog(
+			const rawConfig = await readRequestLog(
 				!!input?.dateRange?.start || !!input?.dateRange?.end,
 			);
 			const processedLogs = processLogs(rawConfig as string, input?.dateRange);
 			return processedLogs || [];
 		}),
 	haveActivateRequests: protectedProcedure.query(async () => {
-		return (await getRequestAnalyticsState()).enabled;
+		if (IS_CLOUD) {
+			return true;
+		}
+		if ((await getWebServerProvider()) === "caddy") {
+			return !!(await getWebServerSettings())?.requestLogsEnabled;
+		}
+		const config = readMainConfig();
+
+		if (!config) return false;
+		const parsedConfig = parse(config) as {
+			accessLog?: {
+				filePath: string;
+			};
+		};
+
+		return !!parsedConfig?.accessLog?.filePath;
 	}),
 	toggleRequests: protectedProcedure
 		.input(
@@ -888,23 +977,13 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
-			const provider = await resolveWebServerProvider();
-			if (provider === "caddy") {
-				const previousSettings = await getWebServerSettings();
-				const previousEnabled = Boolean(previousSettings?.requestLogsEnabled);
-				await updateWebServerSettings({
-					requestLogsEnabled: input.enable,
-				});
-				try {
-					await compileWriteAndReloadCaddyConfigSafely(
-						await getCaddyCompileSettings(),
-					);
-				} catch (error) {
-					await updateWebServerSettings({
-						requestLogsEnabled: previousEnabled,
-					});
-					throw error;
+			if ((await getWebServerProvider()) === "caddy") {
+				// Traefik applies this only once an admin reloads it. Caddy is
+				// reloaded here, so the change itself is an admin's.
+				if (ctx.user.role !== "owner" && ctx.user.role !== "admin") {
+					throw new TRPCError({ code: "UNAUTHORIZED" });
 				}
+				await setCaddyRequestLogs(input.enable);
 				await audit(ctx, {
 					action: "update",
 					resourceType: "settings",
@@ -912,7 +991,6 @@ export const settingsRouter = createTRPCRouter({
 				});
 				return true;
 			}
-
 			const mainConfig = readMainConfig();
 			if (!mainConfig) return false;
 
@@ -968,26 +1046,19 @@ export const settingsRouter = createTRPCRouter({
 		}
 	}),
 	checkInfrastructureHealth: adminProcedure.query(async () => {
-		const provider = await resolveWebServerProvider();
 		if (IS_CLOUD) {
-			const webServer = { provider, status: "healthy" as const };
 			return {
 				postgres: { status: "healthy" as const },
-				webServer,
-				traefik: { status: webServer.status },
+				traefik: { status: "healthy" as const },
 			};
 		}
 
-		const [postgres, webServer] = await Promise.all([
+		const [postgres, traefik] = await Promise.all([
 			checkPostgresHealth(),
-			checkWebServerHealth(provider),
+			checkTraefikHealth(),
 		]);
 
-		return {
-			postgres,
-			webServer,
-			traefik: { status: webServer.status, message: webServer.message },
-		};
+		return { postgres, traefik };
 	}),
 	setupGPU: adminProcedure
 		.input(

@@ -1,12 +1,12 @@
 import { join } from "node:path";
 import {
-	addDomainToComposeForWebServer,
+	addDomainToCompose,
 	clearOldDeployments,
 	cloneCompose,
 	createCommand,
 	createCompose,
 	createComposeByTemplate,
-	createComposeDomain,
+	createDomain,
 	createMount,
 	deleteMount,
 	execAsync,
@@ -26,11 +26,11 @@ import {
 	randomizeIsolatedDeploymentComposeFile,
 	removeCompose,
 	removeComposeDirectory,
-	removeComposeDomainsForWebServer,
 	removeDeploymentsByComposeId,
-	removeWebServerAppRoutes,
+	removeDomainById,
 	startCompose,
 	stopCompose,
+	syncCaddyInBackground,
 	updateCompose,
 	updateDeploymentStatus,
 	withHostBuildAdmission,
@@ -260,10 +260,6 @@ export const composeRouter = createTRPCRouter({
 				composeResult.appName,
 				composeResult.serverId,
 			);
-			await removeWebServerAppRoutes(
-				composeResult.appName,
-				composeResult.serverId,
-			);
 
 			const deleted = await db
 				.delete(composeTable)
@@ -275,6 +271,7 @@ export const composeRouter = createTRPCRouter({
 					message: "Compose cleanup succeeded but its record was not deleted",
 				});
 			}
+			syncCaddyInBackground(composeResult.serverId);
 
 			await audit(ctx, {
 				action: "delete",
@@ -430,10 +427,7 @@ export const composeRouter = createTRPCRouter({
 			});
 			const compose = await findComposeById(input.composeId);
 			const domains = await findDomainsByComposeId(input.composeId);
-			const composeFile = await addDomainToComposeForWebServer(
-				compose,
-				domains,
-			);
+			const composeFile = await addDomainToCompose(compose, domains);
 			return stringify(composeFile, {
 				lineWidth: 1000,
 			});
@@ -700,18 +694,13 @@ export const composeRouter = createTRPCRouter({
 
 			if (generate.domains && generate.domains?.length > 0) {
 				for (const domain of generate.domains) {
-					await createComposeDomain(
-						compose,
-						{
-							...domain,
-							domainType: "compose",
-							certificateType: "none",
-							composeId: compose.composeId,
-							host: domain.host || "",
-						},
-						undefined,
-						ctx.session.activeOrganizationId,
-					);
+					await createDomain({
+						...domain,
+						domainType: "compose",
+						certificateType: "none",
+						composeId: compose.composeId,
+						host: domain.host || "",
+					});
 				}
 			}
 
@@ -998,12 +987,9 @@ export const composeRouter = createTRPCRouter({
 					await deleteMount(mount.mountId);
 				}
 
-				await removeComposeDomainsForWebServer(
-					compose,
-					compose.domains,
-					undefined,
-					ctx.session.activeOrganizationId,
-				);
+				for (const domain of compose.domains) {
+					await removeDomainById(domain.domainId);
+				}
 
 				let serverIp = "127.0.0.1";
 
@@ -1063,18 +1049,13 @@ export const composeRouter = createTRPCRouter({
 
 				if (processedTemplate.domains && processedTemplate.domains.length > 0) {
 					for (const domain of processedTemplate.domains) {
-						await createComposeDomain(
-							compose,
-							{
-								...domain,
-								domainType: "compose",
-								certificateType: "none",
-								composeId: compose.composeId,
-								host: domain.host || "",
-							},
-							undefined,
-							ctx.session.activeOrganizationId,
-						);
+						await createDomain({
+							...domain,
+							domainType: "compose",
+							certificateType: "none",
+							composeId: compose.composeId,
+							host: domain.host || "",
+						});
 					}
 				}
 

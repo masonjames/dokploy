@@ -112,7 +112,9 @@ const normalizeCaddyLogEntry = (
 		msg: entry.msg ?? "",
 		origin_Content_Type: "",
 		request_Content_Type: "",
-		request_User_Agent: getHeaderValue(request.headers, "User-Agent"),
+		// Lines written before the headers were left out carry it there.
+		request_User_Agent:
+			entry.user_agent ?? getHeaderValue(request.headers, "User-Agent"),
 		time: startUTC,
 	};
 };

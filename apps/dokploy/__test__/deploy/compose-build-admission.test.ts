@@ -1,5 +1,4 @@
 import * as composeBuilder from "@dokploy/server/utils/builders/compose";
-import * as domainUtils from "@dokploy/server/utils/docker/domain";
 import * as buildAdmission from "@dokploy/server/utils/process/build-admission";
 import * as execProcess from "@dokploy/server/utils/process/execAsync";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,13 +30,6 @@ vi.mock("@dokploy/server/utils/docker/domain", () => ({
 	cloneCompose: vi.fn(),
 	loadDockerCompose: vi.fn(),
 	loadDockerComposeRemote: vi.fn(),
-	getCaddyComposeRouteTargetsForWebServer: vi.fn(async () => {
-		expect(admissionDepth).toBe(1);
-		return [{ finalServiceName: "web", domain: { domainId: "domain-id" } }];
-	}),
-	writeCaddyComposeRoutesForTargets: vi.fn(async () => {
-		expect(admissionDepth).toBe(0);
-	}),
 }));
 
 vi.mock("@dokploy/server/utils/process/execAsync", () => ({
@@ -158,12 +150,6 @@ describe("compose host build admission", () => {
 		expect(executed[0]?.[0]).toContain("docker-compose.yml");
 		expect(executed[1]?.[0]).toMatch(/^ADMITTED:/);
 		expect(executed[1]?.[0]).toContain("docker compose up -d --build");
-		expect(
-			domainUtils.getCaddyComposeRouteTargetsForWebServer,
-		).toHaveBeenCalledOnce();
-		expect(
-			domainUtils.writeCaddyComposeRoutesForTargets,
-		).toHaveBeenCalledOnce();
 		expect(admissionDepth).toBe(0);
 	});
 

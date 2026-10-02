@@ -1,6 +1,5 @@
 import { dirname, join } from "node:path";
 import { paths } from "@dokploy/server/constants";
-import { resolveWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import type { InferResultType } from "@dokploy/server/types/with";
 import boxen from "boxen";
 import { quote } from "shell-quote";
@@ -12,7 +11,6 @@ import {
 	prepareEnvironmentVariablesForFile,
 } from "../docker/utils";
 import { withResolvedVaultRefs } from "../vault";
-import { getWebServerResourceName } from "../web-server/providers";
 
 export type ComposeNested = InferResultType<
 	"compose",
@@ -33,8 +31,6 @@ export const getBuildComposeCommand = async (rawCompose: ComposeNested) => {
 		: "";
 	const exportEnvCommand = getExportEnvCommand(compose);
 
-	const provider = await resolveWebServerProvider(compose.serverId);
-	const webServerResourceName = getWebServerResourceName(provider);
 	const newCompose = await writeDomainsToCompose(compose, domains);
 	const logContent = `
 App Name: ${appName}
@@ -67,7 +63,8 @@ Compose Type: ${composeType} ✅`;
 
 		${compose.isolatedDeployment ? `docker network inspect ${compose.appName} >/dev/null 2>&1 || docker network create ${compose.composeType === "stack" ? "--driver overlay" : ""} --attachable ${compose.appName}` : ""}
 		env -i PATH="$PATH" HOME="$HOME" ${exportEnvCommand} docker ${command.split(" ").join(" ")} 2>&1 || { echo "Error: ❌ Docker command failed"; exit 1; }
-		${compose.isolatedDeployment ? `docker network connect ${compose.appName} $(docker ps --filter "name=${webServerResourceName}" -q) >/dev/null 2>&1` : ""}
+		${compose.isolatedDeployment ? `docker network connect ${compose.appName} $(docker ps --filter "name=dokploy-traefik" -q) >/dev/null 2>&1` : ""}
+		${compose.isolatedDeployment ? `docker network connect ${compose.appName} dokploy-caddy >/dev/null 2>&1 || true` : ""}
 
 		echo "Docker Compose Deployed: ✅";
 	} || {

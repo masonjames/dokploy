@@ -17,43 +17,21 @@ import {
 } from "@/components/ui/card";
 import { Tree } from "@/components/ui/file-tree";
 import { api } from "@/utils/api";
+import { ShowCaddyFile } from "./show-caddy-file";
 import { ShowTraefikFile } from "./show-traefik-file";
 
 interface Props {
 	serverId?: string;
-	activeProvider?: "traefik" | "caddy";
 }
-export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
+export const ShowTraefikSystem = ({ serverId }: Props) => {
 	const [file, setFile] = React.useState<null | string>(null);
-	const { data: resolvedProvider } =
-		api.settings.getActiveWebServerProvider.useQuery(
-			{ serverId },
-			{ enabled: !activeProvider },
-		);
-	const provider = activeProvider ?? resolvedProvider;
-	const providerLabel =
-		provider === "caddy"
-			? "Caddy"
-			: provider === "traefik"
-				? "Traefik"
-				: "Web Server";
-	const isCaddy = provider === "caddy";
-	const isTraefik = provider === "traefik";
-
-	React.useEffect(() => {
-		setFile(null);
-	}, []);
-
-	React.useEffect(() => {
-		setFile(null);
-	}, [provider]);
 
 	const {
 		data: directories,
 		isLoading,
 		error,
 		isError,
-	} = api.settings.readWebServerDirectories.useQuery(
+	} = api.settings.readDirectories.useQuery(
 		{
 			serverId,
 		},
@@ -61,6 +39,8 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 			retry: 2,
 		},
 	);
+	// A Caddy server lists Caddy's own folder, which starts with the Caddyfile.
+	const isCaddy = directories?.[0]?.name === "Caddyfile";
 
 	return (
 		<div className="w-full">
@@ -69,23 +49,25 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 					<CardHeader className="">
 						<CardTitle className="text-xl flex flex-row gap-2">
 							<FileIcon className="size-6 text-muted-foreground self-center" />
-							{providerLabel} File System
+							{isCaddy ? "Caddy" : "Traefik"} File System
 						</CardTitle>
 						<CardDescription>
 							{isCaddy
-								? "Review generated Caddy artifacts such as caddy.json, route fragments, and non-backup migration artifacts."
-								: provider === "traefik"
-									? "Manage files and directories for the active Traefik web server."
-									: "Review files and directories for the active web server."}
+								? "Your own Caddy configuration, in global/ and sites/ under '/etc/dokploy/caddy'."
+								: "Manage all the files and directories in '/etc/dokploy/traefik'."}
 						</CardDescription>
 
-						<AlertBlock type={isTraefik ? "warning" : "info"}>
-							{isCaddy
-								? "Caddy generated config is read-only here. Use Dokploy settings, domains, and migration controls to change generated Caddy config."
-								: isTraefik
-									? "Adding invalid configuration to existing files can break your Traefik instance, preventing access to your applications."
-									: "Review active web server files here. Provider-specific edit controls appear after Dokploy resolves the active provider."}
-						</AlertBlock>
+						{isCaddy ? (
+							<AlertBlock type="info">
+								Caddy checks a file when you save it. If Caddy rejects it, the
+								previous version is kept.
+							</AlertBlock>
+						) : (
+							<AlertBlock type="warning">
+								Adding invalid configuration to existing files, can break your
+								Traefik instance, preventing access to your applications.
+							</AlertBlock>
+						)}
 					</CardHeader>
 					<CardContent className="space-y-2 py-8 border-t">
 						<div>
@@ -115,9 +97,7 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 											<span className="text-sm text-muted-foreground">
 												There are no directories or files in{" "}
 												<code className="bg-muted px-1.5 py-0.5 rounded text-xs">
-													{isCaddy
-														? "/etc/dokploy/caddy"
-														: "/etc/dokploy/traefik"}
+													/etc/dokploy/traefik
 												</code>{" "}
 												on this server yet.
 											</span>
@@ -134,12 +114,10 @@ export const ShowTraefikSystem = ({ serverId, activeProvider }: Props) => {
 											itemIcon={Workflow}
 										/>
 										<div className="w-full">
-											{file ? (
-												<ShowTraefikFile
-													path={file}
-													serverId={serverId}
-													activeProvider={provider}
-												/>
+											{file && isCaddy ? (
+												<ShowCaddyFile path={file} serverId={serverId} />
+											) : file ? (
+												<ShowTraefikFile path={file} serverId={serverId} />
 											) : (
 												<div className="h-full min-h-[300px] w-full flex-col gap-4 flex items-center justify-center border border-dashed rounded-lg">
 													<div className="flex items-center justify-center size-14 rounded-full bg-muted">

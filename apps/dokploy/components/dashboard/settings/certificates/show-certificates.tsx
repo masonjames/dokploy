@@ -46,13 +46,14 @@ export const ShowCertificates = () => {
 							Certificates
 						</CardTitle>
 						<CardDescription>
-							Create uploaded certificates for web server domains
+							Create certificates in the Traefik directory
 						</CardDescription>
 
 						<AlertBlock type="warning">
-							Uploaded certificates can be used by supported web server
-							providers to secure your applications. Invalid certificates can
-							break domain access for the services that use them.
+							Certificates are created in the Traefik directory. Traefik uses
+							these certificates to secure your applications. Using invalid
+							certificates can break your Traefik instance, preventing access to
+							your applications.
 						</AlertBlock>
 					</CardHeader>
 					<CardContent className="space-y-2 py-8 border-t">

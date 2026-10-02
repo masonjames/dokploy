@@ -48,21 +48,17 @@ const PortSchema = z.object({
 	protocol: z.enum(["tcp", "udp", "sctp"]),
 });
 
-const WebServerPortsSchema = z.object({
+const TraefikPortsSchema = z.object({
 	ports: z.array(PortSchema),
 });
 
-type WebServerPortsForm = z.infer<typeof WebServerPortsSchema>;
+type TraefikPortsForm = z.infer<typeof TraefikPortsSchema>;
 
 export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 	const [open, setOpen] = useState(false);
 
-	const { data: activeProvider } =
-		api.settings.getActiveWebServerProvider.useQuery({ serverId });
-	const providerLabel = activeProvider === "caddy" ? "Caddy" : "Traefik";
-
-	const form = useForm<WebServerPortsForm>({
-		resolver: zodResolver(WebServerPortsSchema),
+	const form = useForm<TraefikPortsForm>({
+		resolver: zodResolver(TraefikPortsSchema),
 		defaultValues: {
 			ports: [],
 		},
@@ -74,12 +70,12 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 	});
 
 	const { data: currentPorts, refetch: refetchPorts } =
-		api.settings.getWebServerPorts.useQuery({
+		api.settings.getTraefikPorts.useQuery({
 			serverId,
 		});
 
 	const { mutateAsync: updatePorts, isPending } =
-		api.settings.updateWebServerPorts.useMutation();
+		api.settings.updateTraefikPorts.useMutation();
 
 	const {
 		execute: executeWithHealthCheck,
@@ -108,7 +104,7 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 		append({ targetPort: 0, publishedPort: 0, protocol: "tcp" });
 	};
 
-	const onSubmit = async (data: WebServerPortsForm) => {
+	const onSubmit = async (data: TraefikPortsForm) => {
 		try {
 			await executeWithHealthCheck(() =>
 				updatePorts({
@@ -118,9 +114,7 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 			);
 			setOpen(false);
 		} catch (error) {
-			toast.error(
-				(error as Error).message || `Error updating ${providerLabel} ports`,
-			);
+			toast.error((error as Error).message || "Error updating Traefik ports");
 		}
 	};
 
@@ -138,7 +132,7 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 						<DialogDescription className="text-base w-full">
 							<div className="flex items-center justify-between">
 								<div className="flex flex-col gap-1">
-									Add or remove additional ports for {providerLabel}
+									Add or remove additional ports for Traefik
 									<span className="text-sm text-muted-foreground">
 										{fields.length} port mapping{fields.length !== 1 ? "s" : ""}{" "}
 										configured
@@ -292,7 +286,7 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 											<span className="text-sm">
 												<strong>
 													Each port mapping defines how external traffic reaches
-													your containers through {providerLabel}.
+													your containers through Traefik.
 												</strong>
 												<ul className="pt-2">
 													<li>
@@ -306,8 +300,8 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 												</ul>
 												<p className="mt-2">
 													All ports are bound directly to the host machine,
-													allowing {providerLabel} to handle incoming traffic
-													and route it appropriately to your services.
+													allowing Traefik to handle incoming traffic and route
+													it appropriately to your services.
 												</p>
 											</span>
 										</div>
@@ -315,9 +309,9 @@ export const ManageTraefikPorts = ({ children, serverId }: Props) => {
 								)}
 
 								<AlertBlock type="warning">
-									The {providerLabel} resource will be recreated from scratch.
-									This means the container or service will be deleted and
-									created again, which may cause downtime in your applications.
+									The Traefik container will be recreated from scratch. This
+									means the container will be deleted and created again, which
+									may cause downtime in your applications.
 								</AlertBlock>
 							</div>
 							<DialogFooter>

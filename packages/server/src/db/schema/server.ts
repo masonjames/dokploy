@@ -10,7 +10,6 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { CaddyTrustedProxySettings } from "../../utils/caddy/types";
 import { organization } from "./account";
 import { applications } from "./application";
 import { certificates } from "./certificate";
@@ -44,12 +43,9 @@ export const server = pgTable("server", {
 		.notNull()
 		.$defaultFn(() => generateAppName("server")),
 	enableDockerCleanup: boolean("enableDockerCleanup").notNull().default(false),
-	webServerProvider: webServerProvider("webServerProvider")
-		.notNull()
-		.default("traefik"),
-	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig")
-		.$type<CaddyTrustedProxySettings | null>()
-		.default(null),
+	// Not read any more: trusted proxies are a file in Caddy's global/ folder.
+	// The column stays so the previous release can still be started.
+	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig").default(null),
 	buildsConcurrency: integer("buildsConcurrency").notNull().default(1),
 	createdAt: text("createdAt").notNull(),
 	organizationId: text("organizationId")
@@ -57,6 +53,9 @@ export const server = pgTable("server", {
 		.references(() => organization.id, { onDelete: "cascade" }),
 	serverStatus: serverStatus("serverStatus").notNull().default("active"),
 	serverType: serverType("serverType").notNull().default("deploy"),
+	webServerProvider: webServerProvider("webServerProvider")
+		.notNull()
+		.default("traefik"),
 	command: text("command").notNull().default(""),
 	sshKeyId: text("sshKeyId").references(() => sshKeys.sshKeyId, {
 		onDelete: "set null",
@@ -147,7 +146,6 @@ const createSchema = createInsertSchema(server, {
 	name: z.string().min(1),
 	description: z.string().optional(),
 	serverType: z.enum(["deploy", "build"]).optional(),
-	webServerProvider: z.enum(["traefik", "caddy"]).optional(),
 });
 
 export const apiCreateServer = createSchema

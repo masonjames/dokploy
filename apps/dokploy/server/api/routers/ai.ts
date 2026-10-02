@@ -6,7 +6,7 @@ import {
 	deploySuggestionSchema,
 } from "@dokploy/server/db/schema/ai";
 import {
-	createComposeDomain,
+	createDomain,
 	createMount,
 	findEnvironmentById,
 } from "@dokploy/server/index";
@@ -367,17 +367,12 @@ ${input.logs}`,
 
 			if (input.domains && input.domains?.length > 0) {
 				for (const domain of input.domains) {
-					await createComposeDomain(
-						compose,
-						{
-							...domain,
-							domainType: "compose",
-							certificateType: "none",
-							composeId: compose.composeId,
-						},
-						undefined,
-						ctx.session.activeOrganizationId,
-					);
+					await createDomain({
+						...domain,
+						domainType: "compose",
+						certificateType: "none",
+						composeId: compose.composeId,
+					});
 				}
 			}
 			if (input.configFiles && input.configFiles?.length > 0) {

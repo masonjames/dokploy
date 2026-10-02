@@ -69,6 +69,7 @@ export interface CaddyRawAccessLogEntry {
 	size?: number;
 	status?: number;
 	resp_headers?: Record<string, string[]>;
+	user_agent?: string;
 }
 
 export type LogEntry = TraefikLogEntry & {

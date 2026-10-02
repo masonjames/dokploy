@@ -1,16 +1,84 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { ACCESS_LOG_RETAINED_LINES, paths } from "@dokploy/server/constants";
 import {
+	getWebServerProvider,
 	getWebServerSettings,
-	resolveWebServerProvider,
 	updateWebServerSettings,
 } from "@dokploy/server/services/web-server-settings";
+import { TRPCError } from "@trpc/server";
 import { scheduledJobs, scheduleJob } from "node-schedule";
 import { quote } from "shell-quote";
+import { caddySwitch, syncCaddy, syncCaddyInBackground } from "../caddy/sync";
 import { execAsync } from "../process/execAsync";
+import { readMonitoringConfig } from "../traefik/application";
 
 const LOG_CLEANUP_JOB_NAME = "access-log-cleanup";
+
+// CADDY_REQUEST_LOG, as Dokploy sees it.
+const caddyRequestLogPath = () =>
+	path.join(paths().MAIN_CADDY_PATH, "access.log");
+
+/**
+ * The access log of the proxy that serves the Dokploy host: Traefik's as
+ * upstream reads it, or the last lines of Caddy's
+ */
+export const readRequestLog = async (readAll = false) => {
+	if ((await getWebServerProvider()) !== "caddy") {
+		return readMonitoringConfig(readAll);
+	}
+	const file = caddyRequestLogPath();
+	if (!fs.existsSync(file)) return "";
+
+	// The page asks again every second or so, and the file grows until the
+	// cleanup job runs. Only its end is read: 4 KiB per entry is generous.
+	const start = Math.max(
+		0,
+		fs.statSync(file).size - ACCESS_LOG_RETAINED_LINES * 4096,
+	);
+	const recent: string[] = [];
+	const lines = createInterface({
+		input: fs.createReadStream(file, { encoding: "utf8", start }),
+		crlfDelay: Number.POSITIVE_INFINITY,
+	});
+	let cut = start > 0;
+	for await (const line of lines) {
+		// Reading from the middle of the file starts inside an entry.
+		if (cut) {
+			cut = false;
+			continue;
+		}
+		const trimmed = line.trim();
+		if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
+		recent.push(line);
+		if (recent.length > ACCESS_LOG_RETAINED_LINES) recent.shift();
+	}
+	return recent.length ? `${recent.join("\n")}\n` : "";
+};
+
+/**
+ * Turn Caddy's request log on or off. Caddy has loaded the change when this
+ * returns, and a change it refuses is taken back
+ */
+export const setCaddyRequestLogs = async (enable: boolean) => {
+	// A sync returns at once during a switch, so Caddy's answer would be lost.
+	if (caddySwitch(null)?.status === "running") {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "A switch is running on this server. Try again when it is done",
+		});
+	}
+	const before = !!(await getWebServerSettings())?.requestLogsEnabled;
+	await updateWebServerSettings({ requestLogsEnabled: enable });
+	try {
+		await syncCaddy(null, true);
+	} catch (error) {
+		await updateWebServerSettings({ requestLogsEnabled: before });
+		syncCaddyInBackground();
+		throw error;
+	}
+};
 
 export const startLogCleanup = async (
 	cronExpression = "0 0 * * *",
@@ -36,12 +104,10 @@ export const startLogCleanup = async (
 			cronExpression,
 			async () => {
 				try {
-					const provider = await resolveWebServerProvider();
-					const currentPaths = paths();
-					const accessLogPath =
-						provider === "caddy"
-							? currentPaths.CADDY_ACCESS_LOG_PATH
-							: path.join(currentPaths.DYNAMIC_TRAEFIK_PATH, "access.log");
+					const caddy = (await getWebServerProvider()) === "caddy";
+					const accessLogPath = caddy
+						? caddyRequestLogPath()
+						: path.join(paths().DYNAMIC_TRAEFIK_PATH, "access.log");
 
 					if (!fs.existsSync(accessLogPath)) {
 						console.error("Access log file does not exist");
@@ -50,7 +116,9 @@ export const startLogCleanup = async (
 
 					const quotedAccessLogPath = quote([accessLogPath]);
 					const quotedTempPath = quote([`${accessLogPath}.tmp`]);
-					if (provider === "caddy") {
+					if (caddy) {
+						// Caddy keeps the file open and has no signal for reopening
+						// it, so the file is rewritten in place.
 						await execAsync(
 							`tail -n ${ACCESS_LOG_RETAINED_LINES} ${quotedAccessLogPath} > ${quotedTempPath} && cat ${quotedTempPath} > ${quotedAccessLogPath} && rm ${quotedTempPath}`,
 						);

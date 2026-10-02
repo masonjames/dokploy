@@ -13,7 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/utils/api";
-import { invalidateApplicationWebServerConfig } from "../../web-server-config-cache";
 import { HandleSecurity } from "./handle-security";
 
 interface Props {
@@ -89,12 +88,11 @@ export const ShowSecurity = ({ applicationId }: Props) => {
 													await deleteSecurity({
 														securityId: security.securityId,
 													})
-														.then(async () => {
-															await refetch();
-															await invalidateApplicationWebServerConfig(
-																utils,
+														.then(() => {
+															refetch();
+															utils.application.readTraefikConfig.invalidate({
 																applicationId,
-															);
+															});
 															toast.success("Security deleted successfully");
 														})
 														.catch(() => {

@@ -162,19 +162,17 @@ Admission covers:
 - Compose source fetches used for service discovery and isolated-deployment
   generation;
 - image pulls and service mutations for PostgreSQL, MySQL, MariaDB, MongoDB,
-  Redis, LibSQL, monitoring, Traefik, Caddy, forward-auth, and the Dokploy
+  Redis, LibSQL, monitoring, Traefik, forward-auth, and the Dokploy
   PostgreSQL/Redis initializers;
 - Dokploy self-update and image-tag reload pre-pulls;
 - rollback, application reload, and split build/deployment-host mutation entry
   points.
 
-Service starts and positive-replica snapshot recovery are admitted because a
-scale from zero can pull a missing image; scale-to-zero remains outside the
-capacity gate. Caddy service convergence, live validation, upstream probes,
-and post-start network attachment remain owner-monitored until completion, and
-abort promptly if the holder is lost. Forward-auth creates only after Docker
-proves the service is absent; an existing-service update failure is propagated
-instead of being treated as a successful create fallback.
+Service starts are admitted because a scale from zero can pull a missing
+image; scale-to-zero remains outside the capacity gate. Forward-auth creates
+only after Docker proves the service is absent; an existing-service update
+failure is propagated instead of being treated as a successful create
+fallback.
 
 An image-only Docker-source rebuild skips admission only when no registry,
 build registry, or rollback registry can add a tag/push command. The
@@ -210,6 +208,12 @@ cluster-wide admission for Docker's later asynchronous worker-node pulls.
 Per-node admission and convergence proof are a separate control. The one-time
 bootstrap pull in `apps/dokploy/setup.ts` is also outside runtime admission and
 must run only under an independently approved bootstrap procedure.
+
+The Caddy provider is outside admission. The dry run before a switch starts
+two short-lived containers from the pinned `caddy` image, which pulls it when
+the server does not have it, and the switch script pulls it only in that
+case. Neither holds the host lock or runs the capacity gate. A server that
+has the image under that tag pulls nothing.
 
 This control never prunes images, containers, volumes, logs, networks, or
 BuildKit cache. A capacity denial is an instruction to follow the separately

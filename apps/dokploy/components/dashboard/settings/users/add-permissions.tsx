@@ -457,10 +457,9 @@ export const AddUserPermissions = ({ userId, role }: Props) => {
 									render={({ field }) => (
 										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
 											<div className="space-y-0.5">
-												<FormLabel>Access to Web Server Files</FormLabel>
+												<FormLabel>Access to Traefik Files</FormLabel>
 												<FormDescription>
-													Allow the user to access the active web server file
-													browser
+													Allow the user to access to the Traefik Tab Files
 												</FormDescription>
 											</div>
 											<FormControl>

@@ -1,819 +1,459 @@
-import { setTimeout as delay } from "node:timers/promises";
-import { pullImageUnderBuildAdmission } from "@dokploy/server/utils/docker/utils";
-import {
-	type BuildAdmissionContext,
-	withHostBuildAdmission,
-} from "@dokploy/server/utils/process/build-admission";
-import type { ContainerCreateOptions, CreateServiceOptions } from "dockerode";
+import { X509Certificate } from "node:crypto";
+import { quote } from "shell-quote";
 import { paths } from "../constants";
+import { findApplicationById } from "../services/application";
 import {
-	CADDY_METRICS_PORT,
-	ensureDefaultCaddyConfig,
-	readCaddyConfigFileIfExists,
-	reloadCaddyAfterValidation,
-	validateCaddyConfigFileWithImage,
-	validateCaddyConfigWithContainer,
-	withCaddyConfigLock,
-	writeCaddyConfigContent,
-} from "../utils/caddy/config";
-import { runActiveCaddyUpstreamPreflight } from "../utils/caddy/migration/upstream-preflight";
-import type {
-	CaddyAccessLogConfig,
-	CaddyTrustedProxyConfig,
-} from "../utils/caddy/types";
-import { DOKPLOY_CADDY_NETWORK } from "../utils/caddy/upstream-targets";
-import { getRemoteDocker } from "../utils/servers/remote-docker";
+	getDockerResourceType,
+	readPorts,
+	reconnectServicesToTraefik,
+} from "../services/settings";
+import {
+	setWebServerProvider,
+	type WebServerProvider,
+} from "../services/web-server-settings";
+import { CADDY_IMAGE, renderCaddyfile } from "../utils/caddy/caddyfile";
+import {
+	certificateBundle,
+	SWITCH_MARKER,
+	switchToCaddyScript,
+	switchToTraefikScript,
+} from "../utils/caddy/cutover";
+import {
+	applyCaddy,
+	CADDY_CONTAINER,
+	caddyError,
+	caddySwitch,
+	caddyUnsupported,
+	findServerDomains,
+	loadCaddyState,
+	recordCaddySwitch,
+	runOn,
+	withCaddyQueue,
+	writeOn,
+} from "../utils/caddy/sync";
+import {
+	findHandWrittenTraefikConfig,
+	readTraefikFiles,
+	readTraefikLabels,
+} from "../utils/caddy/traefik-audit";
+import { ExecError, sleep } from "../utils/process/execAsync";
+import { manageDomain } from "../utils/traefik/domain";
+import {
+	initializeStandaloneTraefik,
+	TRAEFIK_HTTP3_PORT,
+	TRAEFIK_PORT,
+	TRAEFIK_SSL_PORT,
+} from "./traefik-setup";
 
-export const CADDY_SSL_PORT =
-	Number.parseInt(process.env.CADDY_SSL_PORT ?? "", 10) || 443;
-export const CADDY_PORT =
-	Number.parseInt(process.env.CADDY_PORT ?? "", 10) || 80;
-export const CADDY_HTTP3_PORT =
-	Number.parseInt(process.env.CADDY_HTTP3_PORT ?? "", 10) || 443;
-export const CADDY_ADMIN_PORT = 2019;
-const CADDY_RESERVED_TCP_PORTS = new Set([
-	CADDY_ADMIN_PORT,
-	CADDY_METRICS_PORT,
-]);
-const CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS = new Set([
-	8080,
-	8082,
-	...CADDY_RESERVED_TCP_PORTS,
-]);
-export const CADDY_VERSION = process.env.CADDY_VERSION || "2.11.4";
-export const CADDY_IMAGE =
-	process.env.CADDY_IMAGE?.trim() || `caddy:${CADDY_VERSION}`;
+const TRAEFIK_CONTAINER = "dokploy-traefik";
 
-export interface CaddyOptions {
-	env?: string[];
-	serverId?: string;
-	additionalPorts?: {
-		targetPort: number;
-		publishedPort: number;
-		protocol?: string;
-	}[];
-	letsEncryptEmail?: string | null;
-	trustedProxies?: CaddyTrustedProxyConfig | null;
-	accessLogs?: CaddyAccessLogConfig | null;
+interface WebServerSwitchCheck {
+	// The Caddyfile the switch would start Caddy with. Empty when the target
+	// is Traefik.
+	caddyfile: string;
+	// The switch is refused while there is one.
+	blockers: string[];
+	// What Traefik does today that will stop: each has to be accepted.
+	acknowledge: string[];
+	warnings: string[];
 }
 
-type CaddyAdditionalPort = NonNullable<CaddyOptions["additionalPorts"]>[number];
-type DockerClient = Awaited<ReturnType<typeof getRemoteDocker>>;
-type DockerContainer = ReturnType<DockerClient["getContainer"]>;
-type DockerService = ReturnType<DockerClient["getService"]>;
-type CaddyPostStartHook = (context: BuildAdmissionContext) => Promise<unknown>;
-type DockerTaskSnapshot = {
-	Status?: { State?: string };
-	Spec?: { ContainerSpec?: { Image?: string } };
+type ServerId = string | null | undefined;
+
+// What a failed command printed is Caddy's or Docker's own account of the
+// failure. A switch script prints the container's last log lines before its
+// own verdict: of those, only Caddy's error is worth showing.
+const failureMessage = (error: unknown) => {
+	const lines =
+		error instanceof ExecError ? (error.stderr?.trim().split("\n") ?? []) : [];
+	const [last] = lines.slice(-1);
+	if (!last) return error instanceof Error ? error.message : String(error);
+	const verdict = lines.find((line) => line.startsWith("Error:"));
+	return verdict && verdict !== last ? `${verdict}\n${last}` : last;
 };
 
-type RetainedCaddyContainer = {
-	container: DockerContainer;
-	wasRunning: boolean;
-	stopped: boolean;
-	renamed: boolean;
-	rollbackName: string;
-};
+const cutoverOptions = (serverId: ServerId) => ({
+	image: CADDY_IMAGE,
+	caddy: CADDY_CONTAINER,
+	traefik: TRAEFIK_CONTAINER,
+	network: "dokploy-network",
+	publish: [
+		`${TRAEFIK_PORT}:80`,
+		`${TRAEFIK_SSL_PORT}:443`,
+		`${TRAEFIK_HTTP3_PORT}:443/udp`,
+	],
+	caddyPath: paths(!!serverId).MAIN_CADDY_PATH,
+	certificatesPath: paths(!!serverId).CERTIFICATES_PATH,
+});
 
-type ExistingCaddyContainer = {
-	container: DockerContainer;
-	wasRunning: boolean;
-	networkNames: string[];
-};
-
-const usesTcp = (port: CaddyAdditionalPort) =>
-	(port.protocol ?? "tcp") === "tcp";
-
-export const isCaddyAdminAdditionalPort = (port: CaddyAdditionalPort) =>
-	usesTcp(port) &&
-	(port.targetPort === CADDY_ADMIN_PORT ||
-		port.publishedPort === CADDY_ADMIN_PORT);
-
-export const isCaddyAdminPort = isCaddyAdminAdditionalPort;
-export const isCaddyReservedAdditionalPort = (port: CaddyAdditionalPort) =>
-	usesTcp(port) &&
-	(CADDY_RESERVED_TCP_PORTS.has(port.targetPort) ||
-		CADDY_RESERVED_TCP_PORTS.has(port.publishedPort));
-
-export const isTraefikCarryOverPortForCaddyMigration = (
-	port: CaddyAdditionalPort,
-) =>
-	usesTcp(port) &&
-	(CADDY_TRAEFIK_CARRY_OVER_TCP_TARGET_PORTS.has(port.targetPort) ||
-		CADDY_RESERVED_TCP_PORTS.has(port.publishedPort));
-
-export const filterCaddyAdditionalPorts = (
-	additionalPorts: CaddyOptions["additionalPorts"] = [],
-) => additionalPorts.filter((port) => !isCaddyReservedAdditionalPort(port));
-
-export const filterTraefikCarryOverPortsForCaddyMigration = (
-	additionalPorts: CaddyOptions["additionalPorts"] = [],
-) =>
-	additionalPorts.filter(
-		(port) => !isTraefikCarryOverPortForCaddyMigration(port),
-	);
-
-const getCaddyMounts = (serverId?: string) => {
-	const {
-		CADDY_CONFIG_DIR_PATH,
-		CADDY_CONFIG_PATH,
-		CADDY_DATA_PATH,
-		MAIN_CADDY_PATH,
-	} = paths(!!serverId);
-	const { CERTIFICATES_PATH } = paths(!!serverId);
-
-	return {
-		MAIN_CADDY_PATH,
-		CADDY_CONFIG_PATH,
-		binds: [
-			`${MAIN_CADDY_PATH}:/etc/caddy`,
-			`${CADDY_DATA_PATH}:/data`,
-			`${CADDY_CONFIG_DIR_PATH}:/config`,
-			`${CERTIFICATES_PATH}:${CERTIFICATES_PATH}:ro`,
-		],
-		serviceMounts: [
-			{
-				Type: "bind" as const,
-				Source: MAIN_CADDY_PATH,
-				Target: "/etc/caddy",
-			},
-			{
-				Type: "bind" as const,
-				Source: CADDY_DATA_PATH,
-				Target: "/data",
-			},
-			{
-				Type: "bind" as const,
-				Source: CADDY_CONFIG_DIR_PATH,
-				Target: "/config",
-			},
-			{
-				Type: "bind" as const,
-				Source: CERTIFICATES_PATH,
-				Target: CERTIFICATES_PATH,
-				ReadOnly: true,
-			},
-		],
-	};
-};
-
-const buildStandalonePorts = (
-	additionalPorts: CaddyOptions["additionalPorts"],
-) => {
-	const exposedPorts: Record<string, {}> = {
-		[`${CADDY_PORT}/tcp`]: {},
-		[`${CADDY_SSL_PORT}/tcp`]: {},
-		[`${CADDY_HTTP3_PORT}/udp`]: {},
-	};
-
-	const portBindings: Record<string, Array<{ HostPort: string }>> = {
-		[`${CADDY_PORT}/tcp`]: [{ HostPort: CADDY_PORT.toString() }],
-		[`${CADDY_SSL_PORT}/tcp`]: [{ HostPort: CADDY_SSL_PORT.toString() }],
-		[`${CADDY_HTTP3_PORT}/udp`]: [{ HostPort: CADDY_HTTP3_PORT.toString() }],
-	};
-
-	for (const port of filterCaddyAdditionalPorts(additionalPorts)) {
-		const portKey = `${port.targetPort}/${port.protocol ?? "tcp"}`;
-		exposedPorts[portKey] = {};
-		portBindings[portKey] = [{ HostPort: port.publishedPort.toString() }];
-	}
-
-	return { exposedPorts, portBindings };
-};
-
-const isDockerNotFoundError = (error: unknown) =>
-	typeof error === "object" &&
-	error !== null &&
-	"statusCode" in error &&
-	error.statusCode === 404;
-
-const getExistingContainer = async (
-	docker: DockerClient,
-	containerName: string,
-): Promise<ExistingCaddyContainer | undefined> => {
-	const container = docker.getContainer(containerName);
+// Traefik's certificate store, or an empty one when it is missing or damaged:
+// the worst that follows is that Caddy requests certificates again.
+const readAcme = (files: Map<string, string>) => {
 	try {
-		const inspect = await container.inspect();
+		const text = files.get("dynamic/acme.json") || "{}";
+		const certificates = Object.values(
+			JSON.parse(text) as Record<
+				string,
+				{ Certificates?: { certificate: string }[] } | null
+			>,
+		).flatMap((resolver) => resolver?.Certificates ?? []);
+		return { text, certificates };
+	} catch {
+		return { text: "{}", certificates: [] };
+	}
+};
+
+/**
+ * The dry run of a provider switch. It changes nothing: the candidate
+ * Caddyfile is written next to the live one, under another name.
+ */
+export const checkWebServerSwitch = async (
+	target: WebServerProvider,
+	serverId?: string | null,
+): Promise<WebServerSwitchCheck> => {
+	const files = await readTraefikFiles(serverId);
+	if (target === "traefik") {
+		const soon = Date.now() + 30 * 24 * 60 * 60 * 1000;
+		const expiring = readAcme(files).certificates.filter(({ certificate }) => {
+			try {
+				const pem = Buffer.from(certificate, "base64");
+				return new Date(new X509Certificate(pem).validTo).getTime() < soon;
+			} catch {
+				return true;
+			}
+		}).length;
 		return {
-			container,
-			wasRunning: inspect.State.Running,
-			networkNames: Object.keys(inspect.NetworkSettings?.Networks ?? {}),
+			caddyfile: "",
+			blockers: [],
+			acknowledge: [],
+			warnings: [
+				...(expiring
+					? [
+							`${expiring} of the certificates Traefik holds have expired or expire within 30 days. Traefik requests those again when it starts.`,
+						]
+					: []),
+				"A compose domain that changed while Caddy served takes effect under Traefik at that compose's next deploy.",
+			],
 		};
-	} catch (error) {
-		if (isDockerNotFoundError(error)) {
-			return undefined;
-		}
-		throw error;
 	}
-};
 
-const buildStandaloneNetworkEndpoints = (networkNames: string[]) =>
-	Object.fromEntries(
-		[...new Set([DOKPLOY_CADDY_NETWORK, ...networkNames])].map((network) => [
-			network,
-			{},
-		]),
-	);
-
-const assertContainerNetworks = async (
-	container: DockerContainer,
-	requiredNetworkNames: string[],
-) => {
-	const inspect = await container.inspect();
-	const attached = new Set(
-		Object.keys(inspect.NetworkSettings?.Networks ?? {}),
-	);
-	const missing = [...new Set(requiredNetworkNames)].filter(
-		(network) => !attached.has(network),
-	);
-	if (missing.length > 0) {
-		throw new Error(
-			`Caddy candidate is missing required network attachment(s): ${missing.join(", ")}`,
-		);
-	}
-};
-
-const assertActiveUpstreamsReachable = async (
-	serverId?: string,
-	context?: BuildAdmissionContext,
-) => {
-	const preflight = await runActiveCaddyUpstreamPreflight({
-		context,
-		serverId,
-	});
-	if (preflight.status === "passed") {
-		return;
-	}
-	const failures = preflight.checks
-		.filter((check) => check.status === "failed")
-		.map((check) => `${check.dial} on ${check.network}: ${check.reason}`);
-	throw new Error(
-		`Caddy runtime upstream preflight failed${failures.length > 0 ? ` (${failures.join("; ")})` : ""}`,
-	);
-};
-
-const restoreRetainedCaddyContainer = async (
-	retained: RetainedCaddyContainer,
-	containerName: string,
-) => {
-	if (retained.renamed) {
-		await retained.container.rename({ name: containerName });
-		retained.renamed = false;
-	}
-	if (retained.wasRunning && retained.stopped) {
-		await retained.container.start();
-		retained.stopped = false;
-	}
-};
-
-const stopAndRetainCaddyContainer = async (
-	container: DockerContainer,
-	wasRunning: boolean,
-	containerName: string,
-) => {
-	const retained: RetainedCaddyContainer = {
-		container,
-		wasRunning,
-		stopped: false,
-		renamed: false,
-		rollbackName: `${containerName}-rollback-${Date.now()}`,
-	};
-
-	try {
-		if (wasRunning) {
-			await container.stop();
-			retained.stopped = true;
-		}
-		await container.rename({ name: retained.rollbackName });
-		retained.renamed = true;
-		return retained;
-	} catch (error) {
-		try {
-			await restoreRetainedCaddyContainer(retained, containerName);
-		} catch (restoreError) {
-			if (error instanceof Error) {
-				(error as Error & { restoreError?: unknown }).restoreError =
-					restoreError;
-			}
-		}
-		throw error;
-	}
-};
-
-const removeFailedCandidate = async (
-	container: DockerContainer,
-	containerName: string,
-) => {
-	try {
-		await container.stop();
-	} catch {}
-	try {
-		await container.remove({ force: true });
-	} catch (error) {
-		try {
-			await container.rename({
-				name: `${containerName}-failed-${Date.now()}`,
-			});
-		} catch (renameError) {
-			if (error instanceof Error) {
-				(error as Error & { renameError?: unknown }).renameError = renameError;
-			}
-		}
-		throw error;
-	}
-};
-
-const getExistingService = async (
-	docker: DockerClient,
-	serviceName: string,
-) => {
-	const service = docker.getService(serviceName);
-	try {
-		return { service, inspect: await service.inspect() };
-	} catch (error) {
-		if (isDockerNotFoundError(error)) {
-			return undefined;
-		}
-		throw error;
-	}
-};
-
-const mergeServiceNetworks = (
-	existingNetworks: Array<{ Target: string; Aliases?: string[] }>,
-	caddyNetworkTarget: string,
-) => {
-	const hasCaddyNetwork = existingNetworks.some(
-		(network) =>
-			network.Target === caddyNetworkTarget ||
-			network.Target === DOKPLOY_CADDY_NETWORK,
-	);
-	const networks = hasCaddyNetwork
-		? existingNetworks
-		: [...existingNetworks, { Target: caddyNetworkTarget }];
-	return [
-		...new Map(networks.map((network) => [network.Target, network])).values(),
+	const { MAIN_CADDY_PATH, CERTIFICATES_PATH } = paths(!!serverId);
+	const state = await loadCaddyState(serverId);
+	const { caddyfile, refused, automatic } = renderCaddyfile(state);
+	const all = await findServerDomains(serverId);
+	const domains = all.filter((domain) => domain.enabled);
+	const blockers = [
+		...domains.flatMap((domain) => {
+			const reason = caddyUnsupported(domain);
+			return reason ? [`${domain.host}: ${reason}.`] : [];
+		}),
+		...refused.map(
+			(route) =>
+				`${route.host}${route.path ?? ""}: its host, a path, a redirect or a user name cannot be written in a Caddyfile.`,
+		),
 	];
-};
 
-const resolveCaddyNetworkTarget = async (docker: DockerClient) => {
-	const network = await docker.getNetwork(DOKPLOY_CADDY_NETWORK).inspect();
-	if (!network.Id) {
-		throw new Error(
-			`Docker network ${DOKPLOY_CADDY_NETWORK} has no inspectable ID`,
+	// Validating compiles every redirect pattern and reads the admin's own
+	// files and the uploaded certificates, as Caddy will when it starts.
+	await runOn(serverId, `mkdir -p ${quote([MAIN_CADDY_PATH])}`);
+	const candidate = `${MAIN_CADDY_PATH}/Caddyfile.check`;
+	await writeOn(serverId, candidate, caddyfile);
+	try {
+		await runOn(
+			serverId,
+			`docker run --rm --network none -v ${quote([`${MAIN_CADDY_PATH}:/etc/caddy`])} -v ${quote([`${CERTIFICATES_PATH}:${CERTIFICATES_PATH}:ro`])} ${CADDY_IMAGE} caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.check
+status=$?
+rm -f ${quote([candidate])}
+exit $status`,
+		);
+	} catch (error) {
+		blockers.push(
+			`Caddy rejects the configuration. ${caddyError(error).message}`,
 		);
 	}
-	return network.Id;
-};
 
-const serviceTaskUsesImage = (taskImage: unknown, expectedImage: string) =>
-	taskImage === expectedImage ||
-	(typeof taskImage === "string" && taskImage.startsWith(`${expectedImage}@`));
+	const traefik = await getDockerResourceType(
+		TRAEFIK_CONTAINER,
+		serverId ?? undefined,
+	);
+	if (traefik !== "standalone") {
+		blockers.push(
+			traefik === "service"
+				? "Traefik runs as a Swarm service on this server. Run the server setup again to convert it to a container, then switch."
+				: "The Traefik container was not found on this server.",
+		);
+	}
 
-const waitForCaddyService = async (
-	docker: DockerClient,
-	service: DockerService,
-	expectedImage: string,
-	options: {
-		context?: BuildAdmissionContext;
-		retries?: number;
-		intervalMs?: number;
-	} = {},
-) => {
-	const { context } = options;
-	const retries = options.retries ?? 60;
-	const intervalMs = options.intervalMs ?? 1000;
-	const failedStates = new Set([
-		"paused",
-		"rollback_started",
-		"rollback_paused",
-		"rollback_completed",
-	]);
+	const labels = await readTraefikLabels(serverId);
+	const acknowledge = await findHandWrittenTraefikConfig(
+		serverId,
+		all,
+		files,
+		labels,
+	);
+	// readPorts throws for a container that is not there, which is reported
+	// as a blocker above.
+	const ports =
+		traefik === "standalone"
+			? await readPorts(TRAEFIK_CONTAINER, serverId ?? undefined)
+			: [];
+	const extraPorts = ports
+		.map((port) => `${port.publishedPort}/${port.protocol}`)
+		.filter(
+			(port) =>
+				![
+					`${TRAEFIK_PORT}/tcp`,
+					`${TRAEFIK_SSL_PORT}/tcp`,
+					`${TRAEFIK_HTTP3_PORT}/udp`,
+				].includes(port),
+		);
+	if (extraPorts.length) {
+		acknowledge.push(
+			`Traefik also publishes ${extraPorts.join(", ")}. Caddy will not.`,
+		);
+	}
 
-	for (let attempt = 0; attempt < retries; attempt++) {
-		context?.assertLockHeld();
-		const inspect = await service.inspect();
-		context?.assertLockHeld();
-		const updateState = inspect.UpdateStatus?.State as string | undefined;
-		if (updateState && failedStates.has(updateState)) {
-			throw new Error(
-				`Caddy service update entered ${updateState}: ${inspect.UpdateStatus?.Message ?? "no daemon message"}`,
+	const warnings: string[] = [];
+	const carried = new Set(
+		certificateBundle(readAcme(files).text)
+			.split("\n")
+			.map((line) => line.split(" ")[0]?.split("/").pop()),
+	);
+	const waiting = automatic.filter((host) => !carried.has(host));
+	if (waiting.length) {
+		warnings.push(
+			`Traefik holds no certificate Caddy can take over for ${waiting.join(", ")}. Caddy asks Let's Encrypt for one when it starts, and until it has one these hosts do not answer over HTTPS, where Traefik answers with a self-signed certificate. For a domain Let's Encrypt cannot validate, set the certificate provider to None, which keeps that behaviour.`,
+		);
+	}
+	const unanchored = new Set(
+		state.routes.flatMap((route) =>
+			route.redirects
+				.map((redirect) => redirect.regex)
+				.filter((regex) => !regex.startsWith("^")),
+		),
+	);
+	for (const regex of unanchored) {
+		warnings.push(
+			`The redirect ${regex} does not start with ^. If it matches a URL more than once, Traefik replaces every match and Caddy only the first.`,
+		);
+	}
+	const upstreams = [
+		...new Set(state.routes.flatMap((route) => route.upstreams)),
+	];
+	if (upstreams.length) {
+		// Inside Traefik's network namespace, so it sees every network the proxy
+		// is attached to. Nothing is probed while Traefik is not running.
+		const probe = upstreams
+			.map((upstream) => {
+				const [host = "", port = ""] = upstream.split(":");
+				return `nc -z -w 2 ${quote([host, port])} || echo ${quote([upstream])}`;
+			})
+			.join("; ");
+		const { stdout: silent } = await runOn(
+			serverId,
+			`docker run --rm --network container:${TRAEFIK_CONTAINER} ${CADDY_IMAGE} sh -c ${quote([probe])} 2>/dev/null; true`,
+		);
+		for (const upstream of silent.split("\n").filter(Boolean)) {
+			warnings.push(
+				`${upstream} does not answer. Its application may be stopped.`,
 			);
 		}
-
-		const tasks = (await docker.listTasks({
-			filters: {
-				service: [inspect.ID ?? service.id],
-				"desired-state": ["running"],
-			},
-		})) as DockerTaskSnapshot[];
-		context?.assertLockHeld();
-		const runningTasks = tasks.filter(
-			(task) => task.Status?.State === "running",
-		);
+	}
+	const labelled = new Set(
+		[...labels.values()].flatMap((entries) => Object.keys(entries)),
+	);
+	for (const domain of domains) {
 		if (
-			runningTasks.length > 0 &&
-			runningTasks.every((task) =>
-				serviceTaskUsesImage(task.Spec?.ContainerSpec?.Image, expectedImage),
+			domain.compose &&
+			!domain.customEntrypoint &&
+			!labelled.has(
+				`traefik.http.routers.${domain.compose.appName}-${domain.uniqueConfigKey}-web.rule`,
 			)
 		) {
-			return;
+			warnings.push(
+				`${domain.host} has no running container, so it gets its route at that compose's next deploy.`,
+			);
 		}
+	}
+	return { caddyfile, blockers, acknowledge, warnings };
+};
+
+// Which proxy serves, according to Docker. By its status, because Docker also
+// calls a container running while it keeps restarting it. Caddy only with the
+// restart policy the switch gives it before starting it: without that policy
+// it was not started by a switch.
+const servingProvider = async (
+	serverId: ServerId,
+): Promise<WebServerProvider | undefined> => {
+	const marker = `${paths(!!serverId).MAIN_CADDY_PATH}/${SWITCH_MARKER}`;
+	// A dropped connection does not stop the script on the server, so its
+	// marker is waited for, as long as a slow image pull can take.
+	for (let attempt = 0; attempt < 60; attempt++) {
 		try {
-			await delay(intervalMs, undefined, { signal: context?.signal });
-		} catch (error) {
-			context?.assertLockHeld();
-			throw error;
-		}
-		context?.assertLockHeld();
-	}
-	throw new Error(
-		`Caddy service did not converge on ${expectedImage} within ${retries} attempts`,
-	);
-};
-
-const restoreCaddyService = async (
-	docker: DockerClient,
-	service: DockerService,
-	previousSpec: CreateServiceOptions,
-) => {
-	const current = await service.inspect();
-	await service.update({
-		version: current.Version.Index,
-		...previousSpec,
-	});
-	const previousImage = (
-		previousSpec.TaskTemplate as
-			| { ContainerSpec?: { Image?: string } }
-			| undefined
-	)?.ContainerSpec?.Image;
-	if (previousImage) {
-		await waitForCaddyService(docker, service, previousImage);
-	}
-};
-
-const buildServicePorts = (
-	additionalPorts: CaddyOptions["additionalPorts"],
-) => [
-	{
-		TargetPort: 443,
-		PublishedPort: CADDY_SSL_PORT,
-		PublishMode: "host" as const,
-		Protocol: "tcp" as const,
-	},
-	{
-		TargetPort: 443,
-		PublishedPort: CADDY_HTTP3_PORT,
-		PublishMode: "host" as const,
-		Protocol: "udp" as const,
-	},
-	{
-		TargetPort: 80,
-		PublishedPort: CADDY_PORT,
-		PublishMode: "host" as const,
-		Protocol: "tcp" as const,
-	},
-	...filterCaddyAdditionalPorts(additionalPorts).map((port) => ({
-		TargetPort: port.targetPort,
-		PublishedPort: port.publishedPort,
-		Protocol: port.protocol as "tcp" | "udp" | "sctp" | undefined,
-		PublishMode: "host" as const,
-	})),
-];
-
-const initializeStandaloneCaddyLockHeld = async (
-	{
-		env,
-		serverId,
-		additionalPorts = [],
-		letsEncryptEmail,
-		trustedProxies,
-		accessLogs,
-	}: CaddyOptions = {},
-	postStartHook?: CaddyPostStartHook,
-) => {
-	const imageName = CADDY_IMAGE;
-	const containerName = "dokploy-caddy";
-	const { CADDY_CONFIG_PATH, binds } = getCaddyMounts(serverId);
-	const { exposedPorts, portBindings } = buildStandalonePorts(additionalPorts);
-
-	const settings: ContainerCreateOptions = {
-		name: containerName,
-		Image: imageName,
-		Cmd: ["caddy", "run", "--config", "/etc/caddy/caddy.json"],
-		NetworkingConfig: {
-			EndpointsConfig: buildStandaloneNetworkEndpoints([]),
-		},
-		ExposedPorts: exposedPorts,
-		HostConfig: {
-			RestartPolicy: {
-				Name: "always",
-			},
-			Binds: binds,
-			PortBindings: portBindings,
-		},
-		Env: env,
-	};
-
-	const previousConfig = await readCaddyConfigFileIfExists({ serverId });
-	let retained: RetainedCaddyContainer | undefined;
-	let candidate: DockerContainer | undefined;
-	await withHostBuildAdmission(
-		{ serverId: serverId || null, operation: "caddy-standalone-setup" },
-		async (context) => {
-			try {
-				await ensureDefaultCaddyConfig({
-					serverId,
-					letsEncryptEmail,
-					trustedProxies,
-					accessLogs,
-				});
-				const docker = await getRemoteDocker(serverId);
-				await pullImageUnderBuildAdmission({
-					context,
-					dockerImage: imageName,
-					serverId: serverId || null,
-				});
-				await docker.getImage(imageName).inspect();
-				context.assertLockHeld();
-				await validateCaddyConfigFileWithImage(
-					CADDY_CONFIG_PATH,
-					serverId,
-					imageName,
-					context,
-				);
-				context.assertLockHeld();
-				await assertActiveUpstreamsReachable(serverId, context);
-				context.assertLockHeld();
-				console.log("Caddy candidate pulled and validated ✅");
-
-				const existing = await getExistingContainer(docker, containerName);
-				settings.NetworkingConfig = {
-					EndpointsConfig: buildStandaloneNetworkEndpoints(
-						existing?.networkNames ?? [],
-					),
-				};
-				context.assertLockHeld();
-				retained = existing
-					? await stopAndRetainCaddyContainer(
-							existing.container,
-							existing.wasRunning,
-							containerName,
-						)
+			const { stdout } = await runOn(
+				serverId,
+				`[ -e ${quote([marker])} ] && echo ${SWITCH_MARKER}
+docker inspect -f '{{.Name}} {{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' ${CADDY_CONTAINER} ${TRAEFIK_CONTAINER} 2>/dev/null
+docker info >/dev/null`,
+			);
+			// A marker that outlives the wait was left by a script that was
+			// killed, and Docker's answer stands.
+			if (!stdout.includes(SWITCH_MARKER) || attempt === 59) {
+				if (stdout.includes(`/${CADDY_CONTAINER} running always`)) {
+					return "caddy";
+				}
+				return stdout.includes(`/${TRAEFIK_CONTAINER} running`)
+					? "traefik"
 					: undefined;
-				context.assertLockHeld();
-				candidate = await docker.createContainer(settings);
-				context.assertLockHeld();
-				await candidate.start();
-				context.assertLockHeld();
-				await validateCaddyConfigWithContainer(serverId, context);
-				context.assertLockHeld();
-				if (postStartHook) {
-					await postStartHook(context);
-					context.assertLockHeld();
-				}
-				await assertContainerNetworks(candidate, [
-					DOKPLOY_CADDY_NETWORK,
-					...(existing?.networkNames ?? []),
-				]);
-				context.assertLockHeld();
-				await assertActiveUpstreamsReachable(serverId, context);
-				context.assertLockHeld();
-			} catch (error) {
-				const restoreErrors: unknown[] = [];
-				try {
-					if (candidate) {
-						await removeFailedCandidate(candidate, containerName);
-					}
-				} catch (restoreError) {
-					restoreErrors.push(restoreError);
-				}
-				try {
-					if (previousConfig) {
-						await writeCaddyConfigContent(previousConfig, { serverId });
-					}
-				} catch (restoreError) {
-					restoreErrors.push(restoreError);
-				}
-				try {
-					if (retained) {
-						await restoreRetainedCaddyContainer(retained, containerName);
-					}
-				} catch (restoreError) {
-					restoreErrors.push(restoreError);
-				}
-				if (error instanceof Error && restoreErrors.length > 0) {
-					(error as Error & { restoreError?: unknown }).restoreError =
-						restoreErrors.length === 1
-							? restoreErrors[0]
-							: new AggregateError(
-									restoreErrors,
-									"Failed to clean up the Caddy candidate and restore the previous edge",
-								);
-				}
-				throw error;
 			}
-		},
-	);
-	if (retained) {
-		console.log(`Previous Caddy retained as ${retained.rollbackName} ✅`);
+		} catch {}
+		await sleep(5000);
 	}
-	console.log("Caddy Started ✅");
 };
 
-export const initializeStandaloneCaddy = async (
-	options: CaddyOptions = {},
-	postStartHook?: CaddyPostStartHook,
-) =>
-	withCaddyConfigLock(options.serverId, () =>
-		initializeStandaloneCaddyLockHeld(options, postStartHook),
+const switchToCaddy = async (serverId: ServerId) => {
+	const { MAIN_CADDY_PATH } = paths(!!serverId);
+	const { caddyfile } = renderCaddyfile(await loadCaddyState(serverId));
+	const bundle = certificateBundle(
+		readAcme(await readTraefikFiles(serverId)).text,
 	);
-
-const initializeCaddyServiceLockHeld = async (
-	{
-		env,
-		additionalPorts = [],
+	// The bundle holds private keys. The script unpacks and deletes it.
+	const prepare = `umask 077 && mkdir -p ${quote([`${MAIN_CADDY_PATH}/data`])} && : > ${quote([`${MAIN_CADDY_PATH}/data/certificates.import`])}`;
+	await runOn(serverId, prepare);
+	await writeOn(
 		serverId,
-		letsEncryptEmail,
-		trustedProxies,
-		accessLogs,
-	}: CaddyOptions,
-	postStartHook?: CaddyPostStartHook,
-) => {
-	const imageName = CADDY_IMAGE;
-	const appName = "dokploy-caddy";
-	const { CADDY_CONFIG_PATH, serviceMounts } = getCaddyMounts(serverId);
-	const previousConfig = await readCaddyConfigFileIfExists({ serverId });
-	const docker = await getRemoteDocker(serverId);
-	let existing: Awaited<ReturnType<typeof getExistingService>>;
-	let activeService: DockerService | undefined;
-	let createdService = false;
-	let serviceMutated = false;
+		`${MAIN_CADDY_PATH}/data/certificates.import`,
+		bundle,
+	);
+	await writeOn(serverId, `${MAIN_CADDY_PATH}/Caddyfile`, caddyfile);
+	// Before the script, so that every state other than the intended one is
+	// loud: a sync against a Caddy that is not running fails with an error. The
+	// other order could leave Caddy serving while the column says Traefik.
+	await setWebServerProvider("caddy", serverId);
+	await runOn(serverId, switchToCaddyScript(cutoverOptions(serverId)));
+};
 
-	const settings: CreateServiceOptions = {
-		Name: appName,
-		TaskTemplate: {
-			ContainerSpec: {
-				Image: imageName,
-				Command: ["caddy", "run", "--config", "/etc/caddy/caddy.json"],
-				Env: env,
-				Mounts: serviceMounts,
-			},
-			Networks: [{ Target: DOKPLOY_CADDY_NETWORK }],
-			Placement: {
-				Constraints: ["node.role==manager"],
-			},
-		},
-		Mode: {
-			Replicated: {
-				Replicas: 1,
-			},
-		},
-		EndpointSpec: {
-			Ports: buildServicePorts(additionalPorts),
-		},
-		UpdateConfig: {
-			Parallelism: 1,
-			Delay: 0,
-			FailureAction: "rollback",
-			Monitor: 30_000_000_000,
-			MaxFailureRatio: 0,
-			Order: "stop-first",
-		},
-		RollbackConfig: {
-			Parallelism: 1,
-			Delay: 0,
-			FailureAction: "pause",
-			Monitor: 30_000_000_000,
-			MaxFailureRatio: 0,
-			Order: "stop-first",
-		},
-	};
-	await withHostBuildAdmission(
-		{ serverId: serverId || null, operation: "caddy-service-setup" },
-		async (context) => {
-			try {
-				await ensureDefaultCaddyConfig({
-					serverId,
-					letsEncryptEmail,
-					trustedProxies,
-					accessLogs,
-				});
-				await pullImageUnderBuildAdmission({
-					context,
-					dockerImage: imageName,
-					serverId: serverId || null,
-				});
-				await docker.getImage(imageName).inspect();
-				context.assertLockHeld();
-				await validateCaddyConfigFileWithImage(
-					CADDY_CONFIG_PATH,
-					serverId,
-					imageName,
-					context,
-				);
-				context.assertLockHeld();
-				await assertActiveUpstreamsReachable(serverId, context);
-				context.assertLockHeld();
-				console.log("Caddy service candidate pulled and validated ✅");
+// The column stays on Caddy until Docker confirms Traefik: if this is cut
+// short, a later change then fails with an error instead of being skipped
+// for a Caddy that still serves.
+const switchToTraefik = async (serverId: ServerId) => {
+	const { stdout } = await runOn(
+		serverId,
+		switchToTraefikScript(cutoverOptions(serverId)),
+	);
+	const recreated = stdout.split("\n").includes("missing");
+	if (recreated) {
+		await initializeStandaloneTraefik({ serverId: serverId ?? undefined });
+	}
+	await reconnectServicesToTraefik(serverId ?? undefined);
+	return recreated;
+};
 
-				existing = await getExistingService(docker, appName);
-				const caddyNetworkTarget = await resolveCaddyNetworkTarget(docker);
-				settings.TaskTemplate = {
-					...settings.TaskTemplate,
-					Networks: mergeServiceNetworks(
-						existing?.inspect.Spec?.TaskTemplate?.Networks ?? [],
-						caddyNetworkTarget,
-					),
-				};
-
-				context.assertLockHeld();
-				if (existing) {
-					activeService = existing.service;
-					await activeService.update({
-						version: existing.inspect.Version.Index,
-						...settings,
-						TaskTemplate: {
-							...settings.TaskTemplate,
-							ForceUpdate:
-								existing.inspect.Spec?.TaskTemplate?.ForceUpdate ?? 0,
-						},
-					});
-					serviceMutated = true;
-					context.assertLockHeld();
-					console.log("Caddy service update accepted ✅");
-				} else {
-					activeService = await docker.createService(settings);
-					createdService = true;
-					serviceMutated = true;
-					context.assertLockHeld();
-					console.log("Caddy service creation accepted ✅");
-				}
-
-				await waitForCaddyService(docker, activeService, imageName, {
-					context,
-				});
-				context.assertLockHeld();
-				await validateCaddyConfigWithContainer(serverId, context);
-				context.assertLockHeld();
-				if (postStartHook) {
-					await postStartHook(context);
-					context.assertLockHeld();
-					await waitForCaddyService(docker, activeService, imageName, {
-						context,
-					});
-					context.assertLockHeld();
-				}
-				await assertActiveUpstreamsReachable(serverId, context);
-				context.assertLockHeld();
-				console.log(existing ? "Caddy Updated ✅" : "Caddy Started ✅");
-			} catch (error) {
-				const restoreErrors: unknown[] = [];
-				try {
-					if (previousConfig) {
-						await writeCaddyConfigContent(previousConfig, { serverId });
-					}
-				} catch (restoreError) {
-					restoreErrors.push(restoreError);
-				}
-				try {
-					if (createdService && activeService) {
-						await activeService.remove();
-					} else if (serviceMutated && existing && activeService) {
-						await restoreCaddyService(
-							docker,
-							activeService,
-							existing.inspect.Spec as CreateServiceOptions,
-						);
-					}
-				} catch (restoreError) {
-					restoreErrors.push(restoreError);
-				}
-				if (error instanceof Error && restoreErrors.length > 0) {
-					(error as Error & { restoreError?: unknown }).restoreError =
-						restoreErrors.length === 1
-							? restoreErrors[0]
-							: new AggregateError(
-									restoreErrors,
-									"Failed to restore the previous Caddy service",
-								);
-				}
-				throw error;
+// Traefik's files were written all along, but its writers swallow errors, so
+// every application and preview domain is written once more.
+const rewriteTraefikFiles = async (serverId: ServerId) => {
+	for (const domain of await findServerDomains(serverId)) {
+		const applicationId =
+			domain.applicationId ?? domain.previewDeployment?.applicationId;
+		if (!applicationId) continue;
+		try {
+			const application = await findApplicationById(applicationId);
+			if (domain.previewDeployment) {
+				application.appName = domain.previewDeployment.appName;
 			}
-		},
-	);
+			await manageDomain(application, domain);
+		} catch (error) {
+			console.error(`Traefik config for ${domain.host}:`, error);
+		}
+	}
 };
 
-export const initializeCaddyService = async (
-	options: CaddyOptions,
-	postStartHook?: CaddyPostStartHook,
-) =>
-	withCaddyConfigLock(options.serverId, () =>
-		initializeCaddyServiceLockHeld(options, postStartHook),
+/**
+ * Refuses while the dry run has blockers or unaccepted items, then switches
+ * in the background: on the Dokploy host the dashboard is reached through the
+ * proxy being replaced, so the request cannot wait for the outcome. It is
+ * recorded for `caddySwitch` to return.
+ */
+export const switchWebServer = async (
+	target: WebServerProvider,
+	serverId: string | null | undefined,
+	acknowledged: boolean,
+) => {
+	if (caddySwitch(serverId)?.status === "running") {
+		throw new Error("A switch is already running on this server.");
+	}
+	// Before the first await, so that a second request is refused above.
+	recordCaddySwitch(serverId, { target, status: "running", message: "" });
+	try {
+		const check = await checkWebServerSwitch(target, serverId);
+		if (check.blockers.length) throw new Error(check.blockers.join("\n"));
+		if (check.acknowledge.length && !acknowledged) {
+			throw new Error(
+				"Some of Traefik's configuration will stop applying. Accept that before switching.",
+			);
+		}
+	} catch (error) {
+		recordCaddySwitch(serverId, {
+			target,
+			status: "failed",
+			message: failureMessage(error),
+		});
+		throw error;
+	}
+
+	// In the queue, so that no sync and no second switch can interleave.
+	void withCaddyQueue(serverId, async () => {
+		let failure = "";
+		let recreated = false;
+		try {
+			if (target === "caddy") await switchToCaddy(serverId);
+			else recreated = await switchToTraefik(serverId);
+		} catch (error) {
+			failure = failureMessage(error);
+		}
+		// Whatever the script reported, the column follows what Docker says.
+		let serving = await servingProvider(serverId);
+		if (target === "traefik" && serving !== "traefik") {
+			// As the script's own restore does: a Traefik that is not serving must
+			// not come back with the Docker daemon either.
+			await runOn(
+				serverId,
+				`docker stop ${TRAEFIK_CONTAINER} >/dev/null 2>&1
+docker update --restart no ${TRAEFIK_CONTAINER} >/dev/null 2>&1
+docker update --restart always ${CADDY_CONTAINER} && docker start ${CADDY_CONTAINER}`,
+			).catch(() => {});
+			serving = await servingProvider(serverId);
+		}
+		// With neither confirmed the column stays on Caddy, the value that makes
+		// every later change fail with an error instead of going stale quietly.
+		await setWebServerProvider(serving ?? "caddy", serverId);
+		if (serving === "caddy") await applyCaddy(serverId, true);
+		else if (serving === "traefik") await rewriteTraefikFiles(serverId);
+
+		const names = { caddy: "Caddy", traefik: "Traefik" };
+		if (serving !== target) {
+			throw new Error(
+				[
+					failure,
+					serving
+						? `${names[serving]} is serving`
+						: "Docker did not confirm that either proxy is serving. Check the server.",
+				]
+					.filter(Boolean)
+					.join("\n"),
+			);
+		}
+		return recreated
+			? "Traefik is serving. Its container had been removed, so it was created again with the default ports and environment."
+			: `${names[serving]} is serving`;
+	}).then(
+		(message) =>
+			recordCaddySwitch(serverId, { target, status: "done", message }),
+		(error) =>
+			recordCaddySwitch(serverId, {
+				target,
+				status: "failed",
+				message: failureMessage(error),
+			}),
 	);
-
-export const createDefaultCaddyConfig = async (options: CaddyOptions = {}) => {
-	await ensureDefaultCaddyConfig(options);
 };
-
-export const validateCaddyConfig = validateCaddyConfigWithContainer;
-export const reloadCaddy = reloadCaddyAfterValidation;

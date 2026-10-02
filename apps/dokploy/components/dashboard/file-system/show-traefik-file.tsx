@@ -22,7 +22,7 @@ import { api } from "@/utils/api";
 import { validateAndFormatYAML } from "../application/advanced/traefik/update-traefik-config";
 
 const UpdateServerMiddlewareConfigSchema = z.object({
-	webServerConfig: z.string(),
+	traefikConfig: z.string(),
 });
 
 type UpdateServerMiddlewareConfig = z.infer<
@@ -32,24 +32,14 @@ type UpdateServerMiddlewareConfig = z.infer<
 interface Props {
 	path: string;
 	serverId?: string;
-	activeProvider?: "traefik" | "caddy";
 }
 
-export const ShowTraefikFile = ({ path, serverId, activeProvider }: Props) => {
-	const providerLabel =
-		activeProvider === "caddy"
-			? "Caddy"
-			: activeProvider === "traefik"
-				? "Traefik"
-				: "Web Server";
-	const isTraefik = activeProvider === "traefik";
+export const ShowTraefikFile = ({ path, serverId }: Props) => {
 	const {
 		data,
 		refetch,
 		isLoading: isLoadingFile,
-		error: readError,
-		isError: isReadError,
-	} = api.settings.readWebServerFile.useQuery(
+	} = api.settings.readTraefikFile.useQuery(
 		{
 			path,
 			serverId,
@@ -62,64 +52,51 @@ export const ShowTraefikFile = ({ path, serverId, activeProvider }: Props) => {
 	const [skipYamlValidation, setSkipYamlValidation] = useState(false);
 
 	const { mutateAsync, isPending, error, isError } =
-		api.settings.updateWebServerFile.useMutation();
+		api.settings.updateTraefikFile.useMutation();
 
 	const form = useForm<UpdateServerMiddlewareConfig>({
 		defaultValues: {
-			webServerConfig: "",
+			traefikConfig: "",
 		},
-		disabled: !isTraefik || canEdit,
+		disabled: canEdit,
 		resolver: zodResolver(UpdateServerMiddlewareConfigSchema),
 	});
 
 	useEffect(() => {
 		form.reset({
-			webServerConfig: data || "",
+			traefikConfig: data || "",
 		});
 	}, [form, form.reset, data]);
 
 	const onSubmit = async (data: UpdateServerMiddlewareConfig) => {
-		if (!isTraefik) {
-			return;
-		}
 		if (!skipYamlValidation) {
-			const { valid, error } = validateAndFormatYAML(data.webServerConfig);
+			const { valid, error } = validateAndFormatYAML(data.traefikConfig);
 			if (!valid) {
-				form.setError("webServerConfig", {
+				form.setError("traefikConfig", {
 					type: "manual",
 					message: error || "Invalid YAML",
 				});
 				return;
 			}
 		}
-		form.clearErrors("webServerConfig");
+		form.clearErrors("traefikConfig");
 		await mutateAsync({
-			webServerConfig: data.webServerConfig,
+			traefikConfig: data.traefikConfig,
 			path,
 			serverId,
 		})
 			.then(async () => {
-				toast.success(`${providerLabel} config updated`);
+				toast.success("Traefik config Updated");
 				refetch();
 			})
 			.catch(() => {
-				toast.error(`Error updating the ${providerLabel} config`);
+				toast.error("Error updating the Traefik config");
 			});
 	};
 
 	return (
 		<div>
-			{isReadError && (
-				<AlertBlock type="error">{readError?.message}</AlertBlock>
-			)}
 			{isError && <AlertBlock type="error">{error?.message}</AlertBlock>}
-			{activeProvider === "caddy" && (
-				<AlertBlock type="info" className="mb-4">
-					Caddy generated files are read-only from this view. Use Dokploy
-					settings, domains, and migration controls to change generated Caddy
-					config.
-				</AlertBlock>
-			)}
 			<Form {...form}>
 				<form
 					onSubmit={form.handleSubmit(onSubmit)}
@@ -136,18 +113,16 @@ export const ShowTraefikFile = ({ path, serverId, activeProvider }: Props) => {
 						) : (
 							<FormField
 								control={form.control}
-								name="webServerConfig"
+								name="traefikConfig"
 								render={({ field }) => (
 									<FormItem className="relative">
-										<FormLabel>{providerLabel} config</FormLabel>
+										<FormLabel>Traefik config</FormLabel>
 										<FormDescription className="break-all">
 											{path}
 										</FormDescription>
 										<FormControl>
 											<CodeEditor
-												disabled={!isTraefik || canEdit}
 												lineWrapping
-												language={activeProvider === "caddy" ? "json" : "yaml"}
 												wrapperClassName="h-140 font-mono"
 												placeholder={`http:
 routers:
@@ -166,59 +141,55 @@ routers:
 										<pre>
 											<FormMessage />
 										</pre>
-										{isTraefik && (
-											<div className="flex justify-end absolute z-50 right-6 top-8">
-												<Button
-													className="shadow-xs"
-													variant="secondary"
-													type="button"
-													onClick={async () => {
-														setCanEdit(!canEdit);
-													}}
-												>
-													{canEdit ? "Unlock" : "Lock"}
-												</Button>
-											</div>
-										)}
+										<div className="flex justify-end absolute z-50 right-6 top-8">
+											<Button
+												className="shadow-xs"
+												variant="secondary"
+												type="button"
+												onClick={async () => {
+													setCanEdit(!canEdit);
+												}}
+											>
+												{canEdit ? "Unlock" : "Lock"}
+											</Button>
+										</div>
 									</FormItem>
 								)}
 							/>
 						)}
 					</div>
-					{isTraefik && (
-						<div className="flex flex-col gap-4">
-							<div className="flex items-center space-x-2">
-								<Checkbox
-									id="skip-yaml-validation"
-									checked={skipYamlValidation}
-									onCheckedChange={(checked) =>
-										setSkipYamlValidation(checked === true)
-									}
-								/>
-								<Label
-									htmlFor="skip-yaml-validation"
-									className="text-sm font-normal cursor-pointer"
-								>
-									Skip YAML validation (for Go templating)
-								</Label>
-							</div>
-							<p className="text-sm text-muted-foreground -mt-2">
-								Traefik supports Go templating in dynamic configs (e.g.{" "}
-								<code className="text-xs">{"{{range}}"}</code>). Configs using
-								templates will fail standard YAML validation. Check this to save
-								without validation.
-							</p>
-							<div className="flex justify-end">
-								<Button
-									isLoading={isPending}
-									disabled={canEdit || isLoadingFile}
-									type="submit"
-								>
-									Update
-								</Button>
-							</div>
+					<div className="flex flex-col gap-4">
+						<div className="flex items-center space-x-2">
+							<Checkbox
+								id="skip-yaml-validation"
+								checked={skipYamlValidation}
+								onCheckedChange={(checked) =>
+									setSkipYamlValidation(checked === true)
+								}
+							/>
+							<Label
+								htmlFor="skip-yaml-validation"
+								className="text-sm font-normal cursor-pointer"
+							>
+								Skip YAML validation (for Go templating)
+							</Label>
 						</div>
-					)}
+						<p className="text-sm text-muted-foreground -mt-2">
+							Traefik supports Go templating in dynamic configs (e.g.{" "}
+							<code className="text-xs">{"{{range}}"}</code>). Configs using
+							templates will fail standard YAML validation. Check this to save
+							without validation.
+						</p>
+						<div className="flex justify-end">
+							<Button
+								isLoading={isPending}
+								disabled={canEdit || isLoadingFile}
+								type="submit"
+							>
+								Update
+							</Button>
+						</div>
+					</div>
 				</form>
 			</Form>
 		</div>

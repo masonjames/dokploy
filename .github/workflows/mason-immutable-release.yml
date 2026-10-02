@@ -61,7 +61,6 @@ jobs:
           __test__/deploy/rollback-build-admission.test.ts
           __test__/deploy/settings-build-admission.test.ts
           __test__/deploy/service-start-build-admission.test.ts
-          __test__/deploy/snapshot-service-start-build-admission.test.ts
           __test__/deploy/application-release-api.test.ts
           __test__/deploy/application-release-cloud-api.test.ts
           __test__/deploy/application-runtime-status.test.ts

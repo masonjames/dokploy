@@ -5,6 +5,7 @@ import {
 	organization,
 	previewDeployments,
 } from "@dokploy/server/db/schema";
+import { syncCaddyInBackground } from "@dokploy/server/utils/caddy/sync";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import type { z } from "zod";
@@ -12,14 +13,11 @@ import { generatePassword } from "../templates";
 import { removeService } from "../utils/docker/utils";
 import { removeDirectoryCode } from "../utils/filesystem/directory";
 import { authGithub } from "../utils/providers/github";
-import {
-	manageWebServerDomain,
-	removeWebServerAppRoutes,
-	removeWebServerDomain,
-} from "../utils/web-server/domain";
+import { removeTraefikConfig } from "../utils/traefik/application";
+import { manageDomain } from "../utils/traefik/domain";
 import { findApplicationById } from "./application";
 import { removeDeploymentsByPreviewDeploymentId } from "./deployment";
-import { createDomain, removeDomainById } from "./domain";
+import { createDomain } from "./domain";
 import { findGithubById, getIssueComment } from "./github";
 import { getWebServerSettings } from "./web-server-settings";
 
@@ -58,18 +56,6 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 		);
 
 		application.appName = previewDeployment.appName;
-		if (previewDeployment.domain) {
-			await removeWebServerDomain(
-				application,
-				previewDeployment.domain.uniqueConfigKey,
-			);
-		} else {
-			await removeWebServerAppRoutes(
-				application?.appName,
-				application?.serverId,
-			);
-		}
-
 		const cleanupOperations = [
 			async () =>
 				await removeService(application?.appName, application?.serverId),
@@ -80,6 +66,8 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 				),
 			async () =>
 				await removeDirectoryCode(application?.appName, application?.serverId),
+			async () =>
+				await removeTraefikConfig(application?.appName, application?.serverId),
 			async () =>
 				await db
 					.delete(previewDeployments)
@@ -95,6 +83,7 @@ export const removePreviewDeployment = async (previewDeploymentId: string) => {
 				console.error(error);
 			}
 		}
+		syncCaddyInBackground(application.serverId);
 		return previewDeployment;
 	} catch (error) {
 		const message =
@@ -197,64 +186,32 @@ export const createPreviewDeployment = async (
 		});
 	}
 
+	const newDomain = await createDomain({
+		host: generateDomain,
+		path: application.previewPath,
+		port: application.previewPort,
+		https: application.previewHttps,
+		certificateType: application.previewCertificateType,
+		customCertResolver: application.previewCustomCertResolver,
+		domainType: "preview",
+		previewDeploymentId: previewDeployment.previewDeploymentId,
+	});
+
 	application.appName = appName;
-	let newDomain: Awaited<ReturnType<typeof createDomain>> | undefined;
-	let routeCreated = false;
 
-	try {
-		newDomain = await createDomain({
-			host: generateDomain,
-			path: application.previewPath,
-			port: application.previewPort,
-			https: application.previewHttps,
-			certificateType: application.previewCertificateType,
-			customCertResolver: application.previewCustomCertResolver,
-			domainType: "preview",
-			previewDeploymentId: previewDeployment.previewDeploymentId,
-		});
+	await manageDomain(application, newDomain);
 
-		await manageWebServerDomain(application, newDomain);
-		routeCreated = true;
-
-		await db
-			.update(previewDeployments)
-			.set({
-				domainId: newDomain.domainId,
-			})
-			.where(
-				eq(
-					previewDeployments.previewDeploymentId,
-					previewDeployment.previewDeploymentId,
-				),
-			);
-	} catch (error) {
-		if (routeCreated && newDomain) {
-			await removeWebServerDomain(application, newDomain.uniqueConfigKey).catch(
-				() => undefined,
-			);
-		}
-		if (newDomain) {
-			await removeDomainById(newDomain.domainId).catch(() => undefined);
-		}
-		await db
-			.delete(previewDeployments)
-			.where(
-				eq(
-					previewDeployments.previewDeploymentId,
-					previewDeployment.previewDeploymentId,
-				),
-			)
-			.returning()
-			.catch(() => undefined);
-		await octokit.rest.issues
-			.deleteComment({
-				owner: application?.owner || "",
-				repo: application?.repository || "",
-				comment_id: issue.data.id,
-			})
-			.catch(() => undefined);
-		throw error;
-	}
+	await db
+		.update(previewDeployments)
+		.set({
+			domainId: newDomain.domainId,
+		})
+		.where(
+			eq(
+				previewDeployments.previewDeploymentId,
+				previewDeployment.previewDeploymentId,
+			),
+		);
 
 	return previewDeployment;
 };
