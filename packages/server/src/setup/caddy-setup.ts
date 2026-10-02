@@ -684,7 +684,8 @@ docker info >/dev/null`,
 			// A marker that outlives the wait was left by a script that was
 			// killed, and Docker's answer stands.
 			if (!stdout.includes(SWITCH_MARKER) || attempt === 59) {
-				if (stdout.includes(`/${CADDY_CONTAINER} running always`)) return "caddy";
+				if (stdout.includes(`/${CADDY_CONTAINER} running always`))
+					return "caddy";
 				if (stdout.includes(`/${TRAEFIK_CONTAINER} running`)) return "traefik";
 				return undefined;
 			}

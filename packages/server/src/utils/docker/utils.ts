@@ -3,11 +3,11 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import { docker, paths } from "@dokploy/server/constants";
 import type { Compose } from "@dokploy/server/services/compose";
+import { getWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import {
 	type BuildAdmissionContext,
 	withHostBuildAdmission,
 } from "@dokploy/server/utils/process/build-admission";
-import { getWebServerProvider } from "@dokploy/server/services/web-server-settings";
 import type { ContainerInfo, ResourceRequirements } from "dockerode";
 import { parse } from "dotenv";
 import { quote } from "shell-quote";
