@@ -1,7 +1,10 @@
 import { IS_CLOUD } from "@dokploy/server/constants";
+import { db } from "@dokploy/server/db";
+import { server } from "@dokploy/server/db/schema";
 import type { Domain } from "@dokploy/server/services/domain";
 import type { Redirect } from "@dokploy/server/services/redirect";
 import { getWebServerProvider } from "@dokploy/server/services/web-server-settings";
+import { eq } from "drizzle-orm";
 import type { CaddyState } from "./caddyfile";
 
 export const CADDY_CONTAINER = "dokploy-caddy";
@@ -82,6 +85,24 @@ export const syncCaddyInBackground = (serverId?: string | null) =>
 	void syncCaddy(serverId).catch((error) =>
 		console.error("Caddy sync failed:", error),
 	);
+
+/**
+ * For boot, and for changes that can reach any server, like deleting a
+ * project whose services are spread over several.
+ */
+export const syncAllCaddyInBackground = () => {
+	if (IS_CLOUD) return;
+	syncCaddyInBackground();
+	void db.query.server
+		.findMany({
+			where: eq(server.webServerProvider, "caddy"),
+			columns: { serverId: true },
+		})
+		.then((servers) => {
+			for (const { serverId } of servers) syncCaddyInBackground(serverId);
+		})
+		.catch((error) => console.error("Caddy sync failed:", error));
+};
 
 export const loadCaddyState = async (
 	_serverId?: string | null,
