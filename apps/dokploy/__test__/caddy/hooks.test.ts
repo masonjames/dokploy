@@ -1,11 +1,20 @@
 import { db } from "@dokploy/server/db";
+import { security } from "@dokploy/server/db/schema";
 import {
 	createDomain,
 	findDomainServerId,
 	updateDomainById,
 } from "@dokploy/server/services/domain";
+import { createSecurity } from "@dokploy/server/services/security";
 import { assertTraefikProvider } from "@dokploy/server/services/web-server-settings";
+import { syncCaddy } from "@dokploy/server/utils/caddy/sync";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@dokploy/server/utils/traefik/security");
+vi.mock("@dokploy/server/utils/caddy/sync", async (original) => ({
+	...(await original<typeof import("@dokploy/server/utils/caddy/sync")>()),
+	syncCaddy: vi.fn(async () => {}),
+}));
 
 // setup.ts mocks the database with one object shared by every table, so each
 // test queues the rows its lookups return, in the order they run.
@@ -13,11 +22,14 @@ const findFirst = vi.mocked(db.query.domains.findFirst);
 const returns = (...rows: object[]) => {
 	for (const row of rows) findFirst.mockResolvedValueOnce(row as never);
 };
+// It has no transactions either. Running the body is enough here.
+db.transaction = ((run: (tx: typeof db) => unknown) => run(db)) as never;
 
 beforeEach(() => {
 	findFirst.mockReset();
 	vi.mocked(db.insert).mockClear();
 	vi.mocked(db.update).mockClear();
+	vi.mocked(db.delete).mockClear();
 });
 
 describe("findDomainServerId", () => {
@@ -73,6 +85,18 @@ describe("on a server that runs Caddy", () => {
 		await expect(assertTraefikProvider("server")).rejects.toMatchObject({
 			code: "BAD_REQUEST",
 		});
+	});
+
+	it("a password rule Caddy does not load is not kept", async () => {
+		const rule = { applicationId: "app", username: "amy", password: "secret" };
+		returns({ serverId: "server" });
+		await createSecurity(rule);
+		expect(db.delete).not.toHaveBeenCalled();
+		// The second lookup is the deletion's.
+		returns({ serverId: "server" }, { serverId: "server" });
+		vi.mocked(syncCaddy).mockRejectedValueOnce(new Error("not live"));
+		await expect(createSecurity(rule)).rejects.toThrow("not live");
+		expect(db.delete).toHaveBeenCalledWith(security);
 	});
 });
 

@@ -291,8 +291,8 @@ it("loads stable application and preview routes with inherited users", async () 
 		domain(),
 	];
 	const first = await loadCaddyState();
-	const [route, preview] = first.routes;
-	expect(first.routes.map((r) => r.uniqueConfigKey)).toEqual([1, 2]);
+	const [, route, preview] = first.routes;
+	expect(first.routes.map((r) => r.uniqueConfigKey)).toEqual([0, 1, 2]);
 	expect(route).toMatchObject({
 		stripPrefix: "/api",
 		addPrefix: "/inside",
@@ -317,7 +317,7 @@ it("loads stable application and preview routes with inherited users", async () 
 	rows = [{ ...domain(), application: { ...app, security } }];
 	const changed = await loadCaddyState();
 	expect(
-		await bcrypt.compare("changed", changed.routes[0]!.users[0]!.hash),
+		await bcrypt.compare("changed", changed.routes[1]!.users[0]!.hash),
 	).toBe(true);
 	expect(shared.hashes.size).toBe(1);
 	rows = [];
@@ -346,10 +346,8 @@ it.each([
 			stdout: "/container traefik.http.routers.web-2-web.rule",
 			stderr: "",
 		});
-		expect((await loadCaddyState()).routes.map((r) => r.addPrefix)).toEqual([
-			appPrefix,
-			composePrefix,
-		]);
+		const [, ...routes] = (await loadCaddyState()).routes;
+		expect(routes.map((r) => r.addPrefix)).toEqual([appPrefix, composePrefix]);
 	},
 );
 
@@ -381,6 +379,17 @@ it("filters domains and adds the dashboard only locally", async () => {
 	expect(remote.routes.map((route) => route.uniqueConfigKey)).toEqual([4]);
 });
 
+it("serves the dashboard at Traefik's default address until a host is assigned", async () => {
+	vi.mocked(getWebServerSettings).mockResolvedValue({
+		host: null,
+		https: true,
+	} as Awaited<ReturnType<typeof getWebServerSettings>>);
+	expect((await loadCaddyState()).routes).toMatchObject([
+		{ host: "dokploy.docker.localhost", https: false },
+	]);
+	expect((await loadCaddyState("remote")).routes).toEqual([]);
+});
+
 it("looks up exact router keys and existing certificate folders", async () => {
 	rows = [12, 13].map((key) => ({
 		...domain(key),
@@ -400,8 +409,8 @@ it("looks up exact router keys and existing certificate folders", async () => {
 	).toEqual(["replica", "service"]);
 	vi.mocked(execAsync).mockResolvedValue({ stdout: output, stderr: "" });
 	const loaded = await loadCaddyState();
-	expect(loaded.routes).toHaveLength(1);
-	expect(loaded.routes[0]).toMatchObject({
+	expect(loaded.routes).toHaveLength(2);
+	expect(loaded.routes[1]).toMatchObject({
 		upstreams: ["replica:80", "service:80"],
 		users: [],
 		redirects: [],

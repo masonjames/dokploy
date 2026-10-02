@@ -368,11 +368,13 @@ export const loadCaddyState = async (
 			),
 		});
 	}
-	if (!serverId && settings?.host) {
+	if (!serverId) {
 		routes.push({
-			host: settings.host,
-			https: settings.https,
-			selfSigned: settings.certificateType === "none",
+			// Until a host is assigned, Traefik's default configuration serves
+			// the dashboard at this address, over HTTP only.
+			host: settings?.host || "dokploy.docker.localhost",
+			https: !!settings?.host && settings.https,
+			selfSigned: settings?.certificateType === "none",
 			uniqueConfigKey: 0,
 			path: null,
 			stripPrefix: null,

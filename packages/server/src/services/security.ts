@@ -28,7 +28,7 @@ export const createSecurity = async (
 	data: z.infer<typeof apiCreateSecurity>,
 ) => {
 	try {
-		const serverId = await db.transaction(async (tx) => {
+		const { serverId, securityId } = await db.transaction(async (tx) => {
 			const application = await findApplicationById(data.applicationId);
 
 			const securityResponse = await tx
@@ -46,9 +46,17 @@ export const createSecurity = async (
 				});
 			}
 			await createSecurityMiddleware(application, securityResponse);
-			return application.serverId;
+			return {
+				serverId: application.serverId,
+				securityId: securityResponse.securityId,
+			};
 		});
-		await syncCaddy(serverId);
+		// A rule Caddy did not load would be listed while its routes still
+		// answer without a password, so it is not kept.
+		await syncCaddy(serverId).catch(async (error) => {
+			await deleteSecurityById(securityId);
+			throw error;
+		});
 	} catch (error) {
 		throw new TRPCError({
 			code: "BAD_REQUEST",
