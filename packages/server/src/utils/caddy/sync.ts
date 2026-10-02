@@ -25,6 +25,10 @@ export const CADDY_CONTAINER = "dokploy-caddy";
 // The stock image, pinned: the renderer is tested against this version.
 export const CADDY_IMAGE = "caddy:2.11.4";
 
+// Caddy's folder is mounted at /etc/caddy, so on the host this is access.log
+// in that folder.
+export const CADDY_REQUEST_LOG = "/etc/caddy/access.log";
+
 export interface WebServerSwitchOutcome {
 	target: "traefik" | "caddy";
 	status: "running" | "done" | "failed";
@@ -367,6 +371,8 @@ export const loadCaddyState = async (
 	}
 	return {
 		email: settings?.letsEncryptEmail,
+		requestLog:
+			!serverId && settings?.requestLogsEnabled ? CADDY_REQUEST_LOG : null,
 		routes: routes.sort((a, b) => a.uniqueConfigKey - b.uniqueConfigKey),
 		// Without its files a certificate would make Caddy reject every later
 		// change, so its host falls back to automatic HTTPS.

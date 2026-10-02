@@ -485,7 +485,7 @@ export const findHandWrittenTraefikConfig = async (
 	const traefikYml = files.get("traefik.yml") ?? "";
 	if ((parse(traefikYml) as { accessLog?: unknown } | null)?.accessLog) {
 		found.push(
-			"The Requests page reads Traefik's access log. It shows nothing new while Caddy serves.",
+			"The Requests page reads Traefik's access log. With Caddy it starts empty and has to be activated again.",
 		);
 	}
 	const defaults = serverId

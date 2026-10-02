@@ -539,7 +539,7 @@ describe("the dry run", () => {
 			"\naccessLog:\n  filePath: /etc/dokploy/traefik/dynamic/access.log\n";
 		const { acknowledge } = await checkWebServerSwitch("caddy", SERVER);
 		expect(acknowledge).toEqual([
-			"The Requests page reads Traefik's access log. It shows nothing new while Caddy serves.",
+			"The Requests page reads Traefik's access log. With Caddy it starts empty and has to be activated again.",
 		]);
 	});
 

@@ -37,12 +37,13 @@ import {
 	readDirectory,
 	readEnvironmentVariables,
 	readMainConfig,
-	readMonitoringConfig,
 	readPorts,
+	readRequestLog,
 	recreateDirectory,
 	reloadDockerResource,
 	saveCaddyFile,
 	sendDockerCleanupNotifications,
+	setCaddyRequestLogs,
 	setupGPUSupport,
 	startLogCleanup,
 	stopLogCleanup,
@@ -898,7 +899,7 @@ export const settingsRouter = createTRPCRouter({
 					totalCount: 0,
 				};
 			}
-			const rawConfig = await readMonitoringConfig(
+			const rawConfig = await readRequestLog(
 				!!input.dateRange?.start && !!input.dateRange?.end,
 			);
 
@@ -938,7 +939,7 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return [];
 			}
-			const rawConfig = await readMonitoringConfig(
+			const rawConfig = await readRequestLog(
 				!!input?.dateRange?.start || !!input?.dateRange?.end,
 			);
 			const processedLogs = processLogs(rawConfig as string, input?.dateRange);
@@ -947,6 +948,9 @@ export const settingsRouter = createTRPCRouter({
 	haveActivateRequests: protectedProcedure.query(async () => {
 		if (IS_CLOUD) {
 			return true;
+		}
+		if ((await getWebServerProvider()) === "caddy") {
+			return !!(await getWebServerSettings())?.requestLogsEnabled;
 		}
 		const config = readMainConfig();
 
@@ -969,7 +973,15 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
-			if (input.enable) await assertTraefikProvider();
+			if ((await getWebServerProvider()) === "caddy") {
+				await setCaddyRequestLogs(input.enable);
+				await audit(ctx, {
+					action: "update",
+					resourceType: "settings",
+					resourceName: "toggle-requests",
+				});
+				return true;
+			}
 			const mainConfig = readMainConfig();
 			if (!mainConfig) return false;
 

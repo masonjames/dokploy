@@ -29,6 +29,9 @@ export interface CaddyRoute {
 
 export interface CaddyState {
 	email?: string | null;
+	// Where Caddy writes the access log the Requests page reads, as Caddy
+	// sees the path. Nothing is logged without it.
+	requestLog?: string | null;
 	certificates: {
 		certFile: string;
 		keyFile: string;
@@ -76,6 +79,22 @@ const block = (head: string, lines: string[]) => [
 	...lines.map((line) => `\t${line}`),
 	"}",
 ];
+
+// Members can read the Requests page. A deploy webhook carries its token in
+// the path, and query strings and API keys carry other people's secrets.
+const requestLogLines = (file: string) =>
+	block("log dokploy_requests", [
+		`output file ${quote(file)}`,
+		...block("format filter", [
+			"request>headers>X-Api-Key delete",
+			...block("request>uri multi_regexp", [
+				"regexp `^(/api/deploy/(compose/)?)[^/?]+` `${1}[REDACTED]`",
+				"regexp `\\?.*$` ``",
+			]),
+			"wrap json",
+		]),
+		"include http.log.access",
+	]);
 
 // Traefik's redirectRegex rewrites the full URL with Go's ReplaceAllString and
 // redirects only when the result differs, keeping the method on anything but
@@ -183,14 +202,18 @@ interface Handle {
 	lines: string[];
 }
 
-const renderSite = (address: string, handles: Handle[], tls: string[] = []) => {
+const renderSite = (
+	address: string,
+	handles: Handle[],
+	first: string[] = [],
+) => {
 	const sorted = [...handles].sort(
 		(a, b) =>
 			(b.path?.length ?? 0) - (a.path?.length ?? 0) || a.order - b.order,
 	);
 	const [only] = sorted;
 	if (only && sorted.length === 1 && !only.path) {
-		return block(address, [...tls, ...only.lines]);
+		return block(address, [...first, ...only.lines]);
 	}
 	const lines = sorted.flatMap(({ path, order, lines }) =>
 		path
@@ -209,7 +232,7 @@ const renderSite = (address: string, handles: Handle[], tls: string[] = []) => {
 		lines.push(...block("handle", ["respond 404"]));
 	}
 	// `route` keeps the handles in this order, longest path first.
-	return block(address, [...tls, ...block("route", lines)]);
+	return block(address, [...first, ...block("route", lines)]);
 };
 
 /**
@@ -222,9 +245,11 @@ const renderSite = (address: string, handles: Handle[], tls: string[] = []) => {
  */
 export const renderCaddyfile = ({
 	email,
+	requestLog,
 	certificates,
 	routes,
 }: CaddyState) => {
+	const log = requestLog ? ["log"] : [];
 	const usable = certificates.flatMap((certificate) => {
 		try {
 			const x509 = new X509Certificate(certificate.certificateData);
@@ -297,6 +322,7 @@ export const renderCaddyfile = ({
 		"# Your own configuration belongs in global/*.caddy and sites/*.caddy.",
 		...block("", [
 			...(email && EMAIL.test(email) ? [`email ${email}`] : []),
+			...(requestLog ? requestLogLines(requestLog) : []),
 			"import global/*.caddy",
 			// The last value wins, so a file in global/ cannot open the admin
 			// endpoint to the rest of the Docker network.
@@ -314,14 +340,20 @@ export const renderCaddyfile = ({
 			}
 			// With its scheme, because a bare address can be read as a
 			// directive: a host named "import" would break the whole file.
-			return renderSite(`https://${host}`, https.get(host) ?? [], tls);
+			return renderSite(`https://${host}`, https.get(host) ?? [], [
+				...tls,
+				...log,
+			]);
 		}),
 		...[...http.keys()]
 			.sort()
-			.flatMap((host) => renderSite(`http://${host}`, http.get(host) ?? [])),
+			.flatMap((host) =>
+				renderSite(`http://${host}`, http.get(host) ?? [], log),
+			),
 		// Traefik answers 404 for a host it does not know. Caddy would answer
-		// an empty 200.
-		...block("http://", ["respond 404"]),
+		// an empty 200. Logged here, the redirects Caddy adds for HTTPS-only
+		// hosts are logged too.
+		...block("http://", [...log, "respond 404"]),
 		"",
 	].join("\n");
 
