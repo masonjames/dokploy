@@ -108,3 +108,16 @@ and [rclone changelog](https://rclone.org/changelog/#v1-75-1-2026-09-04).
 The scan also inventoried 15 unfixed critical package findings. Preserve their
 inventory and the existing policy that blocks fixable critical findings; this
 change introduces no vulnerability exception or claim of zero vulnerabilities.
+
+### Caddy provider candidate (2026-10-02)
+
+A scan of the image built from the merge of #25 found one fixable critical
+finding: Next.js `GHSA-vcvr-r3jv-pc5j`, remote code execution in `next/og`
+`ImageResponse`, published 2026-09-30 and fixed in 16.3.6. Dokploy does not
+import `next/og`. The policy blocks any fixable critical finding all the same,
+so Next.js goes from 16.3.3 to 16.3.6. That release requires sharp `^0.35.4`,
+which resolves to 0.35.5; no other package in the lockfile changes version.
+
+Upstream reference: [advisory](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j).
+No vulnerability exception is introduced, and the inventory of unfixed critical
+package findings is kept as before.
