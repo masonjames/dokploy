@@ -235,6 +235,12 @@ const wrapOwnedCommand = ({
 	const commandNonce = randomUUID().replaceAll("-", "");
 	const readyPath = join(tempDirectory, `owned-${commandNonce}.ready`);
 
+	// The monitor is stopped with SIGKILL because it can lose a SIGTERM: a
+	// subshell signalled before it has reset the traps inherited from this
+	// script catches the signal and then discards it, and the script then
+	// waits for the monitor forever with the host build lock held. stderr is
+	// redirected around the whole stop because bash reports the killed job on
+	// the script's own stderr, which a redirect on each command does not cover.
 	return `
 set -eu
 export DOKPLOY_BUILD_TMPDIR=${shellQuote(tempDirectory)}
@@ -268,8 +274,10 @@ _dokploy_kill_owned() {
 }
 _dokploy_stop_monitor() {
 	if [ -n "$_dokploy_monitor_pid" ]; then
-		/bin/kill -TERM "$_dokploy_monitor_pid" 2>/dev/null || true
-		wait "$_dokploy_monitor_pid" 2>/dev/null || true
+		{
+			/bin/kill -KILL "$_dokploy_monitor_pid" || true
+			wait "$_dokploy_monitor_pid" || true
+		} 2>/dev/null
 	fi
 }
 _dokploy_owned_cleanup() {
