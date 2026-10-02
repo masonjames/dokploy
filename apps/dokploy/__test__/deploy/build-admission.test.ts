@@ -585,6 +585,23 @@ done
 		expect((await readFile(countPath, "utf8")).trim()).toBe("2");
 	});
 
+	it("stops the ownership monitor when it does not act on SIGTERM", async () => {
+		const { config } = await createFixture();
+		await withHostBuildAdmission(
+			{ serverId: null, operation: "monitor-stop-fixture", config },
+			async ({ prepareCommand }) => {
+				// A monitor signalled before it resets its inherited traps discards
+				// SIGTERM. Whether that happens depends on scheduling, so the wrapper
+				// is started with SIGTERM ignored: its monitor ignores it every time.
+				await execFileAsync("/bin/sh", [
+					"-c",
+					`trap '' TERM; exec /bin/sh -c "$0"`,
+					await prepareCommand("true"),
+				]);
+			},
+		);
+	});
+
 	it("does not terminate a build after the acquisition timeout is cleared", async () => {
 		const { config } = await createFixture();
 		await expect(
