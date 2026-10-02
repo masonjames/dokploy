@@ -30,6 +30,7 @@ import {
 	removeDomainById,
 	startCompose,
 	stopCompose,
+	syncCaddyInBackground,
 	updateCompose,
 	updateDeploymentStatus,
 	withHostBuildAdmission,
@@ -270,6 +271,7 @@ export const composeRouter = createTRPCRouter({
 					message: "Compose cleanup succeeded but its record was not deleted",
 				});
 			}
+			syncCaddyInBackground(composeResult.serverId);
 
 			await audit(ctx, {
 				action: "delete",

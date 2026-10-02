@@ -21,6 +21,7 @@ import {
 	withHostBuildAdmission,
 } from "../utils/process/build-admission";
 import { spawnAsync } from "../utils/process/spawnAsync";
+import { assertTraefikProvider } from "./web-server-settings";
 export interface IUpdateData {
 	latestVersion: string | null;
 	updateAvailable: boolean;
@@ -553,6 +554,7 @@ export const checkPortInUse = async (
 };
 
 export const writeTraefikSetup = async (input: TraefikOptions) => {
+	await assertTraefikProvider(input.serverId);
 	const resourceType = await getDockerResourceType(
 		"dokploy-traefik",
 		input.serverId,

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Tree } from "@/components/ui/file-tree";
 import { api } from "@/utils/api";
+import { ShowCaddyFile } from "./show-caddy-file";
 import { ShowTraefikFile } from "./show-traefik-file";
 
 interface Props {
@@ -38,6 +39,9 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 			retry: 2,
 		},
 	);
+	// The entries come from the folder of the proxy this server runs.
+	const isCaddy = !!directories?.[0]?.id.includes("/caddy/");
+	const name = isCaddy ? "Caddy" : "Traefik";
 
 	return (
 		<div className="w-full">
@@ -46,17 +50,24 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 					<CardHeader className="">
 						<CardTitle className="text-xl flex flex-row gap-2">
 							<FileIcon className="size-6 text-muted-foreground self-center" />
-							Traefik File System
+							{name} File System
 						</CardTitle>
 						<CardDescription>
-							Manage all the files and directories in {"'/etc/dokploy/traefik'"}
-							.
+							Manage all the files and directories in '/etc/dokploy/
+							{name.toLowerCase()}'.
 						</CardDescription>
 
-						<AlertBlock type="warning">
-							Adding invalid configuration to existing files, can break your
-							Traefik instance, preventing access to your applications.
-						</AlertBlock>
+						{isCaddy ? (
+							<AlertBlock type="info">
+								Caddy checks a file when you save it. If Caddy rejects it, the
+								previous version is kept.
+							</AlertBlock>
+						) : (
+							<AlertBlock type="warning">
+								Adding invalid configuration to existing files, can break your
+								Traefik instance, preventing access to your applications.
+							</AlertBlock>
+						)}
 					</CardHeader>
 					<CardContent className="space-y-2 py-8 border-t">
 						<div>
@@ -103,7 +114,9 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 											itemIcon={Workflow}
 										/>
 										<div className="w-full">
-											{file ? (
+											{file && isCaddy ? (
+												<ShowCaddyFile path={file} serverId={serverId} />
+											) : file ? (
 												<ShowTraefikFile path={file} serverId={serverId} />
 											) : (
 												<div className="h-full min-h-[300px] w-full flex-col gap-4 flex items-center justify-center border border-dashed rounded-lg">

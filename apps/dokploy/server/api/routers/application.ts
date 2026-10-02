@@ -1,4 +1,5 @@
 import {
+	assertTraefikProvider,
 	clearOldDeployments,
 	createApplication,
 	createDomain,
@@ -31,6 +32,7 @@ import {
 	startServiceRemote,
 	stopService,
 	stopServiceRemote,
+	syncCaddyInBackground,
 	unzipDrop,
 	updateApplication,
 	updateApplicationStatus,
@@ -378,6 +380,7 @@ export const applicationRouter = createTRPCRouter({
 				.delete(applications)
 				.where(eq(applications.applicationId, input.applicationId))
 				.returning();
+			syncCaddyInBackground(application.serverId);
 
 			if (!IS_CLOUD) {
 				await cleanQueuesByApplication(input.applicationId);
@@ -1151,6 +1154,7 @@ export const applicationRouter = createTRPCRouter({
 				traefikFiles: ["write"],
 			});
 			const application = await findApplicationById(input.applicationId);
+			await assertTraefikProvider(application.serverId);
 			if (application.serverId) {
 				await writeConfigRemote(
 					application.serverId,

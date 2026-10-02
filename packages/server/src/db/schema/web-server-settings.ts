@@ -10,7 +10,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { certificateType } from "./shared";
+import { certificateType, webServerProvider } from "./shared";
 
 export const webServerSettings = pgTable("webServerSettings", {
 	id: text("id")
@@ -18,6 +18,9 @@ export const webServerSettings = pgTable("webServerSettings", {
 		.primaryKey()
 		.$defaultFn(() => nanoid()),
 	// Web Server Configuration
+	webServerProvider: webServerProvider("webServerProvider")
+		.notNull()
+		.default("traefik"),
 	// Not read any more: trusted proxies are a file in Caddy's global/ folder.
 	// The column stays so the previous release can still be started.
 	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig").default(null),
