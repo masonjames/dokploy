@@ -1,11 +1,9 @@
 import {
 	clearOldDeployments,
 	createApplication,
-	createCaddyApplicationRouteFragment,
 	createDomain,
 	deleteAllMiddlewares,
 	findApplicationById,
-	findDomainsByApplicationId,
 	findEnvironmentById,
 	findPreviewDeploymentsByApplicationId,
 	findProjectById,
@@ -27,9 +25,8 @@ import {
 	removeMonitoringDirectory,
 	removePreviewDeployment,
 	removeService,
-	removeWebServerAppRoutes,
+	removeTraefikConfig,
 	reserveImmutableImageDeployment,
-	resolveWebServerProvider,
 	startService,
 	startServiceRemote,
 	stopService,
@@ -397,10 +394,7 @@ export const applicationRouter = createTRPCRouter({
 						application.serverId,
 					),
 				async () =>
-					await removeWebServerAppRoutes(
-						application.appName,
-						application.serverId,
-					),
+					await removeTraefikConfig(application.appName, application.serverId),
 				async () =>
 					await removeService(application?.appName, application.serverId),
 			];
@@ -1092,45 +1086,6 @@ export const applicationRouter = createTRPCRouter({
 				traefikConfig = readConfig(application.appName);
 			}
 			return traefikConfig;
-		}),
-	readWebServerConfig: protectedProcedure
-		.input(apiFindOneApplication)
-		.query(async ({ input, ctx }) => {
-			await checkServicePermissionAndAccess(ctx, input.applicationId, {
-				traefikFiles: ["read"],
-			});
-			const application = await findApplicationById(input.applicationId);
-			const provider = await resolveWebServerProvider(
-				application.serverId || undefined,
-			);
-
-			if (provider === "traefik") {
-				if (application.serverId) {
-					return await readRemoteConfig(
-						application.serverId,
-						application.appName,
-					);
-				}
-				return readConfig(application.appName);
-			}
-
-			const domains = await findDomainsByApplicationId(input.applicationId);
-			const fragments = domains.map((domain) =>
-				createCaddyApplicationRouteFragment(
-					application as never,
-					domain as never,
-				),
-			);
-			return `${JSON.stringify(
-				{
-					provider,
-					message:
-						"Generated Caddy route fragments for this application. Caddy manages HTTPS certificates automatically for HTTPS domains; Traefik custom certificate resolvers do not apply.",
-					fragments,
-				},
-				null,
-				2,
-			)}\n`;
 		}),
 
 	dropDeployment: protectedProcedure

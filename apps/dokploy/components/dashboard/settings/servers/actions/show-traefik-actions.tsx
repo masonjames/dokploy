@@ -13,8 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useHealthCheckAfterMutation } from "@/hooks/use-health-check-after-mutation";
 import { api } from "@/utils/api";
-import { CaddyTrustedProxySettings } from "../../web-server/caddy-trusted-proxy-settings";
-import { EditWebServerEnv } from "../../web-server/edit-web-server-env";
+import { EditTraefikEnv } from "../../web-server/edit-traefik-env";
 import { ManageTraefikPorts } from "../../web-server/manage-traefik-ports";
 import { ShowModalLogs } from "../../web-server/show-modal-logs";
 
@@ -22,34 +21,16 @@ interface Props {
 	serverId?: string;
 }
 export const ShowTraefikActions = ({ serverId }: Props) => {
-	const { data: activeProvider, isLoading: isLoadingProvider } =
-		api.settings.getActiveWebServerProvider.useQuery({ serverId });
-	const providerLabel =
-		activeProvider === "caddy"
-			? "Caddy"
-			: activeProvider === "traefik"
-				? "Traefik"
-				: "Web Server";
-	const resourceName =
-		activeProvider === "caddy"
-			? "dokploy-caddy"
-			: activeProvider === "traefik"
-				? "dokploy-traefik"
-				: null;
-
-	const { mutateAsync: reloadWebServer, isPending: reloadTraefikIsLoading } =
-		api.settings.reloadWebServer.useMutation();
+	const { mutateAsync: reloadTraefik, isPending: reloadTraefikIsLoading } =
+		api.settings.reloadTraefik.useMutation();
 
 	const { mutateAsync: toggleDashboard, isPending: toggleDashboardIsLoading } =
 		api.settings.toggleDashboard.useMutation();
 
-	const { data: webServerDashboardState, refetch: refetchDashboard } =
-		api.settings.getWebServerDashboardState.useQuery({
+	const { data: haveTraefikDashboardPortEnabled, refetch: refetchDashboard } =
+		api.settings.haveTraefikDashboardPortEnabled.useQuery({
 			serverId,
 		});
-	const haveTraefikDashboardPortEnabled =
-		webServerDashboardState?.provider === "traefik" &&
-		webServerDashboardState.enabled;
 
 	const {
 		execute: executeWithHealthCheck,
@@ -69,7 +50,7 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 	} = useHealthCheckAfterMutation({
 		initialDelay: 5000,
 		pollInterval: 4000,
-		successMessage: `${providerLabel} reloaded`,
+		successMessage: "Traefik Reloaded",
 	});
 
 	return (
@@ -77,8 +58,6 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 			<DropdownMenuTrigger
 				asChild
 				disabled={
-					!activeProvider ||
-					isLoadingProvider ||
 					reloadTraefikIsLoading ||
 					toggleDashboardIsLoading ||
 					isHealthCheckExecuting ||
@@ -87,7 +66,6 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 			>
 				<Button
 					isLoading={
-						isLoadingProvider ||
 						reloadTraefikIsLoading ||
 						toggleDashboardIsLoading ||
 						isHealthCheckExecuting ||
@@ -95,7 +73,7 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 					}
 					variant="outline"
 				>
-					{providerLabel}
+					Traefik
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-56" align="start">
@@ -106,12 +84,12 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 						onClick={async () => {
 							try {
 								await executeReloadWithHealthCheck(() =>
-									reloadWebServer({ serverId }),
+									reloadTraefik({ serverId }),
 								);
 							} catch (error) {
 								const errorMessage =
 									(error as Error)?.message ||
-									`Failed to reload ${providerLabel}. Please try again.`;
+									"Failed to reload Traefik. Please try again.";
 								toast.error(errorMessage);
 							}
 						}}
@@ -120,90 +98,75 @@ export const ShowTraefikActions = ({ serverId }: Props) => {
 					>
 						<span>Reload</span>
 					</DropdownMenuItem>
-					{resourceName && (
-						<ShowModalLogs
-							appName={resourceName}
-							serverId={serverId}
-							type="standalone"
+					<ShowModalLogs
+						appName="dokploy-traefik"
+						serverId={serverId}
+						type="standalone"
+					>
+						<DropdownMenuItem
+							onSelect={(e) => e.preventDefault()}
+							className="cursor-pointer"
 						>
-							<DropdownMenuItem
-								onSelect={(e) => e.preventDefault()}
-								className="cursor-pointer"
-							>
-								View Logs
-							</DropdownMenuItem>
-						</ShowModalLogs>
-					)}
-					<EditWebServerEnv serverId={serverId}>
+							View Logs
+						</DropdownMenuItem>
+					</ShowModalLogs>
+					<EditTraefikEnv serverId={serverId}>
 						<DropdownMenuItem
 							onSelect={(e) => e.preventDefault()}
 							className="cursor-pointer"
 						>
 							<span>Modify Environment</span>
 						</DropdownMenuItem>
-					</EditWebServerEnv>
+					</EditTraefikEnv>
 
-					{activeProvider === "caddy" && (
-						<CaddyTrustedProxySettings serverId={serverId}>
-							<DropdownMenuItem
-								onSelect={(e) => e.preventDefault()}
-								className="cursor-pointer"
-							>
-								<span>Trusted Proxies</span>
-							</DropdownMenuItem>
-						</CaddyTrustedProxySettings>
-					)}
-
-					{activeProvider === "traefik" && (
-						<DialogAction
-							title={
-								haveTraefikDashboardPortEnabled
-									? "Disable Traefik Dashboard"
-									: "Enable Traefik Dashboard"
+					<DialogAction
+						title={
+							haveTraefikDashboardPortEnabled
+								? "Disable Traefik Dashboard"
+								: "Enable Traefik Dashboard"
+						}
+						description={
+							<div className="space-y-4">
+								<AlertBlock type="warning">
+									The Traefik container will be recreated from scratch. This
+									means the container will be deleted and created again, which
+									may cause downtime in your applications.
+								</AlertBlock>
+								<p>
+									Are you sure you want to{" "}
+									{haveTraefikDashboardPortEnabled ? "disable" : "enable"} the
+									Traefik dashboard?
+								</p>
+							</div>
+						}
+						onClick={async () => {
+							try {
+								await executeWithHealthCheck(() =>
+									toggleDashboard({
+										enableDashboard: !haveTraefikDashboardPortEnabled,
+										serverId: serverId,
+									}),
+								);
+							} catch (error) {
+								const errorMessage =
+									(error as Error)?.message ||
+									"Failed to toggle dashboard. Please check if port 8080 is available.";
+								toast.error(errorMessage);
 							}
-							description={
-								<div className="space-y-4">
-									<AlertBlock type="warning">
-										The Traefik container will be recreated from scratch. This
-										means the container will be deleted and created again, which
-										may cause downtime in your applications.
-									</AlertBlock>
-									<p>
-										Are you sure you want to{" "}
-										{haveTraefikDashboardPortEnabled ? "disable" : "enable"} the
-										Traefik dashboard?
-									</p>
-								</div>
-							}
-							onClick={async () => {
-								try {
-									await executeWithHealthCheck(() =>
-										toggleDashboard({
-											enableDashboard: !haveTraefikDashboardPortEnabled,
-											serverId: serverId,
-										}),
-									);
-								} catch (error) {
-									const errorMessage =
-										(error as Error)?.message ||
-										"Failed to toggle dashboard. Please check if port 8080 is available.";
-									toast.error(errorMessage);
-								}
-							}}
-							disabled={toggleDashboardIsLoading || isHealthCheckExecuting}
-							type="default"
+						}}
+						disabled={toggleDashboardIsLoading || isHealthCheckExecuting}
+						type="default"
+					>
+						<DropdownMenuItem
+							onSelect={(e) => e.preventDefault()}
+							className="w-full cursor-pointer space-x-3"
 						>
-							<DropdownMenuItem
-								onSelect={(e) => e.preventDefault()}
-								className="w-full cursor-pointer space-x-3"
-							>
-								<span>
-									{haveTraefikDashboardPortEnabled ? "Disable" : "Enable"}{" "}
-									Dashboard
-								</span>
-							</DropdownMenuItem>
-						</DialogAction>
-					)}
+							<span>
+								{haveTraefikDashboardPortEnabled ? "Disable" : "Enable"}{" "}
+								Dashboard
+							</span>
+						</DropdownMenuItem>
+					</DialogAction>
 					<ManageTraefikPorts serverId={serverId}>
 						<DropdownMenuItem
 							onSelect={(e) => e.preventDefault()}

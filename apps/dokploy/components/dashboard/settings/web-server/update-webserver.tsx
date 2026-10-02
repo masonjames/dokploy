@@ -30,10 +30,7 @@ type ServiceStatus = {
 
 type HealthResult = {
 	postgres: ServiceStatus;
-	webServer: ServiceStatus & {
-		provider: "traefik" | "caddy";
-	};
-	traefik?: ServiceStatus;
+	traefik: ServiceStatus;
 };
 
 type ModalState = "idle" | "checking" | "results" | "updating";
@@ -57,11 +54,6 @@ const ServiceStatusItem = ({
 		)}
 	</div>
 );
-
-const webServerLabels: Record<HealthResult["webServer"]["provider"], string> = {
-	traefik: "Traefik",
-	caddy: "Caddy",
-};
 
 export const UpdateWebServer = ({
 	buttonClassName,
@@ -96,7 +88,7 @@ export const UpdateWebServer = ({
 	const allHealthy =
 		healthResult &&
 		healthResult.postgres.status === "healthy" &&
-		healthResult.webServer.status === "healthy";
+		healthResult.traefik.status === "healthy";
 
 	const checkIsUpdateFinished = async () => {
 		try {
@@ -185,7 +177,7 @@ export const UpdateWebServer = ({
 							{modalState === "checking" && (
 								<span className="flex items-center gap-2">
 									<Loader2 className="animate-spin h-4 w-4" />
-									Checking PostgreSQL and the active web server...
+									Checking PostgreSQL and Traefik...
 								</span>
 							)}
 
@@ -197,8 +189,8 @@ export const UpdateWebServer = ({
 											service={healthResult.postgres}
 										/>
 										<ServiceStatusItem
-											name={`Web server (${webServerLabels[healthResult.webServer.provider]})`}
-											service={healthResult.webServer}
+											name="Traefik"
+											service={healthResult.traefik}
 										/>
 									</div>
 

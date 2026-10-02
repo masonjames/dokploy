@@ -14,11 +14,6 @@ export const certificateType = pgEnum("certificateType", [
 	"custom",
 ]);
 
-export const webServerProvider = pgEnum("webServerProvider", [
-	"traefik",
-	"caddy",
-]);
-
 export const triggerType = pgEnum("triggerType", ["push", "tag"]);
 
 export const sqldNode = pgEnum("sqldNode", ["primary", "replica"]);

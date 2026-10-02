@@ -3,7 +3,7 @@ import {
 	checkGPUStatus,
 	checkPortInUse,
 	checkPostgresHealth,
-	checkWebServerHealth,
+	checkTraefikHealth,
 	cleanupAll,
 	cleanupAllBackground,
 	cleanupBuilders,
@@ -11,11 +11,9 @@ import {
 	cleanupImages,
 	cleanupSystem,
 	cleanupVolumes,
-	compileWriteAndReloadCaddyConfigSafely,
 	DEFAULT_UPDATE_DATA,
 	dispatchDokployUpdate,
 	findServerById,
-	getCaddyCompileSettings,
 	getDockerDiskUsage,
 	getDokployImageTag,
 	getLogCleanupStatus,
@@ -31,17 +29,16 @@ import {
 	readDirectory,
 	readEnvironmentVariables,
 	readMainConfig,
+	readMonitoringConfig,
 	readPorts,
 	recreateDirectory,
 	reloadDockerResource,
-	resolveWebServerProvider,
 	sendDockerCleanupNotifications,
 	setupGPUSupport,
 	startLogCleanup,
 	stopLogCleanup,
 	updateLetsEncryptEmail,
 	updateServerById,
-	updateServerCaddy,
 	updateServerTraefik,
 	updateWebServerSettings,
 	writeConfig,
@@ -83,15 +80,8 @@ import {
 	protectedProcedure,
 	publicProcedure,
 } from "../trpc";
-import {
-	ensureServerAccess,
-	getRequestAnalyticsState,
-	readActiveRequestAccessLog,
-	webServerProcedures,
-} from "./web-server";
 
 export const settingsRouter = createTRPCRouter({
-	...webServerProcedures,
 	getWebServerSettings: protectedProcedure.query(async () => {
 		if (IS_CLOUD) {
 			return null;
@@ -142,16 +132,6 @@ export const settingsRouter = createTRPCRouter({
 	toggleDashboard: adminProcedure
 		.input(apiEnableDashboard)
 		.mutation(async ({ input, ctx }) => {
-			await ensureServerAccess(ctx, input.serverId);
-			const provider = await resolveWebServerProvider(input.serverId);
-			if (provider !== "traefik") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message:
-						"The dashboard toggle is only available for Traefik. The Caddy admin API is kept local-only and is not exposed through Dokploy.",
-				});
-			}
-
 			const ports = await readPorts("dokploy-traefik", input.serverId);
 			const env = await readEnvironmentVariables(
 				"dokploy-traefik",
@@ -305,14 +285,6 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
-			const previousSettings = await getWebServerSettings();
-			if (!previousSettings) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Web server settings not found",
-				});
-			}
-
 			const settings = await updateWebServerSettings({
 				host: input.host,
 				letsEncryptEmail: input.letsEncryptEmail,
@@ -327,24 +299,9 @@ export const settingsRouter = createTRPCRouter({
 				});
 			}
 
-			const provider = await resolveWebServerProvider();
-			if (provider === "caddy") {
-				try {
-					await updateServerCaddy(settings, input.host);
-				} catch (error) {
-					await updateWebServerSettings({
-						host: previousSettings.host,
-						letsEncryptEmail: previousSettings.letsEncryptEmail,
-						certificateType: previousSettings.certificateType,
-						https: previousSettings.https,
-					});
-					throw error;
-				}
-			} else {
-				updateServerTraefik(settings, input.host);
-				if (input.letsEncryptEmail) {
-					updateLetsEncryptEmail(input.letsEncryptEmail);
-				}
+			updateServerTraefik(settings, input.host);
+			if (input.letsEncryptEmail) {
+				updateLetsEncryptEmail(input.letsEncryptEmail);
 			}
 
 			await audit(ctx, {
@@ -785,6 +742,7 @@ export const settingsRouter = createTRPCRouter({
 			);
 			return envVars;
 		}),
+
 	writeTraefikEnv: adminProcedure
 		.input(z.object({ env: z.string(), serverId: z.string().optional() }))
 		.mutation(async ({ input, ctx }) => {
@@ -812,6 +770,7 @@ export const settingsRouter = createTRPCRouter({
 			const ports = await readPorts("dokploy-traefik", input?.serverId);
 			return ports.some((port) => port.targetPort === 8080);
 		}),
+
 	readStatsLogs: protectedProcedure
 		.meta({
 			openapi: {
@@ -829,7 +788,7 @@ export const settingsRouter = createTRPCRouter({
 					totalCount: 0,
 				};
 			}
-			const rawConfig = await readActiveRequestAccessLog(
+			const rawConfig = await readMonitoringConfig(
 				!!input.dateRange?.start && !!input.dateRange?.end,
 			);
 
@@ -869,14 +828,26 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return [];
 			}
-			const rawConfig = await readActiveRequestAccessLog(
+			const rawConfig = await readMonitoringConfig(
 				!!input?.dateRange?.start || !!input?.dateRange?.end,
 			);
 			const processedLogs = processLogs(rawConfig as string, input?.dateRange);
 			return processedLogs || [];
 		}),
 	haveActivateRequests: protectedProcedure.query(async () => {
-		return (await getRequestAnalyticsState()).enabled;
+		if (IS_CLOUD) {
+			return true;
+		}
+		const config = readMainConfig();
+
+		if (!config) return false;
+		const parsedConfig = parse(config) as {
+			accessLog?: {
+				filePath: string;
+			};
+		};
+
+		return !!parsedConfig?.accessLog?.filePath;
 	}),
 	toggleRequests: protectedProcedure
 		.input(
@@ -888,31 +859,6 @@ export const settingsRouter = createTRPCRouter({
 			if (IS_CLOUD) {
 				return true;
 			}
-			const provider = await resolveWebServerProvider();
-			if (provider === "caddy") {
-				const previousSettings = await getWebServerSettings();
-				const previousEnabled = Boolean(previousSettings?.requestLogsEnabled);
-				await updateWebServerSettings({
-					requestLogsEnabled: input.enable,
-				});
-				try {
-					await compileWriteAndReloadCaddyConfigSafely(
-						await getCaddyCompileSettings(),
-					);
-				} catch (error) {
-					await updateWebServerSettings({
-						requestLogsEnabled: previousEnabled,
-					});
-					throw error;
-				}
-				await audit(ctx, {
-					action: "update",
-					resourceType: "settings",
-					resourceName: "toggle-requests",
-				});
-				return true;
-			}
-
 			const mainConfig = readMainConfig();
 			if (!mainConfig) return false;
 
@@ -968,26 +914,19 @@ export const settingsRouter = createTRPCRouter({
 		}
 	}),
 	checkInfrastructureHealth: adminProcedure.query(async () => {
-		const provider = await resolveWebServerProvider();
 		if (IS_CLOUD) {
-			const webServer = { provider, status: "healthy" as const };
 			return {
 				postgres: { status: "healthy" as const },
-				webServer,
-				traefik: { status: webServer.status },
+				traefik: { status: "healthy" as const },
 			};
 		}
 
-		const [postgres, webServer] = await Promise.all([
+		const [postgres, traefik] = await Promise.all([
 			checkPostgresHealth(),
-			checkWebServerHealth(provider),
+			checkTraefikHealth(),
 		]);
 
-		return {
-			postgres,
-			webServer,
-			traefik: { status: webServer.status, message: webServer.message },
-		};
+		return { postgres, traefik };
 	}),
 	setupGPU: adminProcedure
 		.input(

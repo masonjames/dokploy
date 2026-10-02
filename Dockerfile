@@ -84,7 +84,6 @@ COPY . .
 ENV NODE_ENV=production
 RUN pnpm --filter=@dokploy/server build
 RUN pnpm --filter=./apps/dokploy run build
-RUN test -f /usr/src/app/apps/dokploy/dist/caddy-migration-rollback.mjs
 
 # Install native add-ons for the runtime architecture before packaging the built app.
 FROM base AS package
@@ -134,8 +133,6 @@ COPY --from=package /prod/dokploy/drizzle ./drizzle
 COPY .env.production ./.env
 COPY --from=package /prod/dokploy/components.json ./components.json
 COPY --from=package /prod/dokploy/node_modules ./node_modules
-RUN test -f /app/dist/caddy-migration-rollback.mjs \
-  && node -r dotenv/config /app/dist/caddy-migration-rollback.mjs --help | grep -q "Usage: caddy-migration-rollback"
 
 # Install only the Docker client and its patched CLI plugins. Dokploy uses the
 # host socket and does not need a second daemon or rootless runtime in its image.

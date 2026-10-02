@@ -7,7 +7,6 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 dockerfile = (ROOT / "Dockerfile").read_text()
 workflow = (ROOT / ".github/workflows/mason-immutable-release.yml").read_text()
-caddy_setup = (ROOT / "packages/server/src/setup/caddy-setup.ts").read_text()
 package = json.loads((ROOT / "apps/dokploy/package.json").read_text())
 journal = json.loads(
     (ROOT / "apps/dokploy/drizzle/meta/_journal.json").read_text()
@@ -86,7 +85,6 @@ assert re.search(r"Set up pnpm.*?version: 10\.34\.5", workflow, re.DOTALL)
 assert workflow.index("Inventory unresolved critical vulnerabilities") < workflow.index("Enforce critical vulnerability threshold before publication")
 assert workflow.index("Enforce critical vulnerability threshold before publication") < workflow.index("Build and push immutable image")
 assert "image-ref: local/mason-dokploy:${{ github.sha }}" in workflow
-assert "CADDY_IMAGE" in caddy_setup
 
 assert re.search(
     r"^FROM node:24\.18\.0-slim@sha256:[0-9a-f]{64} AS base$",

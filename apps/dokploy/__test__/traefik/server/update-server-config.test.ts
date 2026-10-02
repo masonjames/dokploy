@@ -18,7 +18,6 @@ type WebServerSettings = typeof webServerSettings.$inferSelect;
 
 const baseSettings: WebServerSettings = {
 	id: "",
-	webServerProvider: "traefik",
 	caddyTrustedProxyConfig: null,
 	https: false,
 	requestLogsEnabled: false,

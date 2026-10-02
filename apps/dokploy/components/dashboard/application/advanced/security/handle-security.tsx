@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { api } from "@/utils/api";
-import { invalidateApplicationWebServerConfig } from "../../web-server-config-cache";
 
 const AddSecuritychema = z.object({
 	username: z.string().min(1, "Username is required"),
@@ -86,7 +85,9 @@ export const HandleSecurity = ({
 				await utils.application.one.invalidate({
 					applicationId,
 				});
-				await invalidateApplicationWebServerConfig(utils, applicationId);
+				await utils.application.readTraefikConfig.invalidate({
+					applicationId,
+				});
 				await refetch();
 				setIsOpen(false);
 			})

@@ -11,10 +11,8 @@ import { getBuildComposeCommand } from "@dokploy/server/utils/builders/compose";
 import { randomizeSpecificationFile } from "@dokploy/server/utils/docker/compose";
 import {
 	cloneCompose,
-	getCaddyComposeRouteTargetsForWebServer,
 	loadDockerCompose,
 	loadDockerComposeRemote,
-	writeCaddyComposeRoutesForTargets,
 } from "@dokploy/server/utils/docker/domain";
 import {
 	buildStackCleanupCommand,
@@ -281,9 +279,6 @@ export const deployCompose = async ({
 			...compose,
 			type: "compose" as const,
 		};
-		let caddyComposeRouteTargets: Awaited<
-			ReturnType<typeof getCaddyComposeRouteTargetsForWebServer>
-		> = null;
 		await withHostBuildAdmission(
 			{ serverId: compose.serverId, operation: "compose-deploy" },
 			async ({ prepareCommand, signal }) => {
@@ -331,27 +326,11 @@ export const deployCompose = async ({
 					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
 				}
 
-				caddyComposeRouteTargets =
-					await getCaddyComposeRouteTargetsForWebServer(
-						entity,
-						compose.domains,
-					);
-
 				command = "set -e;";
 				command += await getBuildComposeCommand(entity);
 				await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
 			},
 		);
-
-		if (caddyComposeRouteTargets) {
-			await writeCaddyComposeRoutesForTargets(
-				entity,
-				caddyComposeRouteTargets,
-				{
-					organizationId: compose.environment.project.organizationId,
-				},
-			);
-		}
 
 		await updateDeploymentStatus(deployment.deploymentId, "done");
 		await updateCompose(composeId, {
@@ -433,9 +412,6 @@ export const rebuildCompose = async ({
 	});
 
 	try {
-		let caddyComposeRouteTargets: Awaited<
-			ReturnType<typeof getCaddyComposeRouteTargetsForWebServer>
-		> = null;
 		await withHostBuildAdmission(
 			{ serverId: compose.serverId, operation: "compose-rebuild" },
 			async ({ prepareCommand, signal }) => {
@@ -466,12 +442,6 @@ export const rebuildCompose = async ({
 					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
 				}
 
-				caddyComposeRouteTargets =
-					await getCaddyComposeRouteTargetsForWebServer(
-						compose,
-						compose.domains,
-					);
-
 				if (freshVolumes && compose.composeType === "docker-compose") {
 					command = `set -e; env -i PATH="$PATH" docker compose -p ${compose.appName} down --volumes 2>&1 || true;`;
 					await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
@@ -482,16 +452,6 @@ export const rebuildCompose = async ({
 				await execute(`(${command}) >> ${deployment.logPath} 2>&1`);
 			},
 		);
-
-		if (caddyComposeRouteTargets) {
-			await writeCaddyComposeRoutesForTargets(
-				compose,
-				caddyComposeRouteTargets,
-				{
-					organizationId: compose.environment.project.organizationId,
-				},
-			);
-		}
 
 		await updateDeploymentStatus(deployment.deploymentId, "done");
 		await updateCompose(composeId, {

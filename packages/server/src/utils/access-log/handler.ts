@@ -3,7 +3,6 @@ import path from "node:path";
 import { ACCESS_LOG_RETAINED_LINES, paths } from "@dokploy/server/constants";
 import {
 	getWebServerSettings,
-	resolveWebServerProvider,
 	updateWebServerSettings,
 } from "@dokploy/server/services/web-server-settings";
 import { scheduledJobs, scheduleJob } from "node-schedule";
@@ -36,12 +35,8 @@ export const startLogCleanup = async (
 			cronExpression,
 			async () => {
 				try {
-					const provider = await resolveWebServerProvider();
-					const currentPaths = paths();
-					const accessLogPath =
-						provider === "caddy"
-							? currentPaths.CADDY_ACCESS_LOG_PATH
-							: path.join(currentPaths.DYNAMIC_TRAEFIK_PATH, "access.log");
+					const { DYNAMIC_TRAEFIK_PATH } = paths();
+					const accessLogPath = path.join(DYNAMIC_TRAEFIK_PATH, "access.log");
 
 					if (!fs.existsSync(accessLogPath)) {
 						console.error("Access log file does not exist");
@@ -50,13 +45,6 @@ export const startLogCleanup = async (
 
 					const quotedAccessLogPath = quote([accessLogPath]);
 					const quotedTempPath = quote([`${accessLogPath}.tmp`]);
-					if (provider === "caddy") {
-						await execAsync(
-							`tail -n ${ACCESS_LOG_RETAINED_LINES} ${quotedAccessLogPath} > ${quotedTempPath} && cat ${quotedTempPath} > ${quotedAccessLogPath} && rm ${quotedTempPath}`,
-						);
-						return;
-					}
-
 					await execAsync(
 						`tail -n ${ACCESS_LOG_RETAINED_LINES} ${quotedAccessLogPath} > ${quotedTempPath} && mv ${quotedTempPath} ${quotedAccessLogPath}`,
 					);
