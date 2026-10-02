@@ -5,6 +5,8 @@ import { getWebServerProvider } from "@dokploy/server/services/web-server-settin
 import type { CaddyState } from "./caddyfile";
 
 export const CADDY_CONTAINER = "dokploy-caddy";
+// The stock image, pinned: the renderer is tested against this version.
+export const CADDY_IMAGE = "caddy:2.11.4";
 
 interface CaddySyncState {
 	tail: Map<string, Promise<unknown>>;
