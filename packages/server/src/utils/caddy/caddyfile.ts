@@ -81,12 +81,15 @@ const block = (head: string, lines: string[]) => [
 ];
 
 // Members can read the Requests page. A deploy webhook carries its token in
-// the path, and query strings and API keys carry other people's secrets.
+// the path, and query strings and headers carry other people's secrets:
+// API keys, a Referer or a redirect's Location with the query of another
+// page. So no header is written, and the user agent is logged on its own.
 const requestLogLines = (file: string) =>
 	block("log dokploy_requests", [
 		`output file ${quote(file)}`,
 		...block("format filter", [
-			"request>headers>X-Api-Key delete",
+			"request>headers delete",
+			"resp_headers delete",
 			...block("request>uri multi_regexp", [
 				"regexp `^(/api/deploy/(compose/)?)[^/?]+` `${1}[REDACTED]`",
 				"regexp `\\?.*$` ``",
@@ -249,7 +252,9 @@ export const renderCaddyfile = ({
 	certificates,
 	routes,
 }: CaddyState) => {
-	const log = requestLog ? ["log"] : [];
+	const log = requestLog
+		? ["log", "log_append user_agent {header.User-Agent}"]
+		: [];
 	const usable = certificates.flatMap((certificate) => {
 		try {
 			const x509 = new X509Certificate(certificate.certificateData);

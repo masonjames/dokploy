@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CADDY_IMAGE, type CaddyRoute, renderCaddyfile } from "@dokploy/server";
@@ -41,7 +42,8 @@ describe("the request log in the Caddyfile", () => {
 				"\tlog dokploy_requests {",
 				"\t\toutput file `/etc/caddy/access.log`",
 				"\t\tformat filter {",
-				"\t\t\trequest>headers>X-Api-Key delete",
+				"\t\t\trequest>headers delete",
+				"\t\t\tresp_headers delete",
 				"\t\t\trequest>uri multi_regexp {",
 				"\t\t\t\tregexp `^(/api/deploy/(compose/)?)[^/?]+` `${1}[REDACTED]`",
 				"\t\t\t\tregexp `\\?.*$` ``",
@@ -58,7 +60,12 @@ describe("the request log in the Caddyfile", () => {
 			"http://plain.test {",
 			"http:// {",
 		]);
-		for (const lines of sites(caddyfile)) expect(lines).toContain("\tlog");
+		for (const lines of sites(caddyfile)) {
+			expect(lines.slice(1, 3)).toEqual([
+				"\tlog",
+				"\tlog_append user_agent {header.User-Agent}",
+			]);
+		}
 	});
 });
 
@@ -74,22 +81,45 @@ const hasDocker = () => {
 describe.skipIf(!hasDocker())("the request log in real Caddy", () => {
 	let folder = "";
 	let container = "";
+	let port = 0;
 	const docker = (...args: string[]) =>
 		execFileSync("docker", args, { encoding: "utf8", timeout: 120000 });
+	const send = (host: string, path: string, headers = {}) =>
+		new Promise<number | undefined>((resolve) => {
+			request(
+				{ port, path, headers: { Host: host, ...headers } },
+				(response) => {
+					response.resume();
+					response.on("end", () => resolve(response.statusCode));
+				},
+			)
+				.on("error", () => resolve(undefined))
+				.end();
+		});
+	const log = () => {
+		try {
+			return docker("exec", container, "cat", "/etc/caddy/access.log");
+		} catch {
+			return "";
+		}
+	};
 
-	beforeAll(() => {
+	beforeAll(async () => {
 		folder = mkdtempSync(join(tmpdir(), "dokploy-caddy-log-"));
 		writeFileSync(
 			join(folder, "Caddyfile"),
 			renderCaddyfile({
 				certificates: [],
-				routes: [],
+				// Self-signed, so nothing is asked of a certificate authority.
+				routes: [{ ...route("secure.test", true), selfSigned: true }],
 				requestLog: "/etc/caddy/access.log",
 			}).caddyfile,
 		);
 		container = docker(
 			"run",
 			"-d",
+			"-p",
+			"127.0.0.1::80",
 			"-v",
 			`${folder}:/etc/caddy`,
 			CADDY_IMAGE,
@@ -98,6 +128,12 @@ describe.skipIf(!hasDocker())("the request log in real Caddy", () => {
 			"--config",
 			"/etc/caddy/Caddyfile",
 		).trim();
+		port = Number(docker("port", container, "80/tcp").trim().split(":").pop());
+		for (let tries = 0; tries < 120; tries++) {
+			if ((await send("nobody.test", "/")) === 404) return;
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		}
+		throw new Error("Caddy did not start");
 	}, 180000);
 
 	afterAll(() => {
@@ -105,39 +141,30 @@ describe.skipIf(!hasDocker())("the request log in real Caddy", () => {
 		if (folder) rmSync(folder, { recursive: true, force: true });
 	});
 
-	test("keeps tokens, query strings and API keys out of the file", async () => {
-		const ask = (path: string) =>
-			docker(
-				"exec",
-				container,
-				"wget",
-				"-q",
-				"-O",
-				"/dev/null",
-				"--header",
-				"X-Api-Key: s3cret-key",
-				`http://127.0.0.1${path}`,
-			);
+	test("keeps tokens, query strings and every header out of the file", async () => {
+		expect(
+			await send("nobody.test", "/api/deploy/t0ken-one?next=s3cret-query", {
+				"User-Agent": "lab-agent",
+				"X-Api-Key": "s3cret-key",
+				"Private-Token": "s3cret-private",
+				Referer: "https://other.test/reset?token=s3cret-referer",
+			}),
+		).toBe(404);
+		// Caddy's own redirect to HTTPS repeats the path and the query in Location.
+		expect(
+			await send(
+				"secure.test",
+				"/api/deploy/compose/t0ken-two?code=s3cret-code",
+			),
+		).toBe(308);
 		await expect
-			.poll(
-				() => {
-					try {
-						ask("/api/deploy/t0ken-one?next=s3cret-query");
-					} catch {
-						// Every host answers 404 here. Only the log matters.
-					}
-					try {
-						ask("/api/deploy/compose/t0ken-two");
-					} catch {}
-					return docker("exec", container, "cat", "/etc/caddy/access.log");
-				},
-				{ timeout: 30000, interval: 500 },
-			)
-			.toContain("/api/deploy/compose/[REDACTED]");
+			.poll(() => log().trim().split("\n").length, { timeout: 30000 })
+			.toBeGreaterThanOrEqual(3);
 
-		const log = docker("exec", container, "cat", "/etc/caddy/access.log");
-		expect(log).toContain('"uri":"/api/deploy/[REDACTED]"');
-		expect(log).not.toMatch(/t0ken|s3cret/);
+		expect(log()).toContain('"uri":"/api/deploy/[REDACTED]"');
+		expect(log()).toContain('"uri":"/api/deploy/compose/[REDACTED]"');
+		expect(log()).toContain('"user_agent":"lab-agent"');
+		expect(log()).not.toMatch(/t0ken|s3cret|headers/);
 		expect(docker("logs", container)).not.toMatch(/t0ken|s3cret/);
 	}, 60000);
 });

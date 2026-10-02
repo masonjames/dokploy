@@ -3,6 +3,8 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 const existsSyncMock = vi.hoisted(() => vi.fn());
 const createReadStreamMock = vi.hoisted(() => vi.fn());
+const statSyncMock = vi.hoisted(() => vi.fn());
+const caddySwitchMock = vi.hoisted(() => vi.fn());
 const getWebServerProviderMock = vi.hoisted(() => vi.fn());
 const syncCaddyMock = vi.hoisted(() => vi.fn());
 const syncCaddyInBackgroundMock = vi.hoisted(() => vi.fn());
@@ -18,6 +20,7 @@ vi.mock("node:fs", () => ({
 	default: {
 		existsSync: existsSyncMock,
 		createReadStream: createReadStreamMock,
+		statSync: statSyncMock,
 	},
 	existsSync: existsSyncMock,
 }));
@@ -42,6 +45,7 @@ vi.mock("@dokploy/server/services/web-server-settings", () => ({
 }));
 
 vi.mock("@dokploy/server/utils/caddy/sync", () => ({
+	caddySwitch: caddySwitchMock,
 	syncCaddy: syncCaddyMock,
 	syncCaddyInBackground: syncCaddyInBackgroundMock,
 }));
@@ -68,6 +72,7 @@ beforeEach(() => {
 	scheduledCallback = undefined;
 	existsSyncMock.mockReturnValue(true);
 	getWebServerProviderMock.mockResolvedValue("traefik");
+	statSyncMock.mockReturnValue({ size: 100 });
 	execAsyncMock.mockResolvedValue({ stdout: "", stderr: "" });
 	updateWebServerSettingsMock.mockResolvedValue({});
 	scheduleJobMock.mockImplementation((name, _cron, callback) => {
@@ -157,11 +162,25 @@ test("reads the last lines of Caddy's log and skips what is not an entry", async
 
 	expect(createReadStreamMock).toHaveBeenCalledWith(
 		"/etc/dokploy/caddy/access.log",
-		{ encoding: "utf8" },
+		{ encoding: "utf8", start: 0 },
 	);
 	expect(log?.split("\n").slice(0, 1)).toEqual(['{"n":2}']);
 	expect(log?.endsWith('{"n":1001}\n')).toBe(true);
 	expect(readMonitoringConfigMock).not.toHaveBeenCalled();
+});
+
+test("reads only the end of a large log, from the first whole entry", async () => {
+	getWebServerProviderMock.mockResolvedValue("caddy");
+	statSyncMock.mockReturnValue({ size: 5_000_000 });
+	createReadStreamMock.mockReturnValue(
+		Readable.from(['"tail":"of an entry"}\n{"n":1}\n{"n":2}\n']),
+	);
+
+	expect(await readRequestLog()).toBe('{"n":1}\n{"n":2}\n');
+	expect(createReadStreamMock).toHaveBeenCalledWith(
+		"/etc/dokploy/caddy/access.log",
+		{ encoding: "utf8", start: 5_000_000 - 1000 * 4096 },
+	);
 });
 
 test("turns Caddy's request log on once Caddy has loaded it", async () => {
@@ -188,4 +207,15 @@ test("takes the change back when Caddy refuses it", async () => {
 		[{ requestLogsEnabled: false }],
 	]);
 	expect(syncCaddyInBackgroundMock).toHaveBeenCalledOnce();
+});
+
+test("is refused while a switch is running, when Caddy's answer would be lost", async () => {
+	caddySwitchMock.mockReturnValueOnce({ status: "running" });
+
+	await expect(setCaddyRequestLogs(true)).rejects.toThrow(
+		"A switch is running on this server",
+	);
+
+	expect(updateWebServerSettingsMock).not.toHaveBeenCalled();
+	expect(syncCaddyMock).not.toHaveBeenCalled();
 });

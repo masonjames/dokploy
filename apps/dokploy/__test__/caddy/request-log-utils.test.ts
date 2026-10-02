@@ -108,3 +108,16 @@ test("preserves existing Traefik request log parsing", () => {
 		Duration: 14_729_375,
 	});
 });
+
+test("takes the user agent from its own field, which is where Caddy now writes it", () => {
+	const entry = JSON.parse(caddyLogEntry);
+	const result = parseRawConfig(
+		JSON.stringify({
+			...entry,
+			request: { ...entry.request, headers: undefined },
+			user_agent: "lab-agent",
+		}),
+	);
+
+	expect(result.data[0]?.request_User_Agent).toBe("lab-agent");
+});

@@ -974,6 +974,11 @@ export const settingsRouter = createTRPCRouter({
 				return true;
 			}
 			if ((await getWebServerProvider()) === "caddy") {
+				// Traefik applies this only once an admin reloads it. Caddy is
+				// reloaded here, so the change itself is an admin's.
+				if (ctx.user.role !== "owner" && ctx.user.role !== "admin") {
+					throw new TRPCError({ code: "UNAUTHORIZED" });
+				}
 				await setCaddyRequestLogs(input.enable);
 				await audit(ctx, {
 					action: "update",

@@ -7,9 +7,10 @@ import {
 	getWebServerSettings,
 	updateWebServerSettings,
 } from "@dokploy/server/services/web-server-settings";
+import { TRPCError } from "@trpc/server";
 import { scheduledJobs, scheduleJob } from "node-schedule";
 import { quote } from "shell-quote";
-import { syncCaddy, syncCaddyInBackground } from "../caddy/sync";
+import { caddySwitch, syncCaddy, syncCaddyInBackground } from "../caddy/sync";
 import { execAsync } from "../process/execAsync";
 import { readMonitoringConfig } from "../traefik/application";
 
@@ -30,12 +31,24 @@ export const readRequestLog = async (readAll = false) => {
 	const file = caddyRequestLogPath();
 	if (!fs.existsSync(file)) return "";
 
+	// The page asks again every second or so, and the file grows until the
+	// cleanup job runs. Only its end is read: 4 KiB per entry is generous.
+	const start = Math.max(
+		0,
+		fs.statSync(file).size - ACCESS_LOG_RETAINED_LINES * 4096,
+	);
 	const recent: string[] = [];
 	const lines = createInterface({
-		input: fs.createReadStream(file, { encoding: "utf8" }),
+		input: fs.createReadStream(file, { encoding: "utf8", start }),
 		crlfDelay: Number.POSITIVE_INFINITY,
 	});
+	let cut = start > 0;
 	for await (const line of lines) {
+		// Reading from the middle of the file starts inside an entry.
+		if (cut) {
+			cut = false;
+			continue;
+		}
 		const trimmed = line.trim();
 		if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
 		recent.push(line);
@@ -49,6 +62,13 @@ export const readRequestLog = async (readAll = false) => {
  * returns, and a change it refuses is taken back
  */
 export const setCaddyRequestLogs = async (enable: boolean) => {
+	// A sync returns at once during a switch, so Caddy's answer would be lost.
+	if (caddySwitch(null)?.status === "running") {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "A switch is running on this server. Try again when it is done",
+		});
+	}
 	const before = !!(await getWebServerSettings())?.requestLogsEnabled;
 	await updateWebServerSettings({ requestLogsEnabled: enable });
 	try {
