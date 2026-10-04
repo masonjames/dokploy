@@ -1,6 +1,6 @@
 # NONBUILDABLE / nonrunnable community source foundation
 
-Pinned maintained base: `b2c1a6b2016edae023f0cb2a19afdbda355e6d52`.
+Pinned inspection-export base (not the current maintained branch HEAD): `b2c1a6b2016edae023f0cb2a19afdbda355e6d52`.
 This is source inspection tooling and a pure supplied-state refusal policy.
 It grants no build, migration, runtime, publication or production authority.
 Separate source closure, compiler/build/content evidence and runtime qualification
@@ -22,6 +22,10 @@ adds an explicit externally trusted binding, fixed PG18 TLS observation and opt-
 disposable-cluster harness. The coordinator passed its real PG18 fixture gate
 after repairing retained fixture failures; ordinary unit discovery never starts
 PostgreSQL. Startup remains denied, and Linux packaging remains unqualified.
+The [exact prestate packet](prestate-packet.md) adds externally scoped evidence
+and two fresh comparisons using required external CA content pins and private
+verified CA snapshots. Every Expected field is validated before comparison. Even matching reads explicitly refuse writer exclusion
+and all migration/runtime authority; restart, upgrade and recovery remain refused.
 
 `restricted-inventory.json` records the exact 29 restricted paths and identities,
 reconciled with the retained checksum inventory and import probe. SHA-256 values
@@ -83,10 +87,11 @@ blobs, including the upstream license split and DSAL notice. They are not rewrit
 or relabeled. Copyright remains with its stated holders; third-party terms still
 apply. This inventory is not legal or dependency license clearance.
 
-Source-only verification requires Python 3.9+ and existing Git; no dependencies.
-API/grammar audit only: `Path.is_relative_to` requires 3.9; the other used standard-library APIs
-and syntax are available by 3.9. Tests were run with **Python 3.14.8**. This API
-inspection is not a tested interpreter-version matrix; no interpreters were installed.
+Full community test discovery requires Python **3.11+** and existing Git; no
+Python dependencies are acquired. The tests use `unittest.TestCase.enterContext`
+(3.11), and connector annotations require at least 3.10. The original exporter
+alone was written against 3.9 APIs. Tests were run with **Python 3.14.8**; lower
+versions were not executed and no interpreter-version matrix is qualified.
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s community -p 'test_*.py' -v

@@ -1,8 +1,11 @@
 """One fixed PG18 observation; external caller supplies trust, never admission."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+import hashlib
 import ipaddress
 import json
+import os
+import stat
 from pathlib import Path
 import re
 import subprocess
@@ -13,6 +16,7 @@ from state_observation import BEGIN, SET_PATH, OBSERVE, COLUMNS, Result, Target,
 from state_policy import Decision
 
 PSQL = '/opt/homebrew/opt/postgresql@18/bin/psql'
+MAX_CA_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,7 @@ class Binding:
     ca_file: str
     baseline: Baseline
     password: str = field(repr=False)
+    ca_sha256: str | None = None
 
 
 # Fixed normal-object OID boundary is conservative for non-stock templates.
@@ -91,12 +96,38 @@ def validate(binding: Binding) -> None:
                 for part in binding.tls_hostname.split('.')))
     require(type(binding.ca_file) is str and binding.ca_file.startswith('/') and
             '\x00' not in binding.ca_file and len(binding.ca_file) <= 4096)
-    require(Path(binding.ca_file).is_file())
     require(type(binding.baseline) is Baseline)
     for value in (binding.baseline.public_acl, binding.baseline.database_acl):
         require(value is None or (type(value) is str and 0 < len(value) <= 16384 and '\x00' not in value))
     require(type(binding.password) is str and 0 < len(binding.password) <= 1024 and
             '\x00' not in binding.password)
+
+    if binding.ca_sha256 is not None:
+        validate_digest(binding.ca_sha256)
+
+
+def validate_digest(value: str) -> None:
+    require(type(value) is str and re.fullmatch(r'[0-9a-f]{64}', value) is not None)
+
+
+def _snapshot_ca(binding: Binding, home: str) -> str:
+    """One bounded source open; psql only opens the verified private snapshot.
+
+    Same-UID mutation of our private directory is outside this boundary.
+    """
+    validate_digest(binding.ca_sha256)
+    descriptor = os.open(binding.ca_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, 'rb') as source:
+        metadata = os.fstat(source.fileno())
+        require(stat.S_ISREG(metadata.st_mode) and 0 < metadata.st_size <= MAX_CA_BYTES)
+        data = source.read(MAX_CA_BYTES + 1)
+    require(0 < len(data) <= MAX_CA_BYTES)
+    require(hashlib.sha256(data).hexdigest() == binding.ca_sha256)
+    path = os.path.join(home, 'verified-ca.pem')
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, 'wb') as snapshot:
+        require(snapshot.write(data) == len(data))
+    return path
 
 
 def _quote(value: str) -> str:
@@ -112,7 +143,19 @@ def _unique(pairs):
     return result
 
 
+@dataclass(frozen=True)
+class Evidence:
+    """Diagnostic evidence only; never a durable admission or exclusion receipt."""
+
+    result: Exit
+    prestate_sha256: str | None = None
+
+
 def decode(output: bytes, binding: Binding) -> Decision:
+    return decode_evidence(output, binding).result.observation
+
+
+def decode_evidence(output: bytes, binding: Binding) -> Evidence:
     require(len(output) <= 65536)
     lines = output.decode('utf-8', errors='strict').splitlines()
     require(len(lines) == 5 and lines[:3] == ['BEGIN', 'SET', 'SET'] and lines[-1] == 'ROLLBACK')
@@ -131,28 +174,45 @@ def decode(output: bytes, binding: Binding) -> Decision:
     require(envelope['public_owner'] == baseline.public_owner and
             envelope['public_acl'] == baseline.public_acl and envelope['database_acl'] == baseline.database_acl)
     if envelope['extra_objects']:
-        return Decision('REFUSE_EXISTING', 'Additional catalog state; compatibility is unqualified')
-    return decision
+        decision = Decision('REFUSE_EXISTING', 'Additional catalog state; compatibility is unqualified')
+    digest = None
+    if decision.classification == 'NEW_EMPTY_CANDIDATE':
+        scope = dict(target=asdict(binding.target), baseline=asdict(binding.baseline),
+                     tls_hostname=binding.tls_hostname, ca_file=binding.ca_file)
+        if binding.ca_sha256 is not None:
+            scope['ca_sha256'] = binding.ca_sha256
+        digest = hashlib.sha256(json.dumps({'scope': scope, 'observation': envelope},
+                                          sort_keys=True, separators=(',', ':'),
+                                          ensure_ascii=True).encode('ascii')).hexdigest()
+    return Evidence(Exit(decision), digest)
 
 
 def inspect(binding: Binding, purpose: str = 'initial') -> Exit:
+    return inspect_evidence(binding, purpose).result
+
+
+def inspect_evidence(binding: Binding, purpose: str = 'initial') -> Evidence:
     """Fresh physical connection, confirmed rollback and reaped psql before result.
 
     Fixed 2s connect/statement limits, 5s wall limit, then kill/reap on failure or
     cancellation. A failed query closes/aborts its transaction, never a candidate.
-    No SQL, DSN, executable, timeout, environment or process injection surface.
+    No caller-supplied SQL, DSN, executable, timeout, child environment or process hook.
     """
-    refused = Exit(Decision('REFUSE_UNKNOWN', 'Authenticated observation failed or was incomplete'))
+    refused = Evidence(Exit(Decision('REFUSE_UNKNOWN', 'Authenticated observation failed or was incomplete')))
     if type(purpose) is not str or purpose != 'initial':
-        return Exit(Decision('REFUSE_EXISTING', 'Restart/upgrade admission is out of scope'))
+        return Evidence(Exit(Decision('REFUSE_EXISTING', 'Restart/upgrade admission is out of scope')))
     try:
         validate(binding)
+        if binding.ca_sha256 is None:
+            require(Path(binding.ca_file).is_file())  # Legacy inspect path behavior.
         target = binding.target
         with tempfile.TemporaryDirectory(prefix='hostler-observe-') as home:
+            ca_file = (_snapshot_ca(binding, home) if binding.ca_sha256 is not None
+                       else binding.ca_file)
             parameters = dict(host=binding.tls_hostname, hostaddr=target.server_address,
                               port=str(target.server_port), dbname=target.database_name,
                               user=target.observer_role, sslmode='verify-full',
-                              sslrootcert=binding.ca_file, sslcertmode='disable',
+                              sslrootcert=ca_file, sslcertmode='disable',
                               sslcert='', sslkey='', sslcrl='', sslcrldir='',
                               sslsni='1', gssencmode='disable', channel_binding='require',
                               client_encoding='UTF8',
@@ -183,6 +243,8 @@ def inspect(binding: Binding, purpose: str = 'initial') -> Exit:
                 errors.seek(0)
                 require(not errors.read(1))
                 output.seek(0)
-                return Exit(decode(output.read(65537), binding))
+                evidence = decode_evidence(output.read(65537), binding)
+        # Only publish evidence after temporary-file/directory cleanup also succeeds.
+        return evidence
     except Exception:
         return refused

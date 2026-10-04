@@ -6,6 +6,8 @@ configuration, credentials, existing service, socket, or dependency acquisition.
 
 from dataclasses import replace
 import json
+import hashlib
+import shlex
 import os
 from pathlib import Path
 import secrets
@@ -18,6 +20,7 @@ import unittest
 from unittest.mock import patch
 
 import observation_connector as connector
+import prestate_boundary as boundary
 from state_observation import Target
 
 PG = Path('/opt/homebrew/opt/postgresql@18/bin')
@@ -52,6 +55,9 @@ class DisposableCluster:
                               'subjectAltName=DNS:fixture.hostler.invalid', '-keyout',
                               str(self.root / (name + '.key')), '-out', str(self.root / (name + '.crt'))])
                 (self.root / (name + '.key')).chmod(0o600)
+            # Trusted fixture provisioner retains bytes/pin before any observation.
+            self.ca_bytes = (self.root / 'server.crt').read_bytes()
+            self.ca_sha256 = hashlib.sha256(self.ca_bytes).hexdigest()
             with socket.socket() as reservation:
                 reservation.bind(('127.0.0.1', 0))
                 self.port = reservation.getsockname()[1]
@@ -186,6 +192,141 @@ class PostgreSQLTests(unittest.TestCase):
 
     def sql(self, sql):
         return self.cluster.admin(sql, 'fixture_database')
+
+    def prestate_proposal(self):
+        binding = replace(self.binding, ca_sha256=self.cluster.ca_sha256)
+        prior = connector.inspect_evidence(binding)
+        self.assertEqual(prior.result.observation.classification, 'NEW_EMPTY_CANDIDATE')
+        self.assertIsNotNone(prior.prestate_sha256)
+        expected = boundary.Expected(binding.target, binding.baseline, binding.tls_hostname,
+                                     binding.ca_file, 'a' * 64, prior.prestate_sha256,
+                                     self.cluster.ca_sha256)
+        return binding, expected
+
+    def assert_prestate_refusal(self, result, classification, matched=False):
+        self.assertEqual(result.result.observation.classification, classification)
+        self.assertIs(result.observations_match, matched)
+        self.assertFalse(result.writer_exclusion_established)
+        self.assertEqual(result.result.exit_code, 1)
+        self.assertFalse(result.result.migration_authorized or result.result.runtime_authorized or
+                         result.result.observation.migration_authorized or
+                         result.result.observation.runtime_authorized)
+
+    def test_prestate_authenticated_prior_and_two_fresh_reads(self):
+        original_launch = subprocess.Popen
+        clients = []
+
+        def launch(*args, **kwargs):
+            process = original_launch(*args, **kwargs)
+            clients.append(process)
+            return process
+
+        with patch.object(connector.subprocess, 'Popen', side_effect=launch):
+            binding, expected = self.prestate_proposal()
+            result = boundary.check(binding, 'a' * 64, expected)
+        self.assertEqual(len(clients), 3)
+        self.assertEqual(len({p.pid for p in clients}), 3)
+        self.assertTrue(all(p.returncode == 0 and p.stdin.closed for p in clients))
+        self.assert_prestate_refusal(result, 'REFUSE_WRITER_EXCLUSION', True)
+        self.cluster.wait_for_no_observers()
+
+    def test_prestate_empty_after_create_drop_still_refuses_snapshot_drift(self):
+        binding, expected = self.prestate_proposal()
+        original = boundary.inspect_evidence
+        evidence = []
+
+        def observe(binding):
+            result = original(binding)
+            evidence.append(result)
+            if len(evidence) == 1:
+                self.sql('CREATE TABLE transient_fixture(id int); DROP TABLE transient_fixture')
+            return result
+
+        with patch.object(boundary, 'inspect_evidence', side_effect=observe):
+            result = boundary.check(binding, 'a' * 64, expected)
+        self.assertEqual(len(evidence), 2)
+        self.assertEqual(evidence[0].prestate_sha256, expected.prestate_sha256)
+        self.assertEqual(evidence[1].result.observation.classification, 'NEW_EMPTY_CANDIDATE')
+        self.assertIsNotNone(evidence[1].prestate_sha256)
+        self.assertNotEqual(evidence[1].prestate_sha256, expected.prestate_sha256)
+        self.assert_prestate_refusal(result, 'REFUSE_PRESTATE')
+        self.cluster.wait_for_no_observers()
+
+    def test_prestate_intervening_partial_schema(self):
+        binding, expected = self.prestate_proposal()
+        original = boundary.inspect_evidence
+        calls = []
+
+        def observe(binding):
+            evidence = original(binding)
+            calls.append(evidence)
+            if len(calls) == 1:
+                self.sql('CREATE TABLE partial_migration(id int)')
+            return evidence
+
+        with patch.object(boundary, 'inspect_evidence', side_effect=observe):
+            result = boundary.check(binding, 'a' * 64, expected)
+        self.assertEqual(len(calls), 2)
+        self.assert_prestate_refusal(result, 'REFUSE_EXISTING')
+        self.cluster.wait_for_no_observers()
+
+    def test_prestate_candidate_target_and_ca_pin_drift_before_connection(self):
+        binding, expected = self.prestate_proposal()
+        with patch.object(connector.subprocess, 'Popen', side_effect=AssertionError('unexpected launch')) as launch:
+            for changed, candidate in ((binding, 'b' * 64),
+                    (replace(binding, target=replace(binding.target, database_oid=1)), 'a' * 64),
+                    (replace(binding, ca_sha256='b' * 64), 'a' * 64)):
+                self.assert_prestate_refusal(boundary.check(changed, candidate, expected), 'REFUSE_SCOPE')
+            launch.assert_not_called()
+        self.cluster.wait_for_no_observers()
+
+    def test_prestate_source_path_replacement_cannot_switch_trust(self):
+        # Dedicated client source: do not alter the running server's certificate.
+        source = self.cluster.root / 'client-ca.crt'
+        source.write_bytes(self.cluster.ca_bytes)
+        self.binding = replace(self.binding, ca_file=str(source))
+        binding, expected = self.prestate_proposal()
+        original_snapshot = connector._snapshot_ca
+        original_launch = subprocess.Popen
+        original_observe = boundary.inspect_evidence
+        evidence = []
+        snapshots = []
+        clients = []
+
+        def snapshot(binding, home):
+            path = original_snapshot(binding, home)
+            snapshots.append(Path(path))
+            source.unlink()
+            source.write_bytes((self.cluster.root / 'untrusted.crt').read_bytes())
+            return path
+
+        def observe(binding):
+            result = original_observe(binding)
+            evidence.append(result)
+            return result
+
+        def launch(*args, **kwargs):
+            parameters = dict(item.split('=', 1) for item in shlex.split(args[0][-1]))
+            self.assertTrue(Path(parameters['sslrootcert']).read_bytes() == self.cluster.ca_bytes,
+                            'psql must receive verified fixture CA bytes')
+            process = original_launch(*args, **kwargs)
+            clients.append(process)
+            return process
+
+        with patch.object(connector, '_snapshot_ca', side_effect=snapshot), \
+                patch.object(connector.subprocess, 'Popen', side_effect=launch), \
+                patch.object(boundary, 'inspect_evidence', side_effect=observe):
+            result = boundary.check(binding, 'a' * 64, expected)
+        # Real authenticated first read used retained trust; replaced source fails
+        # pinning on the second read before another client can be launched.
+        self.assert_prestate_refusal(result, 'REFUSE_UNKNOWN')
+        self.assertEqual(len(evidence), 2)
+        self.assertEqual(evidence[0].prestate_sha256, expected.prestate_sha256)
+        self.assertIsNone(evidence[1].prestate_sha256)
+        self.assertEqual(len(clients), 1)
+        self.assertEqual(clients[0].returncode, 0)
+        self.assertTrue(all(not path.parent.exists() for path in snapshots))
+        self.cluster.wait_for_no_observers()
 
     def test_authenticated_empty_and_no_superuser_or_secret_catalog_grant(self):
         self.assertEqual(self.sql("SELECT rolsuper FROM pg_roles WHERE rolname='fixture_observer'").strip(), 'f')
