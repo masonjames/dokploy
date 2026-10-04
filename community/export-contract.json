@@ -1,0 +1,18 @@
+{
+	"base": "b2c1a6b2016edae023f0cb2a19afdbda355e6d52",
+	"input_tree": "a21afdb061d2c746fe4ee96b1157ee7cf153f3f5",
+	"inventory_sha256": "7ec386ad912d339c1596c49fa475336d66f67adcb7cf39562c919e1de544973d",
+	"omitted_entries": [
+		{
+			"git_blob": "3594e94c04db171e2767224db355f514b13715c5",
+			"kind": "blob",
+			"mode": "120000",
+			"path": "apps/dokploy/__test__/drop/zips/payload/link",
+			"reason": "Tracked test fixture symlink; never read, follow or materialize"
+		}
+	],
+	"overlays": [],
+	"overlays_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+	"status": "NONBUILDABLE / nonrunnable",
+	"version": 1
+}
