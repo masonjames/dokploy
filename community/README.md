@@ -13,7 +13,11 @@ wired as a universal startup guard: that would refuse the first restart after a
 successful install. Later compatible restart/upgrade admission needs its own bound
 community-install identity plus schema/state policy and crash, restart and
 partial-migration tests. An installation marker alone never grants authority.
-There is no runtime adapter here; the classifier's refusal behavior is unchanged.
+There is no production connector or runtime admission here; the classifier's
+refusal behavior is unchanged. The separate [preparatory observation packet](observation-packet.md)
+adds fixed PostgreSQL catalog SQL, an injected query interface, a synthetic driver
+and an always-refusing community entry. It is not included in the pinned export
+and supplies no viable-build evidence.
 
 `restricted-inventory.json` records the exact 29 restricted paths and identities,
 reconciled with the retained checksum inventory and import probe. SHA-256 values
