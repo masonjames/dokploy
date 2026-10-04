@@ -13,11 +13,15 @@ wired as a universal startup guard: that would refuse the first restart after a
 successful install. Later compatible restart/upgrade admission needs its own bound
 community-install identity plus schema/state policy and crash, restart and
 partial-migration tests. An installation marker alone never grants authority.
-There is no production connector or runtime admission here; the classifier's
+There is no production-qualified connector or runtime admission here; the classifier's
 refusal behavior is unchanged. The separate [preparatory observation packet](observation-packet.md)
 adds fixed PostgreSQL catalog SQL, an injected query interface, a synthetic driver
 and an always-refusing community entry. It is not included in the pinned export
-and supplies no viable-build evidence.
+and supplies no viable-build evidence. The subsequent [authenticated connector packet](connector-packet.md)
+adds an explicit externally trusted binding, fixed PG18 TLS observation and opt-in
+disposable-cluster harness. The coordinator passed its real PG18 fixture gate
+after repairing retained fixture failures; ordinary unit discovery never starts
+PostgreSQL. Startup remains denied, and Linux packaging remains unqualified.
 
 `restricted-inventory.json` records the exact 29 restricted paths and identities,
 reconciled with the retained checksum inventory and import probe. SHA-256 values

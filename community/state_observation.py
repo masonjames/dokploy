@@ -52,7 +52,7 @@ ROLLBACK = "ROLLBACK"
 CATALOGS = (
     "pg_database", "pg_namespace", "pg_class", "pg_type", "pg_proc",
     "pg_extension", "pg_largeobject_metadata", "pg_event_trigger",
-    "pg_foreign_server", "pg_publication", "pg_subscription",
+    "pg_foreign_server", "pg_publication",
     "pg_default_acl", "pg_db_role_setting", "pg_prepared_xacts",
 )
 IDENTITY_COLUMNS = (
@@ -91,7 +91,11 @@ SELECT
      FROM pg_catalog.pg_class c
      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'pg_catalog' AND c.relname IN (CATALOG_NAMES))
-        AND pg_catalog.has_schema_privilege('pg_catalog', 'USAGE') AS catalog_access,
+        AND pg_catalog.has_schema_privilege('pg_catalog', 'USAGE')
+        AND pg_catalog.has_column_privilege('pg_catalog.pg_subscription', 'oid', 'SELECT')
+        AND (SELECT NOT relrowsecurity AND NOT relforcerowsecurity
+             FROM pg_catalog.pg_class WHERE oid = 'pg_catalog.pg_subscription'::pg_catalog.regclass)
+        AS catalog_access,
     pg_catalog.has_database_privilege(d.oid, 'CONNECT') AS database_access,
     (SELECT pg_catalog.bool_and(pg_catalog.has_schema_privilege(n.oid, 'USAGE'))
      FROM pg_catalog.pg_namespace n WHERE n.nspname = 'public') AS public_access,
@@ -116,7 +120,7 @@ SELECT
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_event_trigger) AS event_triggers,
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_foreign_server) AS foreign_servers,
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_publication) AS publications,
-    (SELECT pg_catalog.count(*) FROM pg_catalog.pg_subscription) AS subscriptions,
+    (SELECT pg_catalog.count(oid) FROM pg_catalog.pg_subscription) AS subscriptions,
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_default_acl) AS default_acls,
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_db_role_setting
      WHERE setdatabase IN (0, d.oid)) AS database_role_settings,
