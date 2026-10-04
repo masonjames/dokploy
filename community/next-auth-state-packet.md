@@ -1,7 +1,11 @@
 # NONBUILDABLE / nonrunnable — next auth/state-refusal packet
 
-Base: `b2c1a6b2016edae023f0cb2a19afdbda355e6d52`. Source-only proposal for the
-next bounded implementation. No live inventory or runtime admission has occurred.
+Foundation base: `b2c1a6b2016edae023f0cb2a19afdbda355e6d52`. The original packet
+below is retained as the foundation contract. The October 4 implementation on
+`8c1111253a76b321895dcf13124d42dfe5d862f7` is recorded in the
+[preparatory observation packet](observation-packet.md), with launch map, explicit
+entry, synthetic evidence and next prerequisites. No live inventory or runtime
+admission has occurred; the export contract is unchanged.
 
 Exact seam from retained source evidence: `apps/dokploy/package.json` runs migration
 before `server.mjs`; `apps/dokploy/server/server.ts` performs initialization before
