@@ -87,11 +87,17 @@ blobs, including the upstream license split and DSAL notice. They are not rewrit
 or relabeled. Copyright remains with its stated holders; third-party terms still
 apply. This inventory is not legal or dependency license clearance.
 
-Full community test discovery requires Python **3.11+** and existing Git; no
-Python dependencies are acquired. The tests use `unittest.TestCase.enterContext`
+Full community test discovery requires Python **3.11+**, existing Git, the fixed
+existing Homebrew Node 24 binary `/opt/homebrew/opt/node@24/bin/node`, writable
+`/private/tmp`, and the maintained checkout’s `apps/dokploy/drizzle` and
+`pnpm-lock.yaml`. Unavailable prerequisites **fail**, never skip; no dependency
+acquisition is implied. Ordinary discovery executes the installed-Node startup
+smoke and synthetic Node helper checks but accesses no database.
+The tests use `unittest.TestCase.enterContext`
 (3.11), and connector annotations require at least 3.10. The original exporter
-alone was written against 3.9 APIs. Tests were run with **Python 3.14.8**; lower
-versions were not executed and no interpreter-version matrix is qualified.
+alone was written against 3.9 APIs. Actual checks used **Python 3.14.8** and
+**Node 24.21.0**; lower interpreter versions were not executed and no
+interpreter-version matrix is qualified.
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s community -p 'test_*.py' -v
@@ -129,3 +135,17 @@ Verify the exporter hash independently against reviewed tooling. The exporter
 trusts the local Git object store; the coordinator additionally recomputed each
 output's Git blob ID and SHA-256 against the pinned tree. That source check is
 not loaded-code attestation or qualification of a later build.
+
+The [first synthetic maintenance/migration packet](writer-boundary-packet.md)
+adds an explicit new-cluster-only Drizzle/psql gate and a hand-authored small
+oracle. The parent’s fifth PG18.6 gate and all 93 offline tests passed; maintained
+Drizzle/psql agreement is bounded differential evidence. Actual `claude-opus-5-5`
+tool-disabled review accepted the explicit prior 13-file packet for fixture-only
+increment 1 source merge, **conditional on C1’s README requirements correction**.
+The reviewer used no tools or repository access and did not recompute hashes.
+The receipt is `/tmp/hostler-oct4-next/opus-writer-implementation-review.md`.
+C1 is corrected in the prerequisites above. The pull request retains the final
+documentation-delta review and integrating-agent verification. Source review
+grants no build, runtime or operational approval. Ordinary imports and unit discovery remain database-free.
+It changes no prestate authority, maintained migration SQL, runtime admission
+or pinned export contract.
