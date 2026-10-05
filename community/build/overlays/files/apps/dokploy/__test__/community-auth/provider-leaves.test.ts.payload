@@ -1,0 +1,467 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const external = vi.hoisted(() => ({ db: {} as unknown, effect: vi.fn() }));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return external.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({
+	validateRequest: external.effect,
+}));
+vi.mock("@dokploy/server", async () => ({
+	...(await import("@dokploy/server/services/git-provider")),
+	...(await import("@dokploy/server/services/github")),
+	...(await import("@dokploy/server/services/gitlab")),
+	...(await import("@dokploy/server/services/gitea")),
+	...(await import("@dokploy/server/services/bitbucket")),
+	haveGitlabRequirements: (
+		await import("@dokploy/server/utils/providers/gitlab")
+	).haveGitlabRequirements,
+	getGithubRepositories: external.effect,
+	getGithubBranches: external.effect,
+	getGitlabRepositories: external.effect,
+	getGitlabBranches: external.effect,
+	getGiteaRepositories: external.effect,
+	getGiteaBranches: external.effect,
+	getBitbucketRepositories: external.effect,
+	getBitbucketBranches: external.effect,
+	testGitlabConnection: external.effect,
+	testGiteaConnection: external.effect,
+	testBitbucketConnection: external.effect,
+}));
+import { githubRouter } from "@/server/api/routers/github";
+import { gitlabRouter } from "@/server/api/routers/gitlab";
+import { giteaRouter } from "@/server/api/routers/gitea";
+import { gitProviderRouter } from "@/server/api/routers/git-provider";
+import { bitbucketRouter } from "@/server/api/routers/bitbucket";
+let data = syntheticDatabase();
+function setup(
+	role = "member",
+	owner = "actor",
+	shared = false,
+	organizationId = "org-1",
+) {
+	data.rows.member = [
+		{
+			id: "member",
+			userId: "actor",
+			organizationId: "org-1",
+			role,
+			canAccessToGitProviders: true,
+			accessedGitProviders: ["parent"],
+		},
+	];
+	const parent = {
+		gitProviderId: "parent",
+		userId: owner,
+		organizationId,
+		sharedWithOrganization: shared,
+		name: "before",
+	};
+	data.rows.git_provider = [parent];
+	for (const kind of ["github", "gitlab", "gitea", "bitbucket"])
+		data.rows[kind] = [
+			{
+				[`${kind}Id`]: "leaf",
+				gitProviderId: "parent",
+				gitProvider: parent,
+				giteaUrl: "https://example.invalid",
+				...(kind === "bitbucket"
+					? {
+							appPassword: "synthetic-stored-password",
+							apiToken: "synthetic-stored-token",
+						}
+					: kind === "github"
+						? {
+								githubPrivateKey: "synthetic-stored-key",
+								githubClientSecret: "synthetic-stored-secret",
+								githubWebhookSecret: "synthetic-stored-webhook",
+							}
+						: kind === "gitea"
+							? {
+									clientSecret: "synthetic-stored-secret",
+									accessToken: "synthetic-stored-token",
+									refreshToken: "synthetic-stored-refresh",
+								}
+							: {
+									secret: "synthetic-stored-secret",
+									accessToken: "synthetic-stored-token",
+									refreshToken: "synthetic-stored-refresh",
+								}),
+			},
+		];
+	const ctx = {
+		db: data.db,
+		user: { id: "actor", role },
+		session: { userId: "actor", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof githubRouter.createCaller>[0];
+	return {
+		github: (input: Record<string, unknown>) =>
+			githubRouter
+				.createCaller(ctx)
+				.update(
+					input as Parameters<
+						ReturnType<typeof githubRouter.createCaller>["update"]
+					>[0],
+				),
+		gitlab: (input: Record<string, unknown>) =>
+			gitlabRouter
+				.createCaller(ctx)
+				.update(
+					input as Parameters<
+						ReturnType<typeof gitlabRouter.createCaller>["update"]
+					>[0],
+				),
+		gitea: (input: Record<string, unknown>) =>
+			giteaRouter
+				.createCaller(ctx)
+				.update(
+					input as Parameters<
+						ReturnType<typeof giteaRouter.createCaller>["update"]
+					>[0],
+				),
+		bitbucket: (input: Record<string, unknown>) =>
+			bitbucketRouter
+				.createCaller(ctx)
+				.update(
+					input as Parameters<
+						ReturnType<typeof bitbucketRouter.createCaller>["update"]
+					>[0],
+				),
+		all: () => gitProviderRouter.createCaller(ctx).getAll(),
+		bitbucketOne: () =>
+			bitbucketRouter.createCaller(ctx).one({ bitbucketId: "leaf" }),
+		gitlabOne: () => gitlabRouter.createCaller(ctx).one({ gitlabId: "leaf" }),
+		gitlabList: () => gitlabRouter.createCaller(ctx).gitlabProviders(),
+		giteaOne: () => giteaRouter.createCaller(ctx).one({ giteaId: "leaf" }),
+		githubOne: () => githubRouter.createCaller(ctx).one({ githubId: "leaf" }),
+		url: () => giteaRouter.createCaller(ctx).getGiteaUrl({ giteaId: "leaf" }),
+	};
+}
+beforeEach(() => {
+	data = syntheticDatabase();
+	external.db = data.db;
+	external.effect.mockReset();
+});
+for (const kind of ["github", "gitlab", "gitea", "bitbucket"] as const) {
+	const input = {
+		[`${kind}Id`]: "leaf",
+		gitProviderId: "parent",
+		name: "after",
+		githubAppName: "after",
+		gitlabUrl: "https://example.invalid",
+		giteaUrl: "https://example.invalid",
+		organizationId: "org-evil",
+		userId: "evil",
+	};
+	it.each([
+		"foreign-parent-own-leaf",
+		"foreign-leaf-own-parent",
+		"existing-same-org-mismatch",
+		"stale-other-org-membership",
+		"owner-foreign-parent",
+		"owner-foreign-subtype",
+		"cross-org",
+		"mismatch",
+		"assigned",
+		"missing-membership",
+		"custom-role",
+		"operation-denied",
+		"name-omitted",
+	])(`${kind} denies %s before writes/effects`, async (scenario) => {
+		const callers = setup(
+			scenario.startsWith("owner-")
+				? "owner"
+				: scenario === "custom-role"
+					? "custom"
+					: "member",
+			scenario === "assigned" ? "other" : "actor",
+			false,
+			scenario === "cross-org" ? "org-2" : "org-1",
+		);
+		if (scenario === "missing-membership") data.rows.member = [];
+		if (scenario === "operation-denied")
+			data.rows.member![0]!.canAccessToGitProviders = false;
+		if (scenario === "stale-other-org-membership")
+			data.rows.member![0]!.organizationId = "org-2";
+		let selector = "parent";
+		if (
+			[
+				"foreign-parent-own-leaf",
+				"owner-foreign-parent",
+				"existing-same-org-mismatch",
+			].includes(scenario)
+		) {
+			data.rows.git_provider!.push({
+				...data.rows.git_provider![0],
+				gitProviderId: "existing-other",
+				organizationId:
+					scenario === "existing-same-org-mismatch" ? "org-1" : "org-2",
+			});
+			selector = "existing-other";
+		}
+		if (
+			["foreign-leaf-own-parent", "owner-foreign-subtype"].includes(scenario)
+		) {
+			const foreign = {
+				...data.rows.git_provider![0],
+				gitProviderId: "foreign-parent",
+				organizationId: "org-2",
+			};
+			data.rows.git_provider!.push(foreign);
+			data.rows[kind]![0]!.gitProvider = foreign;
+			data.rows[kind]![0]!.gitProviderId = "foreign-parent";
+		}
+		const before = JSON.stringify(data.rows);
+		await expect(
+			callers[kind]({
+				...input,
+				gitProviderId: selector,
+				...(scenario === "mismatch" ? { gitProviderId: "unrelated" } : {}),
+				...(scenario === "name-omitted" ? { name: undefined } : {}),
+			}),
+		).rejects.toBeTruthy();
+		expect(JSON.stringify(data.rows) === before).toBe(true);
+		expect(data.writes).toEqual([]);
+		expect(external.effect).not.toHaveBeenCalled();
+	});
+	it.each(["own", "shared", "owner", "admin-own", "admin-shared"])(
+		`${kind} permits %s without transferring linkage`,
+		async (scenario) => {
+			const callers = setup(
+				scenario === "owner"
+					? "owner"
+					: scenario.startsWith("admin")
+						? "admin"
+						: "member",
+				scenario.includes("own") && scenario !== "owner" ? "actor" : "other",
+				scenario.includes("shared"),
+			);
+			const result = await callers[kind](input);
+			if (scenario === "own" || scenario === "shared")
+				expect(JSON.stringify(result) ?? "").not.toContain("synthetic-stored-");
+			expect(data.writes.length).toBeGreaterThan(0);
+			expect(data.rows.git_provider![0]).toMatchObject({
+				organizationId: "org-1",
+				userId:
+					scenario.includes("own") && scenario !== "owner" ? "actor" : "other",
+				gitProviderId: "parent",
+				name: "after",
+			});
+			expect(data.rows[kind]![0]).toMatchObject({
+				[`${kind}Id`]: "leaf",
+				gitProviderId: "parent",
+			});
+			expect(external.effect).not.toHaveBeenCalled();
+		},
+	);
+}
+it("gitea URL refuses cross-organization use", async () => {
+	const callers = setup("owner", "actor", false, "org-2");
+	await expect(callers.url()).rejects.toBeTruthy();
+	expect(data.writes).toEqual([]);
+	expect(external.effect).not.toHaveBeenCalled();
+});
+
+// Real routers and services, synthetic rows and external sinks only.
+it.each(["member", "owner", "admin"])(
+	"Bitbucket %s nonsecret edit preserves masked credentials and response authority",
+	async (role) => {
+		const callers = setup(role);
+		Object.assign(data.rows.bitbucket![0]!, {
+			appPassword: "synthetic-stored-password",
+			apiToken: "synthetic-stored-token",
+		});
+		const result = await callers.bitbucket({
+			bitbucketId: "leaf",
+			gitProviderId: "parent",
+			name: "renamed",
+			appPassword: "",
+			apiToken: "",
+		});
+		expect(data.rows.bitbucket![0]).toMatchObject({
+			appPassword: "synthetic-stored-password",
+			apiToken: "synthetic-stored-token",
+		});
+		expect(result).toMatchObject(
+			role === "member"
+				? { appPassword: null, apiToken: null }
+				: {
+						appPassword: "synthetic-stored-password",
+						apiToken: "synthetic-stored-token",
+					},
+		);
+		expect(await callers.bitbucketOne()).toMatchObject(
+			role === "member"
+				? { appPassword: null, apiToken: null }
+				: {
+						appPassword: "synthetic-stored-password",
+						apiToken: "synthetic-stored-token",
+					},
+		);
+		expect(external.effect).not.toHaveBeenCalled();
+	},
+);
+it("Gitea masked blank replacement preserves stored secret; nonempty replacement remains supported", async () => {
+	const callers = setup();
+	data.rows.gitea![0]!.clientSecret = "synthetic-original";
+	await callers.gitea({
+		giteaId: "leaf",
+		gitProviderId: "parent",
+		name: "renamed",
+		clientSecret: "",
+		giteaUrl: "https://example.invalid",
+	});
+	expect(data.rows.gitea![0]!.clientSecret).toBe("synthetic-original");
+	await callers.gitea({
+		giteaId: "leaf",
+		gitProviderId: "parent",
+		name: "renamed",
+		clientSecret: "synthetic-replacement",
+		giteaUrl: "https://example.invalid",
+	});
+	expect(data.rows.gitea![0]!.clientSecret).toBe("synthetic-replacement");
+});
+it.each(["member", "owner", "admin"])(
+	"%s URL presentation follows existing secret authority",
+	async (role) => {
+		const callers = setup(role);
+		const url =
+			"https://synthetic-user:synthetic-password@example.invalid/path";
+		for (const kind of ["gitlab", "gitea"] as const)
+			Object.assign(data.rows[kind]![0]!, {
+				[`${kind}Url`]: url,
+				[`${kind}InternalUrl`]: url,
+				accessToken: "synthetic-token",
+				refreshToken: "synthetic-refresh",
+				secret: "synthetic-secret",
+				clientSecret: "synthetic-secret",
+				applicationId: "app",
+				clientId: "client",
+			});
+		const expected = role === "member" ? "https://example.invalid/path" : url;
+		expect(await callers.gitlabOne()).toMatchObject({
+			gitlabUrl: expected,
+			gitlabInternalUrl: expected,
+			secret: role === "member" ? null : "synthetic-secret",
+		});
+		expect(await callers.gitlabList()).toMatchObject([{ gitlabUrl: expected }]);
+		expect(await callers.giteaOne()).toMatchObject({
+			giteaUrl: expected,
+			giteaInternalUrl: expected,
+			clientSecret: role === "member" ? null : "synthetic-secret",
+		});
+		expect(await callers.url()).toBe(expected);
+		Object.assign(data.rows.github![0]!, { githubUrl: url });
+		expect(await callers.githubOne()).toMatchObject({ githubUrl: expected });
+		for (const kind of ["github", "gitlab", "gitea", "bitbucket"])
+			data.rows.git_provider![0]![kind] = {
+				...data.rows[kind]![0],
+				gitProvider: undefined,
+			};
+		const all = await callers.all();
+		expect(all[0]).toMatchObject({
+			gitlab: { gitlabUrl: expected },
+			gitea: { giteaUrl: expected },
+			github: { githubUrl: expected },
+		});
+
+		expect(data.writes).toEqual([]);
+		expect(external.effect).not.toHaveBeenCalled();
+	},
+);
+
+for (const kind of ["gitlab", "gitea"] as const) {
+	it.each(["own", "shared"])(
+		`${kind} %s one-to-update preserves both stored URLs`,
+		async (scope) => {
+			const callers = setup(
+				"member",
+				scope === "own" ? "actor" : "other",
+				scope === "shared",
+			);
+			const stored = {
+				[`${kind}Url`]:
+					"https://synthetic-user:synthetic-password@example.invalid",
+				[`${kind}InternalUrl`]:
+					"https://synthetic-user:synthetic-password@internal.invalid/private",
+			};
+			Object.assign(data.rows[kind]![0]!, stored);
+			const projection =
+				kind === "gitlab"
+					? await callers.gitlabOne()
+					: await callers.giteaOne();
+			const urls = Object.fromEntries(
+				Object.keys(stored).map((key) => [key, Reflect.get(projection, key)]),
+			);
+			for (const submitted of [
+				{ [`${kind}Url`]: Reflect.get(projection, `${kind}Url`) },
+				urls,
+				stored,
+			]) {
+				await callers[kind]({
+					[`${kind}Id`]: "leaf",
+					gitProviderId: "parent",
+					name: "renamed",
+					...submitted,
+				});
+				expect(data.rows[kind]![0]).toMatchObject(stored);
+				expect(data.rows.git_provider![0]!.name).toBe("renamed");
+			}
+			const different = {
+				[`${kind}Url`]: "https://different.invalid",
+				[`${kind}InternalUrl`]: "https://different-internal.invalid",
+			};
+			await callers[kind]({
+				[`${kind}Id`]: "leaf",
+				gitProviderId: "parent",
+				name: "edited",
+				...different,
+			});
+			expect(data.rows[kind]![0]).toMatchObject(different);
+			expect(external.effect).not.toHaveBeenCalled();
+		},
+	);
+}
+import { withoutUrlCredentials } from "@dokploy/server/services/git-provider";
+it.each([
+	"https://example.invalid",
+	"https://EXAMPLE.invalid:443/path?x=%2f",
+	"https://example.invalid/path#fragment",
+])("credential-free projection preserves exact bytes: %s", (url) => {
+	expect(withoutUrlCredentials(url)).toBe(url);
+});
+import { and, eq, ne, or, gt } from "drizzle-orm";
+import { user, session } from "@dokploy/server/db/schema";
+it("synthetic assignments reject both empty and undefined-only sets at Drizzle's set boundary", () => {
+	for (const value of [{}, { firstName: undefined }])
+		expect(() => data.db.update(user).set(value)).toThrow("No values to set");
+	expect(data.writes).toEqual([]);
+});
+it("synthetic inequality works alone and with equality; unsupported OR/comparison refuses", async () => {
+	data.rows.session = [
+		{ id: "keep", userId: "actor" },
+		{ id: "remove", userId: "actor" },
+		{ id: "foreign", userId: "other" },
+	];
+	expect(
+		await data.db.query.session.findMany({ where: ne(session.id, "keep") }),
+	).toHaveLength(2);
+	expect(
+		await data.db.query.session.findMany({
+			where: and(eq(session.userId, "actor"), ne(session.id, "keep")),
+		}),
+	).toEqual([{ id: "remove", userId: "actor" }]);
+	for (const where of [
+		or(eq(session.id, "keep"), eq(session.id, "remove")),
+		and(eq(session.userId, "actor"), gt(session.id, "keep")),
+	])
+		await expect(data.db.query.session.findMany({ where })).rejects.toThrow(
+			"Unsupported synthetic SQL",
+		);
+	data.rows.session = [];
+	await expect(
+		data.db.query.session.findMany({ where: gt(session.id, "keep") }),
+	).rejects.toThrow("Unsupported synthetic SQL");
+});

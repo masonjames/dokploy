@@ -1,0 +1,83 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const external = vi.hoisted(() => ({
+	role: "member",
+	run: vi.fn(),
+	find: vi.fn(),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	db: {
+		query: {
+			member: {
+				findFirst: async () => ({
+					role: external.role,
+					accessedServices: ["service-1"],
+				}),
+			},
+		},
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({ validateRequest: vi.fn() }));
+vi.mock("@dokploy/server", () => ({
+	IS_CLOUD: false,
+	runVolumeBackup: external.run,
+	findVolumeBackupById: external.find,
+}));
+vi.mock("@dokploy/server/services/destination", () => ({
+	findDestinationById: vi.fn(),
+}));
+vi.mock("@dokploy/server/utils/process/execAsync", () => ({
+	execAsyncRemote: vi.fn(),
+	execAsyncStream: vi.fn(),
+}));
+vi.mock("@/server/api/utils/plan-limits", () => ({
+	assertVolumeBackupLimit: vi.fn(),
+}));
+vi.mock("@/server/utils/backup", () => ({
+	removeJob: vi.fn(),
+	schedule: vi.fn(),
+	updateJob: vi.fn(),
+}));
+import { volumeBackupsRouter } from "@/server/api/routers/volume-backups";
+const caller = () =>
+	volumeBackupsRouter.createCaller({
+		user: {
+			id: "user-1",
+			role: external.role,
+			email: "synthetic@example.invalid",
+		},
+		session: { userId: "user-1", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof volumeBackupsRouter.createCaller>[0]);
+beforeEach(() => {
+	external.role = "member";
+	external.run.mockReset();
+	external.find.mockReset();
+	external.find.mockResolvedValue({ applicationId: "service-1" });
+});
+it("preserves the actual operation result with audit storage unavailable", async () => {
+	external.run.mockResolvedValue({ synthetic: true });
+	expect(await caller().runManually({ volumeBackupId: "backup-1" })).toEqual({
+		synthetic: true,
+	});
+});
+it("retains the volume-backup catch's false result for an operation failure", async () => {
+	external.run.mockRejectedValue(new Error("Synthetic operation failure"));
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	expect(await caller().runManually({ volumeBackupId: "backup-1" })).toBe(
+		false,
+	);
+	log.mockRestore();
+});
+it("retains authorization failure before the operation and its catch", async () => {
+	external.role = "custom";
+	await expect(
+		caller().runManually({ volumeBackupId: "backup-1" }),
+	).rejects.toBeTruthy();
+	expect(external.run).not.toHaveBeenCalled();
+});
+it("retains unassigned-service refusal", async () => {
+	external.find.mockResolvedValue({ applicationId: "unassigned" });
+	await expect(
+		caller().runManually({ volumeBackupId: "backup-1" }),
+	).rejects.toBeTruthy();
+	expect(external.run).not.toHaveBeenCalled();
+});

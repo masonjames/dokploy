@@ -1,0 +1,49 @@
+import { createRequestValidator } from "./auth-request";
+import { communityPassword } from "./community-password";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db } from "../db";
+import * as schema from "../db/schema";
+import { getTrustedOrigins, getUserByToken } from "../services/admin";
+import {
+	readWebServerSettings,
+	updateWebServerSettings,
+} from "../services/web-server-settings";
+import { sendEmail } from "../verification/send-verification-email";
+import { getPublicIpWithFallback } from "../wss/utils";
+import { betterAuthSecret } from "./auth-secret";
+import { createBetterAuth } from "./auth-factory";
+const instance = createBetterAuth({
+	db,
+	database: drizzleAdapter(db, { provider: "pg", schema }),
+	secret: betterAuthSecret,
+	password: communityPassword,
+	readSettings: readWebServerSettings,
+	trustedOrigins: async () => {
+		const [origins, settings] = await Promise.all([
+			getTrustedOrigins(),
+			readWebServerSettings(),
+		]);
+		return [
+			...origins,
+			...(settings?.serverIp ? [`http://${settings.serverIp}:3000`] : []),
+			...(settings?.host ? [`https://${settings.host}`] : []),
+			...(process.env.NODE_ENV === "development"
+				? ["http://localhost:3000"]
+				: []),
+		];
+	},
+	getUserByToken,
+	sendEmail,
+	initializeHost: async () => {
+		await updateWebServerSettings({
+			serverIp: await getPublicIpWithFallback(),
+		});
+	},
+});
+const api = instance.internal;
+export const auth = {
+	handler: instance.handler,
+	createApiKey: api.createApiKey,
+};
+export type AuthType = typeof auth;
+export const validateRequest = createRequestValidator(db, api);

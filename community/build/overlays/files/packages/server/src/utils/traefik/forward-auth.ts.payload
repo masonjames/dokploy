@@ -1,0 +1,155 @@
+import { db } from "@dokploy/server/db";
+import { forwardAuthSettings } from "@dokploy/server/db/schema";
+import type { Domain } from "@dokploy/server/services/domain";
+import {
+	FORWARD_AUTH_PORT,
+	FORWARD_AUTH_SERVICE_NAME,
+} from "@dokploy/server/setup/forward-auth-setup";
+import { eq, isNull } from "drizzle-orm";
+import type { ApplicationNested } from "../builders";
+import {
+	removeTraefikConfig,
+	removeTraefikConfigRemote,
+	writeTraefikConfig,
+	writeTraefikConfigRemote,
+} from "./application";
+import type { FileConfig } from "./file-types";
+import {
+	loadMiddlewares,
+	loadRemoteMiddlewares,
+	writeMiddleware,
+} from "./middleware";
+
+export interface AuthDomainConfig {
+	authDomain: string;
+	https: boolean;
+	certificateType: "none" | "letsencrypt" | "custom";
+	customCertResolver?: string | null;
+}
+
+const TRAEFIK_SERVICE = "forward-auth-proxy";
+
+export const forwardAuthMiddlewareName = (
+	appName: string,
+	uniqueConfigKey: number,
+): string => `forward-auth-${appName}-${uniqueConfigKey}`;
+
+const proxyUrl = () =>
+	`http://${FORWARD_AUTH_SERVICE_NAME}:${FORWARD_AUTH_PORT}`;
+
+const loadOrEmptyMiddlewares = async (
+	serverId: string | null,
+): Promise<FileConfig> => {
+	try {
+		return serverId
+			? await loadRemoteMiddlewares(serverId)
+			: loadMiddlewares<FileConfig>();
+	} catch {
+		return { http: { middlewares: {} } };
+	}
+};
+
+const persistMiddlewares = async (
+	config: FileConfig,
+	serverId: string | null,
+) => {
+	if (serverId) {
+		await writeTraefikConfigRemote(config, "middlewares", serverId);
+	} else {
+		writeMiddleware(config);
+	}
+};
+
+const loadAuthGateDomain = async (serverId: string | null) => {
+	return db.query.forwardAuthSettings.findFirst({
+		where: serverId
+			? eq(forwardAuthSettings.serverId, serverId)
+			: isNull(forwardAuthSettings.serverId),
+		columns: { authDomain: true, https: true },
+	});
+};
+
+export const createForwardAuthMiddleware = async (
+	app: ApplicationNested,
+	domain: Domain,
+) => {
+	if (domain.forwardAuthEnabled)
+		throw new Error("Forward authentication requires separate admission");
+};
+
+export const removeForwardAuthMiddleware = async (
+	app: ApplicationNested,
+	uniqueConfigKey: number,
+) => {
+	const { appName, serverId } = app;
+	let config: FileConfig;
+	try {
+		config = serverId
+			? await loadRemoteMiddlewares(serverId)
+			: loadMiddlewares<FileConfig>();
+	} catch {
+		return;
+	}
+
+	const name = forwardAuthMiddlewareName(appName, uniqueConfigKey);
+	let changed = false;
+	for (const key of [name, `${name}-errors`]) {
+		if (config.http?.middlewares?.[key]) {
+			throw new Error(
+				"Saved forward authentication requires separate admission",
+			);
+		}
+	}
+	if (changed) {
+		await persistMiddlewares(config, serverId);
+	}
+};
+
+export const buildAuthDomainRouter = (cfg: AuthDomainConfig): FileConfig => {
+	const entry = cfg.https ? "websecure" : "web";
+	const oauthRouter: NonNullable<
+		NonNullable<FileConfig["http"]>["routers"]
+	>[string] = {
+		rule: `Host(\`${cfg.authDomain}\`) && PathPrefix(\`/oauth2/\`)`,
+		service: TRAEFIK_SERVICE,
+		entryPoints: [entry],
+		priority: 1000,
+	};
+
+	if (cfg.https) {
+		if (cfg.certificateType === "letsencrypt") {
+			oauthRouter.tls = { certResolver: "letsencrypt" };
+		} else if (cfg.certificateType === "custom" && cfg.customCertResolver) {
+			oauthRouter.tls = { certResolver: cfg.customCertResolver };
+		} else {
+			oauthRouter.tls = {};
+		}
+	}
+
+	return {
+		http: {
+			routers: { "forward-auth-oauth": oauthRouter },
+			services: {
+				[TRAEFIK_SERVICE]: {
+					loadBalancer: {
+						servers: [{ url: proxyUrl() }],
+						passHostHeader: true,
+					},
+				},
+			},
+		},
+	};
+};
+
+export const authDomainConfigName = "forward-auth-domain";
+
+export const manageForwardAuthDomain = async (
+	serverId: string | null,
+	cfg: AuthDomainConfig,
+) => {
+	throw new Error("Forward authentication requires separate admission");
+};
+
+export const removeForwardAuthDomain = async (serverId: string | null) => {
+	throw new Error("Forward authentication requires separate admission");
+};

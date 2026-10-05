@@ -1,0 +1,20 @@
+import type { AuditAction, AuditResourceType } from "@dokploy/server/db/schema";
+
+interface AuditCtx {
+	user: { id: string; email: string; role: string };
+	session: { activeOrganizationId: string };
+}
+
+interface AuditEvent {
+	action: AuditAction;
+	resourceType: AuditResourceType;
+	resourceId?: string;
+	resourceName?: string;
+	metadata?: Record<string, unknown>;
+}
+
+/** Optional enterprise storage is unavailable. No persistence result is produced. */
+export const audit = async (
+	_ctx: AuditCtx,
+	_event: AuditEvent,
+): Promise<void> => {};

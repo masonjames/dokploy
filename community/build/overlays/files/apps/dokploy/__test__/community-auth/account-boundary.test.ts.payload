@@ -1,0 +1,281 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const external = vi.hoisted(() => ({
+	db: {} as unknown,
+	unused: vi.fn(() => {
+		throw new Error("Unexpected external effect");
+	}),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return external.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({
+	validateRequest: external.unused,
+}));
+vi.mock("@dokploy/server", async () => {
+	const { updateUser } = await import("@dokploy/server/services/user");
+	return {
+		IS_CLOUD: false,
+		createApiKey: external.unused,
+		createOrganizationUserWithCredentials: external.unused,
+		findNotificationById: external.unused,
+		findOrganizationById: external.unused,
+		findPasskeysByUserId: external.unused,
+		findUserById: external.unused,
+		getDokployUrl: external.unused,
+		getUserByToken: external.unused,
+		getWebServerSettings: external.unused,
+		removeUserById: external.unused,
+		renderInvitationEmail: external.unused,
+		sendEmailNotification: external.unused,
+		sendResendNotification: external.unused,
+		updateUser,
+	};
+});
+import { userRouter } from "@/server/api/routers/user";
+let data = syntheticDatabase();
+function caller(role = "owner") {
+	data.rows.member = [
+		{ id: "actor", userId: "actor", organizationId: "org-1", role },
+		...(data.rows.member ?? []).filter((r) => r.id !== "actor"),
+	];
+	return userRouter.createCaller({
+		db: data.db,
+		user: { id: "actor", role, email: "actor@example.invalid" },
+		session: {
+			id: "current-session",
+			userId: "actor",
+			activeOrganizationId: "org-1",
+		},
+	} as unknown as Parameters<typeof userRouter.createCaller>[0]);
+}
+beforeEach(() => {
+	data = syntheticDatabase();
+	external.db = data.db;
+	external.unused.mockClear();
+});
+import * as bcrypt from "bcrypt";
+it("profile update strips identity/security fields and does not persist email/password controls", async () => {
+	data.rows.user = [
+		{
+			id: "actor",
+			email: "actor@example.invalid",
+			emailVerified: true,
+			twoFactorEnabled: true,
+			banned: true,
+			role: "member",
+			ownerId: "owner",
+			isEnterpriseCloud: false,
+		},
+	];
+	await caller("member").update({
+		firstName: "After",
+		lastName: "Name",
+		image: "image",
+		allowImpersonation: false,
+		email: "ACTOR@example.invalid",
+		emailVerified: false,
+		twoFactorEnabled: false,
+		banned: false,
+		ownerId: "evil",
+		id: "evil",
+		role: "owner",
+		isEnterpriseCloud: true,
+	} as unknown as Parameters<ReturnType<typeof caller>["update"]>[0]);
+	expect(data.rows.user).toEqual([
+		{
+			id: "actor",
+			email: "actor@example.invalid",
+			emailVerified: true,
+			twoFactorEnabled: true,
+			banned: true,
+			role: "member",
+			ownerId: "owner",
+			isEnterpriseCloud: false,
+			firstName: "After",
+			lastName: "Name",
+			image: "image",
+			allowImpersonation: false,
+		},
+	]);
+	expect(external.unused).not.toHaveBeenCalled();
+});
+it("changed email with password request refuses before every write", async () => {
+	const before = JSON.stringify(data.rows);
+	await expect(
+		caller("member").update({
+			email: "recipient@example.invalid",
+			currentPassword: "old",
+			password: "new",
+		}),
+	).rejects.toMatchObject({ code: "FORBIDDEN" });
+	expect(data.writes).toEqual([]);
+	expect(external.unused).not.toHaveBeenCalled();
+	// caller establishes only synthetic membership; no user/account row was written.
+	expect(data.rows.user).toBeUndefined();
+});
+it("password change selects and updates only credential account", async () => {
+	data.rows.user = [{ id: "actor", email: "actor@example.invalid" }];
+	data.rows.account = [
+		{
+			id: "oauth",
+			userId: "actor",
+			providerId: "github",
+			password: "synthetic-unchanged",
+		},
+		{
+			id: "credential",
+			userId: "actor",
+			providerId: "credential",
+			password: bcrypt.hashSync("old-synthetic", 10),
+		},
+	];
+	data.rows.session = [];
+	await caller("member").update({
+		currentPassword: "old-synthetic",
+		password: "new-synthetic",
+		firstName: "Updated",
+	});
+	expect(data.rows.account[0]!.password).toBe("synthetic-unchanged");
+	expect(
+		bcrypt.compareSync("new-synthetic", String(data.rows.account[1]!.password)),
+	).toBe(true);
+	expect(data.rows.user[0]).toEqual({
+		id: "actor",
+		email: "actor@example.invalid",
+		firstName: "Updated",
+	});
+});
+it.each([
+	{},
+	{
+		firstName: undefined,
+		lastName: undefined,
+		image: undefined,
+		allowImpersonation: undefined,
+	},
+])(
+	"password-only update succeeds without an effective profile UPDATE: %j",
+	async (profile) => {
+		const savedUser = {
+			id: "actor",
+			email: "actor@example.invalid",
+			firstName: "Before",
+		};
+		data.rows.user = [{ ...savedUser }];
+		data.rows.account = [
+			{
+				id: "credential",
+				userId: "actor",
+				providerId: "credential",
+				password: bcrypt.hashSync("old-synthetic", 10),
+			},
+		];
+		data.rows.session = [
+			{ id: "current-session", userId: "actor" },
+			{ id: "other-session", userId: "actor" },
+			{ id: "foreign-session", userId: "other-user" },
+		];
+		const result = await caller("member").update({
+			...profile,
+			currentPassword: "old-synthetic",
+			password: "new-synthetic",
+		});
+		expect(result).toEqual(savedUser);
+		expect(
+			bcrypt.compareSync(
+				"new-synthetic",
+				String(data.rows.account[0]!.password),
+			),
+		).toBe(true);
+		expect(
+			bcrypt.compareSync(
+				"old-synthetic",
+				String(data.rows.account[0]!.password),
+			),
+		).toBe(false);
+		expect(data.rows.session).toEqual([
+			{ id: "current-session", userId: "actor" },
+			{ id: "foreign-session", userId: "other-user" },
+		]);
+		expect(data.writes).not.toContainEqual({
+			table: "user",
+			operation: "update",
+		});
+		expect(external.unused).not.toHaveBeenCalled();
+	},
+);
+it.each([
+	{ email: "ACTOR@example.invalid" },
+	{
+		id: "evil",
+		emailVerified: false,
+		twoFactorEnabled: false,
+		banned: false,
+		role: "owner",
+		ownerId: "evil",
+		isEnterpriseCloud: true,
+	},
+	{
+		firstName: undefined,
+		lastName: undefined,
+		image: undefined,
+		allowImpersonation: undefined,
+	},
+])(
+	"empty effective profile returns current user without protected writes: %j",
+	async (input) => {
+		const savedUser = {
+			id: "actor",
+			email: "actor@example.invalid",
+			emailVerified: true,
+			twoFactorEnabled: true,
+			banned: true,
+			role: "member",
+			ownerId: "owner",
+			isEnterpriseCloud: false,
+		};
+		data.rows.user = [{ ...savedUser }];
+		const result = await caller("member").update(
+			input as Parameters<ReturnType<typeof caller>["update"]>[0],
+		);
+		expect(result).toEqual(savedUser);
+		expect(data.rows.user).toEqual([savedUser]);
+		expect(
+			data.writes.filter((write) =>
+				["user", "account", "session"].includes(write.table),
+			),
+		).toEqual([]);
+		expect(external.unused).not.toHaveBeenCalled();
+	},
+);
+it.each(["owner", "admin", "member"])(
+	"%s cannot delete a global user",
+	async (role) => {
+		data.rows.user = [{ id: "target" }];
+		data.rows.member = [
+			{
+				id: "target-a",
+				userId: "target",
+				organizationId: "org-1",
+				role: "member",
+			},
+			{
+				id: "target-b",
+				userId: "target",
+				organizationId: "org-2",
+				role: "owner",
+			},
+		];
+		const c = caller(role);
+		const before = JSON.stringify(data.rows);
+		await expect(c.remove({ userId: "target" })).rejects.toMatchObject({
+			code: "FORBIDDEN",
+		});
+		expect(JSON.stringify(data.rows)).toBe(before);
+		expect(data.writes).toEqual([]);
+		expect(external.unused).not.toHaveBeenCalled();
+	},
+);

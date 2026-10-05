@@ -1,0 +1,135 @@
+// TypeScript 5.9 is an inventory parser only. Qualification uses TypeScript 7.
+import fs from "node:fs";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import ts from "../../../../node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js";
+import { expect, it } from "vitest";
+import inventory from "./audit-callers.json";
+it("accounts for every retained audit call and its result/transaction/exception context", () => {
+	const root = path.resolve(__dirname, "../../../..");
+	for (const [file, entry] of Object.entries(inventory.files)) {
+		if (
+			file === "packages/server/src/lib/auth.ts" ||
+			file === "apps/dokploy/server/api/utils/audit.ts"
+		)
+			continue;
+		expect(
+			createHash("sha256")
+				.update(fs.readFileSync(path.join(root, file)))
+				.digest("hex"),
+			file,
+		).toBe(entry.exported_sha256);
+	}
+	const expected = Object.entries(inventory.files)
+		.flatMap(([file, entry]) => entry.calls.map((call) => ({ file, ...call })))
+		.filter(
+			(c) =>
+				c.file.includes("/routers/") &&
+				!(c.file.endsWith("/settings.ts") && [517, 561].includes(c.line)) &&
+				!(c.file.endsWith("/user.ts") && c.line === 454),
+		);
+	let total = 0;
+	const files = fs
+		.readdirSync(path.join(root, "apps/dokploy/server/api/routers"), {
+			recursive: true,
+		})
+		.filter((file) => typeof file === "string" && file.endsWith(".ts"))
+		.map((file) => `apps/dokploy/server/api/routers/${file}`);
+	for (const file of files) {
+		const source = ts.createSourceFile(
+			file,
+			fs.readFileSync(path.join(root, file), "utf8"),
+			ts.ScriptTarget.Latest,
+			true,
+		);
+		const bindings = new Set<string>();
+		for (const statement of source.statements)
+			if (
+				ts.isImportDeclaration(statement) &&
+				ts.isStringLiteral(statement.moduleSpecifier) &&
+				path.resolve(
+					statement.moduleSpecifier.text.startsWith("@/")
+						? path.join(
+								root,
+								"apps/dokploy",
+								statement.moduleSpecifier.text.slice(2),
+							)
+						: path.join(
+								root,
+								path.dirname(file),
+								statement.moduleSpecifier.text,
+							),
+				) === path.join(root, "apps/dokploy/server/api/utils/audit")
+			) {
+				const names = statement.importClause?.namedBindings;
+				if (names && ts.isNamedImports(names))
+					for (const spec of names.elements)
+						if ((spec.propertyName ?? spec.name).text === "audit")
+							bindings.add(spec.name.text);
+			}
+		const calls: {
+			awaited: boolean;
+			resultConsumed: boolean;
+			catches: number;
+			transactions: number;
+		}[] = [];
+		function visit(node: ts.Node) {
+			if (
+				ts.isCallExpression(node) &&
+				ts.isIdentifier(node.expression) &&
+				bindings.has(node.expression.text)
+			) {
+				let catches = 0;
+				let transactions = 0;
+				for (let parent = node.parent; parent; parent = parent.parent) {
+					if (
+						ts.isTryStatement(parent) &&
+						parent.catchClause &&
+						node.pos >= parent.tryBlock.pos &&
+						node.end <= parent.tryBlock.end
+					)
+						catches++;
+					if (
+						ts.isCallExpression(parent) &&
+						ts.isPropertyAccessExpression(parent.expression) &&
+						parent.expression.name.text === "transaction"
+					)
+						transactions++;
+				}
+				calls.push({
+					awaited: ts.isAwaitExpression(node.parent),
+					resultConsumed: !(
+						ts.isAwaitExpression(node.parent) &&
+						ts.isExpressionStatement(node.parent.parent)
+					),
+					catches,
+					transactions,
+				});
+			}
+			ts.forEachChild(node, visit);
+		}
+		visit(source);
+		const before = expected.filter((c) => c.file === file);
+		expect(calls, file).toEqual(
+			before.map((c) => ({
+				awaited: c.awaited,
+				resultConsumed: c.resultConsumed,
+				catches: c.catches,
+				transactions: c.transactions,
+			})),
+		);
+		total += calls.length;
+	}
+	expect(total).toBe(305);
+	const auth = fs.readFileSync(
+		path.join(root, "packages/server/src/lib/auth-factory.ts"),
+		"utf8",
+	);
+	expect(auth).not.toContain("createAuditLog");
+	expect(
+		fs.readFileSync(
+			path.join(root, "apps/dokploy/server/api/utils/audit.ts"),
+			"utf8",
+		),
+	).not.toContain("createAuditLog");
+});

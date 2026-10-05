@@ -1,0 +1,7 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+export default function handler(_req: NextApiRequest, res: NextApiResponse) {
+	return res.status(503).json({
+		code: "PROVIDER_OAUTH_UNAVAILABLE",
+		message: "Provider OAuth setup is unavailable in community",
+	});
+}

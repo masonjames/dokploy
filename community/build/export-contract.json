@@ -1,0 +1,10 @@
+{
+	"admission": false,
+	"base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"input_tree": "714618d089473c2e7200f0bd4127b4bdde5d49f7",
+	"inventory_sha256": "6255d19794627f979e9372645bf300a818876da06e70a78b8ad7f306dc5f4120",
+	"manifest_sha256": "7a8db89f5c6b3b60c8fd45a0913eb2380538204fd6759a67c4545ebd16bf6567",
+	"runtime": false,
+	"startup": false,
+	"version": "community-build-export/1"
+}

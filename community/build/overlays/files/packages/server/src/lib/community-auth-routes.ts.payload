@@ -1,0 +1,276 @@
+// Authored from the accepted HTTP contract and the installed BetterAuth endpoint metadata.
+import { and, eq } from "drizzle-orm";
+import type { db as productionDb } from "../db";
+import { invitation, member, organization, session } from "../db/schema";
+import { isCommunityRole, isInvitationRole } from "./community-policy";
+const allow = new Set([
+	..."sign-up/email sign-in/email sign-out reset-password verify-password send-verification-email change-email change-password update-session update-user delete-user request-password-reset revoke-session revoke-sessions revoke-other-sessions"
+		.split(" ")
+		.map((p) => `POST /${p}`),
+	..."reset-password/:token list-sessions list-accounts delete-user/callback ok error"
+		.split(" ")
+		.map((p) => `GET /${p}`),
+	"GET /get-session",
+	"POST /get-session",
+	..."get-totp-uri verify-totp send-otp verify-otp verify-backup-code generate-backup-codes enable disable"
+		.split(" ")
+		.map((p) => `POST /two-factor/${p}`),
+	..."generate-register-options generate-authenticate-options list-user-passkeys"
+		.split(" ")
+		.map((p) => `GET /passkey/${p}`),
+	..."verify-registration verify-authentication delete-passkey update-passkey"
+		.split(" ")
+		.map((p) => `POST /passkey/${p}`),
+	"POST /organization/set-active",
+	"POST /organization/accept-invitation",
+]);
+const deny = new Set([
+	"GET /verify-email",
+	"GET /account-info",
+	"GET /callback/:id",
+	"POST /callback/:id",
+	..."sign-in/social link-social unlink-account refresh-token get-access-token"
+		.split(" ")
+		.map((p) => `POST /${p}`),
+	..."create update delete".split(" ").map((p) => `POST /api-key/${p}`),
+	..."get list".split(" ").map((p) => `GET /api-key/${p}`),
+	..."create update delete invite-member cancel-invitation reject-invitation remove-member update-member-role leave check-slug has-permission"
+		.split(" ")
+		.map((p) => `POST /organization/${p}`),
+	..."get-full-organization list get-invitation list-invitations get-active-member list-user-invitations list-members get-active-member-role"
+		.split(" ")
+		.map((p) => `GET /organization/${p}`),
+	..."get-user list-users".split(" ").map((p) => `GET /admin/${p}`),
+	..."set-role create-user update-user list-user-sessions unban-user ban-user impersonate-user stop-impersonating revoke-user-session revoke-user-sessions remove-user set-user-password has-permission"
+		.split(" ")
+		.map((p) => `POST /admin/${p}`),
+]);
+const internal = new Set([
+	"setPassword",
+	"verifyApiKey",
+	"deleteAllExpiredApiKeys",
+	"generateTOTP",
+	"viewBackupCodes",
+	"addMember",
+]);
+export interface AuthRoute {
+	name: string;
+	path: string | null;
+	methods: string[];
+	exposure: "allow" | "deny" | "internal";
+}
+export function classifyAuthRoutes(api: object): AuthRoute[] {
+	const found = new Set<string>();
+	const result: AuthRoute[] = [];
+	for (const [name, value] of Object.entries(api)) {
+		if (typeof value !== "function")
+			throw new Error(`Unexpected auth API entry: ${name}`);
+		const endpoint = value as typeof value & {
+			path?: unknown;
+			options?: { method?: unknown };
+		};
+		if (endpoint.path === undefined) {
+			if (!internal.has(name))
+				throw new Error(`Unclassified internal method: ${name}`);
+			result.push({ name, path: null, methods: [], exposure: "internal" });
+			continue;
+		}
+		if (typeof endpoint.path !== "string")
+			throw new Error(`Invalid auth path: ${name}`);
+		const methods = Array.isArray(endpoint.options?.method)
+			? endpoint.options.method
+			: [endpoint.options?.method];
+		let exposure: "allow" | "deny" | undefined;
+		for (const method of methods) {
+			if (typeof method !== "string")
+				throw new Error(`Missing auth method: ${name}`);
+			const key = `${method} ${endpoint.path}`;
+			const current = allow.has(key)
+				? "allow"
+				: deny.has(key)
+					? "deny"
+					: undefined;
+			if (!current || found.has(key) || (exposure && exposure !== current))
+				throw new Error(`Unclassified/conflicting auth route: ${key}`);
+			exposure = current;
+			found.add(key);
+		}
+		result.push({ name, path: endpoint.path, methods, exposure: exposure! });
+	}
+	for (const key of [...allow, ...deny])
+		if (!found.has(key)) throw new Error(`Missing auth route: ${key}`);
+	for (const name of internal)
+		if (!result.some((r) => r.name === name))
+			throw new Error(`Missing internal method: ${name}`);
+	return result;
+}
+type SessionReader = {
+	getSession(input: {
+		headers: Headers;
+		query: { disableRefresh: boolean; disableCookieCache: boolean };
+	}): Promise<{
+		user: { id: string; email: string; banned?: boolean | null };
+		session: { id: string };
+	} | null>;
+};
+const refusal = (code = "AUTHORIZATION_DENIED") =>
+	Response.json(
+		{ code, message: "Community auth route denied" },
+		{ status: 403 },
+	);
+const writeFailure = () =>
+	Response.json(
+		{
+			code: "AUTH_STATE_WRITE_FAILED",
+			message: "Unable to update authentication state",
+		},
+		{ status: 500 },
+	);
+export function guardCommunityAuthHandler(
+	handler: (request: Request) => Promise<Response>,
+	api: SessionReader,
+	db: typeof productionDb,
+	routes: AuthRoute[],
+) {
+	return async (request: Request): Promise<Response> => {
+		const url = new URL(request.url);
+		const prefix = "/api/auth";
+		if (
+			!url.pathname.startsWith(`${prefix}/`) ||
+			/%|\\|\/\/|\/\.\.?($|\/)/.test(url.pathname)
+		)
+			return refusal();
+		const path = url.pathname.slice(prefix.length);
+		const route = routes.find(
+			(r) =>
+				r.path &&
+				r.methods.includes(request.method) &&
+				new RegExp(`^${r.path.replace(/:[^/]+/g, "[^/]+")}$`).test(path),
+		);
+		if (!route || route.exposure !== "allow") return refusal();
+		if (
+			path === "/organization/set-active" ||
+			path === "/organization/accept-invitation"
+		) {
+			// Origin checks precede our custom transaction, which does not enter BetterAuth's handler.
+			const origin = request.headers.get("origin");
+			if (!origin || origin !== url.origin) return refusal();
+			const current = await api.getSession({
+				headers: request.headers,
+				query: { disableRefresh: true, disableCookieCache: true },
+			});
+			if (!current || current.user.banned) return refusal();
+			let body: unknown;
+			try {
+				body = await request.clone().json();
+			} catch {
+				return refusal();
+			}
+			if (!body || typeof body !== "object") return refusal();
+			if (path === "/organization/set-active") {
+				const id = "organizationId" in body ? body.organizationId : undefined;
+				if (typeof id !== "string" || !id) return refusal();
+				return db
+					.transaction(async (tx) => {
+						const [membership] = await tx
+							.select()
+							.from(member)
+							.where(
+								and(
+									eq(member.userId, current.user.id),
+									eq(member.organizationId, id),
+								),
+							)
+							.for("update");
+						if (!membership || !isCommunityRole(membership.role))
+							return refusal();
+						const org = await tx.query.organization.findFirst({
+							where: eq(organization.id, id),
+						});
+						if (!org) return refusal();
+						const updatedSession = await tx
+							.update(session)
+							.set({ activeOrganizationId: id })
+							.where(
+								and(
+									eq(session.id, current.session.id),
+									eq(session.userId, current.user.id),
+								),
+							)
+							.returning({ id: session.id });
+						if (updatedSession.length !== 1)
+							throw new Error("Session update refused");
+						return Response.json(org);
+					})
+					.catch(writeFailure);
+			} else {
+				const id = "invitationId" in body ? body.invitationId : undefined;
+				if (typeof id !== "string" || !id) return refusal();
+				return db
+					.transaction(async (tx) => {
+						const [invite] = await tx
+							.select()
+							.from(invitation)
+							.where(eq(invitation.id, id))
+							.for("update");
+						if (
+							!invite ||
+							invite.expiresAt <= new Date() ||
+							!isInvitationRole(invite.role) ||
+							invite.email.trim().toLowerCase() !==
+								current.user.email.trim().toLowerCase()
+						)
+							return refusal();
+						if (invite.status !== "pending")
+							return refusal("INVITATION_NOT_PENDING");
+						// Invitation-only ceiling: all accepts for this organization serialize.
+						// Hold through membership/status/session writes; no schema uniqueness assumed.
+						const [org] = await tx
+							.select()
+							.from(organization)
+							.where(eq(organization.id, invite.organizationId))
+							.for("update");
+						const existing = await tx.query.member.findFirst({
+							where: and(
+								eq(member.userId, current.user.id),
+								eq(member.organizationId, invite.organizationId),
+							),
+						});
+						if (!org) return refusal();
+						if (existing) return refusal("MEMBERSHIP_ALREADY_EXISTS");
+						const [joined] = await tx
+							.insert(member)
+							.values({
+								userId: current.user.id,
+								organizationId: org.id,
+								role: invite.role,
+								createdAt: new Date(),
+							})
+							.returning();
+						const [accepted] = await tx
+							.update(invitation)
+							.set({ status: "accepted" })
+							.where(
+								and(eq(invitation.id, id), eq(invitation.status, "pending")),
+							)
+							.returning();
+						const updatedSession = await tx
+							.update(session)
+							.set({ activeOrganizationId: org.id })
+							.where(
+								and(
+									eq(session.id, current.session.id),
+									eq(session.userId, current.user.id),
+								),
+							)
+							.returning({ id: session.id });
+						if (updatedSession.length !== 1)
+							throw new Error("Session update refused");
+						return Response.json({ invitation: accepted, member: joined });
+					})
+					.catch(writeFailure);
+			}
+		}
+		return handler(request);
+	};
+}

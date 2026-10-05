@@ -1,0 +1,154 @@
+{
+	"base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"evidence": "Historical restricted hashes; all 29 path/blob identities verified unchanged at this source base",
+	"files": [
+		{
+			"git_blob": "517335e298f55a5d0b42f31e574b4f9f52a30ba8",
+			"path": "apps/dokploy/components/proprietary/audit-logs/columns.tsx",
+			"sha256": "67a61a895fdbdabf9144303477767c6da8af8ad8de66df7f1a1de5eac509ada2"
+		},
+		{
+			"git_blob": "fd0ba77461042faf919b1832c6311a53a821f12b",
+			"path": "apps/dokploy/components/proprietary/audit-logs/data-table.tsx",
+			"sha256": "01cf6b74ad293e602c45b85a41f0f612b7db11db54fca11891c415a08a55ce10"
+		},
+		{
+			"git_blob": "7f18514936379aa602081426c64f885621a6dbc2",
+			"path": "apps/dokploy/components/proprietary/audit-logs/show-audit-logs.tsx",
+			"sha256": "626e4648127ebb63b635c42d231bd48073bc5105e1b2f1e2bc948ed7ed7279ce"
+		},
+		{
+			"git_blob": "411e3c7a2259d955edac563c1f73f830dedd9403",
+			"path": "apps/dokploy/components/proprietary/auth/sign-in-with-github.tsx",
+			"sha256": "cbe34aed219e6aacdb476190435eafa2107d8ae64bf428c88af343cd1c5ef9ed"
+		},
+		{
+			"git_blob": "4ed015bd475d8f5a3fdab3b30ae057468f31b77d",
+			"path": "apps/dokploy/components/proprietary/auth/sign-in-with-google.tsx",
+			"sha256": "5b19e57e92f2b9e209b8bc04c82930454cfbe5563d1d0e26f4da56373d5298dd"
+		},
+		{
+			"git_blob": "e67edf608e160070199790cc4bdff2b75b9a2034",
+			"path": "apps/dokploy/components/proprietary/auth/signup-showcase.tsx",
+			"sha256": "24be480b5ef215f2e2ee724ba5c284a017c35b42f87e659717276df6df757cac"
+		},
+		{
+			"git_blob": "f4094c8d976cd2e460c99c3a3e2ebce0e2bbe999",
+			"path": "apps/dokploy/components/proprietary/enterprise-feature-gate.tsx",
+			"sha256": "c216e4bc726fe3ec28c20d20b300bca172584e71fa1bcc65f920f70e23b044c8"
+		},
+		{
+			"git_blob": "6cd7b6ba2cbcae30d520bf24a962d25999fd0097",
+			"path": "apps/dokploy/components/proprietary/license-keys/license-key.tsx",
+			"sha256": "892b6b3c50e75f6617d88fbc31734b0900fdc0fc56e6b0fbd3d9de1f64a2ebd2"
+		},
+		{
+			"git_blob": "797bc8d204e5f97dad600c05247f75611e26d34d",
+			"path": "apps/dokploy/components/proprietary/roles/manage-custom-roles.tsx",
+			"sha256": "b65f912880e29c207d921442bd0256eba7e2a74ccfc2a8b9d944f5a93dcbc6e0"
+		},
+		{
+			"git_blob": "50e9377cebbf8e4b7d4a49f7e333a6f727ec9d2c",
+			"path": "apps/dokploy/components/proprietary/sso/forward-auth-servers.tsx",
+			"sha256": "88dee5b8eb240291c36f52898e56c08c3e5522130691c3de31b84d69f79228ea"
+		},
+		{
+			"git_blob": "727b6896f4b29b9c70615fc3607eeaf339843dad",
+			"path": "apps/dokploy/components/proprietary/sso/register-oidc-dialog.tsx",
+			"sha256": "5e3f65e6829813f498bf2ce557595ffbc7b3ff713cef97edad6d59d357020216"
+		},
+		{
+			"git_blob": "a2f9d477e048c3d3962beb3f87c138d7bc0c1083",
+			"path": "apps/dokploy/components/proprietary/sso/register-saml-dialog.tsx",
+			"sha256": "41ec7baf0a82abd760e9dd8c8f80b17641c587e4efac0319ccd1638c09972e3c"
+		},
+		{
+			"git_blob": "22db98cbd61a0cd5ba345428142116843345880c",
+			"path": "apps/dokploy/components/proprietary/sso/scim-dialog.tsx",
+			"sha256": "e94421cfe82bcea3ca561286c672bc230e647b78f86bdeb01d45eb8b96307a26"
+		},
+		{
+			"git_blob": "4b0ccbf7119f193b4f4cbcecf14590c0af5caa0c",
+			"path": "apps/dokploy/components/proprietary/sso/sign-in-with-sso.tsx",
+			"sha256": "4fb50ccf3147f8ea7f6060cb55839db5a2576a72b8d2bd5a791c73bd62b526db"
+		},
+		{
+			"git_blob": "17a29c19d64066efbc077f567377a8f026522fad",
+			"path": "apps/dokploy/components/proprietary/sso/sso-settings.tsx",
+			"sha256": "9e40c81aeee2a0598f5add04e61467e6191d4aeb39023cf1e8ed7d199fa61bcb"
+		},
+		{
+			"git_blob": "d53af90a2423b7904d95412219728966c970d7dc",
+			"path": "apps/dokploy/components/proprietary/whitelabeling/whitelabeling-preview.tsx",
+			"sha256": "1ae487a9a92d07f8f3c0bbdcfae2bb1b54ad6325afee7e502e42b2243da2ae99"
+		},
+		{
+			"git_blob": "3ba9e80bd3568e9451c65d6e60905d6ab27d171a",
+			"path": "apps/dokploy/components/proprietary/whitelabeling/whitelabeling-settings.tsx",
+			"sha256": "3c99b2c82db911b90a3237f6f1dbb651831c672865fdc175b59492d418c69256"
+		},
+		{
+			"git_blob": "3ff814f1cd5010c51922416607b87b1fa4746843",
+			"path": "apps/dokploy/server/api/routers/proprietary/audit-log.ts",
+			"sha256": "2c8e1f07d7013390c5599ff6950450f04fbd06d628990fc61d4c65b145427f69"
+		},
+		{
+			"git_blob": "9f3b1e85ddceeae2c41a950754b15cbb07de2df3",
+			"path": "apps/dokploy/server/api/routers/proprietary/custom-role.ts",
+			"sha256": "9198ce79d2991fae314b890f011305d20be4341ef35237ca50c54843300c593f"
+		},
+		{
+			"git_blob": "77caae150ff867427719987e1ff3c1fce4be98d4",
+			"path": "apps/dokploy/server/api/routers/proprietary/forward-auth.ts",
+			"sha256": "72632152bb09e4b22bc1779c48f725248669c7f6fdaaa77f0e06ecbafa7924a1"
+		},
+		{
+			"git_blob": "b1ffdb4f19da60a62a8ca2cf2f0e6b6321a7afc1",
+			"path": "apps/dokploy/server/api/routers/proprietary/license-key.ts",
+			"sha256": "2baecf5f5212fb3bbc7372bb37eed504216ac06e373357c7b7fd3dc05285e620"
+		},
+		{
+			"git_blob": "62cb1df0bce11250a0f7e307e88a4a968526e38e",
+			"path": "apps/dokploy/server/api/routers/proprietary/scim.ts",
+			"sha256": "98da8e70413f9a335145bbf0ab60cc657c269b5ff6f24f0b7931a518863c8d37"
+		},
+		{
+			"git_blob": "0581ae4db6bda5cfe0d7cb41ece28f555ad4afd3",
+			"path": "apps/dokploy/server/api/routers/proprietary/sso.ts",
+			"sha256": "4ddc7622acfde8fe5e7151cb476c57620b006b77bfe4ac3e4f92b0979f53ec34"
+		},
+		{
+			"git_blob": "81dbb9f533094644e424db0bbea24b04966a6b75",
+			"path": "apps/dokploy/server/api/routers/proprietary/whitelabeling.ts",
+			"sha256": "0cd164c223dc4f03b5e37842d9e676fb428a95b57d5127015e6419051be01580"
+		},
+		{
+			"git_blob": "8cf4e00550d1c9eb4533866cdfc6f30283e96e43",
+			"path": "packages/server/src/services/proprietary/audit-log.ts",
+			"sha256": "d52d4da66cbc406d92f396f292bb4ea7f56079c2b07815540a74b3b2052dcb01"
+		},
+		{
+			"git_blob": "de1e1847dcb691a88c8a76193468e0375b937dba",
+			"path": "packages/server/src/services/proprietary/forward-auth.ts",
+			"sha256": "bdf74f1f9bb70d92d45f0f69c1d17fe938ad400a5163878400f3a7dc75323fdc"
+		},
+		{
+			"git_blob": "38d53fe3304784a94642a37be3422f7023d0a95c",
+			"path": "packages/server/src/services/proprietary/license-key.ts",
+			"sha256": "8f882c26fbe9c0d0ec493aaa94f57e8e6ddba7212e099ffba75a967cbbe0c5e1"
+		},
+		{
+			"git_blob": "352a042e002d040f8312f270338591b71b4f86e7",
+			"path": "packages/server/src/services/proprietary/sso.ts",
+			"sha256": "29ed84cb2164d400b37c76e33b4b67e53b4fac56a33e5dd6e1c4c1dcbc635012"
+		},
+		{
+			"git_blob": "ea024774f4ce3d624ce95b30f6ccb300704cc5f1",
+			"path": "packages/server/src/services/proprietary/whitelabeling.ts",
+			"sha256": "a6311a728e0ab0fadd6f4b67b633e252e42d852aff9eebbab5e678deda44e1c6"
+		}
+	],
+	"input_tree": "714618d089473c2e7200f0bd4127b4bdde5d49f7",
+	"license_facts": "LICENSE.MD attributes copyright 2026-present Dokploy Technology, Inc.; proprietary directories are covered by LICENSE_PROPRIETARY.md (DSAL 1.0). Other content is described as Apache 2.0 subject to stated restrictions; third-party terms remain applicable. No legal or dependency clearance.",
+	"status": "UNQUALIFIED / nonrunnable"
+}

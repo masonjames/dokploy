@@ -1,0 +1,129 @@
+{
+	"source_base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"evidence_categories": {
+		"in_memory": "All ordinary scoped suites use memoryAdapter / synthetic Drizzle or named persistence mocks; no PostgreSQL exclusion claim",
+		"real_crypto": "auth.test.ts uses the shared production bcrypt hash(cost10)/compare config, good and bad credentials; real BetterAuth TOTP enrollment/challenge verification and ES256 passkey signature; memory storage and real clock",
+		"real_pg": "NOT RUN. Separate opt-in fixture only; oracle bound in pg18-contract.json",
+		"corrective_handlers": "Actual tRPC and Pages handlers; synthetic persistence, scheduler/remote/provider sinks. OAuth refusal routes have type-only imports. Profile password test uses real bcrypt; crypto factory proof remains separately counted.",
+		"session_zero_row": "Actual guarded handler and transaction rejection, attempted writes retained in synthetic persistence; no in-memory rollback or real SQL rollback claim."
+	},
+	"injected_factory_dependencies": {
+		"auth.test.ts": [
+			"memoryAdapter for BetterAuth storage",
+			"synthetic DB query/transaction boundary",
+			"constant readSettings and trustedOrigins",
+			"synthetic getUserByToken including invitation signup controls",
+			"throwing host initializer",
+			"mail spy"
+		],
+		"crypto": [
+			"assignments.test.ts mocks bcrypt only for non-auth assignment scope; not password proof"
+		],
+		"clock": "No fake clock; TOTP derives from current time"
+	},
+	"module_replacements": {
+		"apps/dokploy/__test__/community-auth/settings.test.ts": [
+			"@dokploy/server/db"
+		],
+		"apps/dokploy/__test__/community-auth/resources.test.ts": [
+			"@dokploy/server/db"
+		],
+		"apps/dokploy/__test__/community-auth/organization.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server/index",
+			"@/server/api/utils/plan-limits"
+		],
+		"apps/dokploy/__test__/community-auth/protected-state.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/utils/traefik/application",
+			"@dokploy/server/utils/traefik/middleware",
+			"@dokploy/server/setup/forward-auth-setup"
+		],
+		"apps/dokploy/__test__/community-auth/assignments.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"bcrypt",
+			"@dokploy/server"
+		],
+		"apps/dokploy/__test__/community-auth/audit-operation.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server",
+			"@dokploy/server/services/destination",
+			"@dokploy/server/utils/process/execAsync",
+			"@/server/api/utils/plan-limits",
+			"@/server/utils/backup"
+		],
+		"apps/dokploy/__test__/community-auth/provider-leaves.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server"
+		],
+		"apps/dokploy/__test__/permissions/resolve-permissions.test.ts": [
+			"@dokploy/server/db"
+		],
+		"apps/dokploy/__test__/permissions/observer-api-key-boundary.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server",
+			"@/server/api/utils/audit"
+		],
+		"apps/dokploy/__test__/permissions/check-permission.test.ts": [
+			"@dokploy/server/db"
+		],
+		"apps/dokploy/__test__/permissions/service-access.test.ts": [
+			"@dokploy/server/db"
+		],
+		"apps/dokploy/__test__/permissions/observer-procedure.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth"
+		],
+		"apps/dokploy/__test__/wss/authorize.test.ts": [
+			"@dokploy/server/services/permission",
+			"@dokploy/server/services/server"
+		],
+		"apps/dokploy/__test__/community-auth/account-boundary.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server"
+		],
+		"apps/dokploy/__test__/community-auth/settings-targets.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@/server/api/root",
+			"@/server/queues/queueSetup",
+			"@/server/utils/backup",
+			"node-schedule",
+			"@dokploy/server"
+		],
+		"apps/dokploy/__test__/community-auth/domain-update.test.ts": [
+			"@dokploy/server/db",
+			"@dokploy/server/lib/auth",
+			"@dokploy/server/utils/caddy/sync",
+			"@dokploy/server"
+		],
+		"apps/dokploy/__test__/community-auth/oauth-unavailable.test.ts": []
+	},
+	"suite_policy": {
+		"included": [
+			"community-auth/*.test.ts",
+			"permissions/*.test.ts",
+			"wss/authorize.test.ts"
+		],
+		"superseded": {
+			"permissions/server-terminal.test.ts": "License/custom-role assumptions replaced by resources.test.ts real community permission/server/WebSocket matrix",
+			"git-provider/git-provider-access.test.ts": "License/custom-role assumptions replaced by resources.test.ts built-in/malformed role and assignment matrix",
+			"git-provider/git-provider-idor.test.ts": "Replaced by resources.test.ts scope/secret tests and provider-leaves.test.ts actual-router scope/link/edit regression"
+		},
+		"retained": [
+			"All other permission suites",
+			"wss/authorize.test.ts exercises the WebSocket authorizer with mocked permission/server leaf services and explicit member fixtures; assertions retained"
+		],
+		"pg18_default_suite": "Explicitly excluded opt-in fixture, never counted by source gates",
+		"oauth": "GitHub setup (including gh_setup), GitLab callback, Gitea authorize/callback refuse; unused Pages helper omitted. Configured-provider use retained; OAuth completion NOT QUALIFIED."
+	},
+	"startup": false,
+	"admission": false,
+	"runtime": false
+}

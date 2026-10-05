@@ -1,0 +1,85 @@
+{
+	"source": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"preserved": [
+		{
+			"path": "community/prestate_boundary.py",
+			"sha256": "7b05d301368d8e1cff88290dea6238386c795e41ea7576bfbb5d8f5f74702802"
+		},
+		{
+			"path": "community/observation_connector.py",
+			"sha256": "91cb96786b855cc1283861c205270c7977291d6d197f528b53a82f8439e21018"
+		},
+		{
+			"path": "community/state_observation.py",
+			"sha256": "c0d8f38adc5d2d90ecb0f3d5145d9b32b3aabb4727784904fc43940cdc735c30"
+		},
+		{
+			"path": "community/state_policy.py",
+			"sha256": "769a3fecf150abf54efa8f7aae762d677ef252fbeaf6a9669dace5def3affb86"
+		},
+		{
+			"path": "community/observe_entry.py",
+			"sha256": "91955e47753f8d242e687c1f9461a08616212d365e2a3a5fc8e122783b38f37b"
+		},
+		{
+			"path": "community/pg18_fixture_tests.py",
+			"sha256": "b7a70a0d58c96cad512bbb83b0c4fca6c55a2e66a38e988a4018105fbe9f8109"
+		},
+		{
+			"path": "pnpm-lock.yaml",
+			"sha256": "779ede461b31522ec830f57c3cd1415e7049c207c6044374f04358cec2ec1e95"
+		},
+		{
+			"path": "community/README.md",
+			"sha256": "1cdf44ff1bff41f1012693a1a505751a08f8928354dfdb400880fdc685d8b9b8"
+		},
+		{
+			"path": "community/maintenance_fixture.py",
+			"sha256": "d39237b1d2cb98596acd6bc22bf6d2e1a030b4538efea27a479aa11b393cd316"
+		},
+		{
+			"path": "community/migrate_owned.mjs",
+			"sha256": "2118df699f5e9dc70f42f07522b235dfe2628f6e7c5995c17b015866b57328e5"
+		},
+		{
+			"path": "community/migration_state.py",
+			"sha256": "3d43c83dc2ae8a28fee554dca1740395b5592d496bcd6a3ec35cc6aaa5df5de1"
+		},
+		{
+			"path": "community/pg18_writer_fixture_tests.py",
+			"sha256": "b8d666418d54acbc57046e99d43572765341b4850ed38d468f82a35cf8859c3c"
+		},
+		{
+			"path": "community/test_writer_boundary.py",
+			"sha256": "faa635c450bab970cb57e7c6d7e391d1f8aad689c84528b9ce3c6df33898de86"
+		},
+		{
+			"path": "community/writer-boundary-packet.md",
+			"sha256": "99edcfdd63230d4d3ff174d45f3ccac26c0c79dc8f484e57c7cee41a6af9c2f1"
+		},
+		{
+			"path": "community/writer_catalog.sql",
+			"sha256": "dd5416cb8d211196f8198414fafa49e2262f27ed4ec617ac8ab3c9077cfa1f94"
+		},
+		{
+			"path": "community/writer_fixture/0000_seed.sql",
+			"sha256": "da3deefd66848beded52ca835628bf3277ed38efdb0bab8672532e4d4db56c72"
+		},
+		{
+			"path": "community/writer_fixture/0001_upgrade.sql",
+			"sha256": "ab428a387142ecf85dbd72e5e2d70dcfb469684c0d020c9e76b63dfe4cc66e86"
+		},
+		{
+			"path": "community/writer_fixture/maintained-source.json",
+			"sha256": "b80ccfe38fe9f8c84b643ce01da1157fd4864b38c31eed38f136974b4ba7853f"
+		},
+		{
+			"path": "community/writer_fixture/meta/_journal.json",
+			"sha256": "5862ce849ccb2779c39859127cd62481a84b3df9f946c939efc0435185d051ee"
+		},
+		{
+			"path": "community/writer_fixture/oracle.json",
+			"sha256": "07d170089696e8275900c0bf30e4860b07392f44cb58c024b59ee8bf51c0250d"
+		}
+	]
+}

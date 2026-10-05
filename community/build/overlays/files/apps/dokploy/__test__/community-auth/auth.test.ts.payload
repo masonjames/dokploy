@@ -1,0 +1,893 @@
+import { syntheticDatabase } from "./synthetic-db";
+// Synthetic in-memory external systems; imports the production factory and route guard.
+import type { IncomingMessage } from "node:http";
+import { createRequestValidator } from "@dokploy/server/lib/auth-request";
+import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { describe, expect, it, vi } from "vitest";
+import {
+	createBetterAuth,
+	type AuthDependencies,
+} from "@dokploy/server/lib/auth-factory";
+import { communityPassword } from "@dokploy/server/lib/community-password";
+const seededPassword = await communityPassword.hash("synthetic-password");
+function fixture(
+	options: {
+		banned?: boolean;
+		enforceSSO?: boolean;
+		role?: string;
+		twoFactor?: boolean;
+		missingMembership?: boolean;
+		persistence?: AuthDependencies["db"];
+		tokenLookup?: AuthDependencies["getUserByToken"];
+	} = {},
+) {
+	const now = new Date();
+	const storage = {
+		user: [
+			{
+				id: "user-1",
+				firstName: "Synthetic",
+				email: "synthetic@example.invalid",
+				emailVerified: true,
+				createdAt: now,
+				updatedAt: now,
+				banned: options.banned ?? false,
+				twoFactorEnabled: options.twoFactor ?? false,
+			},
+		],
+		account: [
+			{
+				id: "account-1",
+				accountId: "user-1",
+				userId: "user-1",
+				providerId: "credential",
+				password: seededPassword,
+				createdAt: now,
+				updatedAt: now,
+			},
+		],
+		session: [],
+		verification: [],
+		twoFactor: [],
+		passkey: [],
+		apikey: [],
+		member: [],
+		organization: [],
+		invitation: [],
+	};
+	const write = vi.fn(() => {
+		throw new Error("Unexpected protected-state write");
+	});
+	const db = {
+		query: {
+			member: {
+				findFirst: vi.fn(async () =>
+					options.missingMembership
+						? undefined
+						: {
+								role: options.role ?? "member",
+								organization: { id: "org-1", ownerId: "owner-1" },
+								user: { banned: false },
+							},
+				),
+			},
+			apikey: {
+				findFirst: vi.fn(async () => ({
+					id: "key-1",
+					metadata: JSON.stringify({ organizationId: "org-1" }),
+					user: {
+						id: "user-1",
+						email: "synthetic@example.invalid",
+						banned: false,
+					},
+				})),
+			},
+		},
+		insert: write,
+		update: write,
+		delete: write,
+		transaction: write,
+	};
+	const readSettings = vi.fn(async () => ({
+		enforceSSO: options.enforceSSO ?? false,
+	}));
+	const auth = createBetterAuth({
+		db: options.persistence ?? (db as unknown as AuthDependencies["db"]),
+		database: memoryAdapter(storage),
+		secret: "synthetic-community-auth-test-secret-00000000000",
+		password: communityPassword,
+		readSettings,
+		trustedOrigins: async () => ["http://localhost:3000"],
+		getUserByToken:
+			options.tokenLookup ??
+			(async () => {
+				throw new Error("No invitation");
+			}),
+		initializeHost: write,
+		sendEmail: vi.fn(),
+	});
+	const request = (
+		path: string,
+		body: unknown = {},
+		method = "POST",
+		cookie?: string,
+		extraHeaders: Record<string, string> = {},
+	) =>
+		auth.handler(
+			new Request(`http://localhost:3000/api/auth${path}`, {
+				method,
+				headers: {
+					origin: "http://localhost:3000",
+					"content-type": "application/json",
+					...(cookie ? { cookie } : {}),
+					...extraHeaders,
+				},
+				...(method === "GET" ? {} : { body: JSON.stringify(body) }),
+			}),
+		);
+	const validate = createRequestValidator(
+		db as unknown as AuthDependencies["db"],
+		auth.internal,
+	);
+	return { auth, db, write, readSettings, storage, request, validate };
+}
+describe("real community authentication factory", () => {
+	it("enumerates the actual built endpoints and emits their classifications", () => {
+		const { auth } = fixture();
+		expect(auth.communityRoutes.length).toBeGreaterThan(50);
+		expect(
+			auth.communityRoutes.some(
+				(r) =>
+					r.path?.startsWith("/sso") ||
+					r.path?.startsWith("/scim") ||
+					r.path?.includes("create-role"),
+			),
+		).toBe(false);
+		if (process.env.COMMUNITY_ROUTE_RECEIPT)
+			writeFileSync(
+				process.env.COMMUNITY_ROUTE_RECEIPT,
+				JSON.stringify(auth.communityRoutes, null, 2),
+			);
+	});
+	it("denies every actual forbidden endpoint before adapter/settings effects", async () => {
+		const { auth, request, write, readSettings, storage } = fixture();
+		const before = JSON.stringify(storage);
+		for (const route of auth.communityRoutes.filter(
+			(r) => r.exposure === "deny",
+		))
+			for (const method of route.methods) {
+				const response = await request(
+					route.path!.replace(":id", "synthetic"),
+					{},
+					method,
+				);
+				expect(response.status, `${method} ${route.path}`).toBe(403);
+			}
+		expect(write).not.toHaveBeenCalled();
+		expect(readSettings).not.toHaveBeenCalled();
+		expect(JSON.stringify(storage)).toBe(before);
+	});
+	it.each([
+		"/sso/register",
+		"/scim/v2/Users",
+		"/organization/create-role",
+		"/api-key/create/",
+		"/API-key/create",
+		"/%61pi-key/create",
+	])("refuses absent/variant route %s", async (path) => {
+		const { request, write } = fixture();
+		expect((await request(path)).status).toBe(403);
+		expect(write).not.toHaveBeenCalled();
+	});
+	it("performs local password sign-in and a session read", async () => {
+		const { request } = fixture();
+		const response = await request("/sign-in/email", {
+			email: "synthetic@example.invalid",
+			password: "synthetic-password",
+		});
+		expect(response.status).toBe(200);
+		const cookie = response.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+		expect(cookie.includes("session_token")).toBe(true);
+		const session = await request("/get-session", {}, "GET", cookie);
+		expect(session.status).toBe(200);
+		expect((await session.json()).user.id).toBe("user-1");
+	});
+	it("rejects invalid passwords", async () => {
+		const { request } = fixture();
+		expect(
+			(
+				await request("/sign-in/email", {
+					email: "synthetic@example.invalid",
+					password: "wrong-password",
+				})
+			).status,
+		).toBe(401);
+	});
+	it("preserves the banned-user plugin hook", async () => {
+		const { request } = fixture({ banned: true });
+		expect(
+			(
+				await request("/sign-in/email", {
+					email: "synthetic@example.invalid",
+					password: "synthetic-password",
+				})
+			).status,
+		).toBe(403);
+	});
+	it("refuses enforced SSO without initialization or writes", async () => {
+		const { request, write, storage } = fixture({ enforceSSO: true });
+		const before = JSON.stringify(storage);
+		expect(
+			(
+				await request("/sign-in/email", {
+					email: "synthetic@example.invalid",
+					password: "synthetic-password",
+				})
+			).status,
+		).toBe(403);
+		expect(JSON.stringify(storage)).toBe(before);
+		expect(write).not.toHaveBeenCalled();
+	});
+	it.each(["constructor", "__proto__", "admin,member", "custom"])(
+		"rejects session creation for invalid membership %s",
+		async (role) => {
+			const { request } = fixture({ role });
+			expect(
+				(
+					await request("/sign-in/email", {
+						email: "synthetic@example.invalid",
+						password: "synthetic-password",
+					})
+				).status,
+			).toBe(403);
+		},
+	);
+	it("retains two-factor and passkey endpoints", () => {
+		const { auth } = fixture();
+		expect(
+			auth.communityRoutes.find((r) => r.path === "/two-factor/verify-totp")
+				?.exposure,
+		).toBe("allow");
+		expect(
+			auth.communityRoutes.find(
+				(r) => r.path === "/passkey/verify-authentication",
+			)?.exposure,
+		).toBe("allow");
+	});
+});
+
+describe("production request validation", () => {
+	it.each([
+		undefined,
+		"member",
+		"observer",
+		"owner",
+		"admin",
+		"constructor",
+		"__proto__",
+		"custom",
+		"admin,member",
+	])(
+		"validates API key membership %s with the real API-key plugin",
+		async (role) => {
+			const f = fixture();
+			const key = await f.auth.internal.createApiKey({
+				body: {
+					name: "synthetic-key",
+					userId: "user-1",
+					metadata: { organizationId: "org-1" },
+				},
+			});
+			f.db.query.member.findFirst.mockResolvedValue(
+				role === undefined
+					? undefined
+					: {
+							role,
+							organization: { id: "org-1", ownerId: "owner-1" },
+							user: { banned: false },
+						},
+			);
+			const result = await f.validate({
+				headers: { "x-api-key": key.key },
+			} as unknown as IncomingMessage);
+			expect(result.user !== null).toBe(
+				role !== undefined &&
+					["member", "observer", "owner", "admin"].includes(role),
+			);
+		},
+	);
+	it("refuses a stale cookie membership without falling back to a different org", async () => {
+		const f = fixture();
+		const login = await f.request("/sign-in/email", {
+			email: "synthetic@example.invalid",
+			password: "synthetic-password",
+		});
+		const cookie = login.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+		f.db.query.member.findFirst.mockResolvedValue(undefined);
+		expect(
+			await f.validate({ headers: { cookie } } as unknown as IncomingMessage),
+		).toEqual({ session: null, user: null });
+	});
+});
+
+function totp(uri: string) {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+	const encoded = new URL(uri).searchParams.get("secret")!;
+	const bits = [...encoded]
+		.map((c) => alphabet.indexOf(c).toString(2).padStart(5, "0"))
+		.join("");
+	const secret = Buffer.from(
+		(bits.match(/.{8}/g) ?? []).map((b) => Number.parseInt(b, 2)),
+	);
+	const counter = Buffer.alloc(8);
+	counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+	const digest = createHmac("sha1", secret).update(counter).digest();
+	const offset = digest[digest.length - 1]! & 15;
+	return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000)
+		.toString()
+		.padStart(6, "0");
+}
+it("enables two-factor, challenges password login, and completes a TOTP challenge", async () => {
+	const f = fixture();
+	const login = await f.request("/sign-in/email", {
+		email: "synthetic@example.invalid",
+		password: "synthetic-password",
+	});
+	const cookie = login.headers
+		.getSetCookie()
+		.map((c) => c.split(";")[0])
+		.join("; ");
+	const enable = await f.request(
+		"/two-factor/enable",
+		{ password: "synthetic-password" },
+		"POST",
+		cookie,
+	);
+	expect(enable.status).toBe(200);
+	const { totpURI } = await enable.json();
+	const verified = await f.request(
+		"/two-factor/verify-totp",
+		{ code: totp(totpURI) },
+		"POST",
+		cookie,
+	);
+	expect(verified.status).toBe(200);
+	const challenge = await f.request("/sign-in/email", {
+		email: "synthetic@example.invalid",
+		password: "synthetic-password",
+	});
+	expect((await challenge.json()).twoFactorRedirect).toBe(true);
+	const challengeCookie = challenge.headers
+		.getSetCookie()
+		.map((c) => c.split(";")[0])
+		.join("; ");
+	const invalidChallenge = await f.request(
+		"/two-factor/verify-totp",
+		{ code: "invalid" },
+		"POST",
+		challengeCookie,
+	);
+	expect(invalidChallenge.status).toBe(401);
+	const completion = await f.request(
+		"/two-factor/verify-totp",
+		{ code: totp(totpURI) },
+		"POST",
+		challengeCookie,
+	);
+	expect(completion.status).toBe(200);
+	expect(
+		completion.headers.getSetCookie().join(";").includes("session_token"),
+	).toBe(true);
+});
+it("requires a session for passkey registration and issues authenticated registration options", async () => {
+	const f = fixture();
+	expect(
+		(await f.request("/passkey/generate-register-options", {}, "GET")).status,
+	).toBe(401);
+	const login = await f.request("/sign-in/email", {
+		email: "synthetic@example.invalid",
+		password: "synthetic-password",
+	});
+	const cookie = login.headers
+		.getSetCookie()
+		.map((c) => c.split(";")[0])
+		.join("; ");
+	const options = await f.request(
+		"/passkey/generate-register-options",
+		{},
+		"GET",
+		cookie,
+	);
+	expect(options.status).toBe(200);
+	expect((await options.json()).challenge).toBeTruthy();
+	expect(
+		(
+			await f.request(
+				"/passkey/verify-registration",
+				{ response: {} },
+				"POST",
+				cookie,
+			)
+		).status,
+	).toBeGreaterThanOrEqual(400);
+});
+
+async function invitationFixture(overrides: Record<string, unknown> = {}) {
+	const data = syntheticDatabase();
+	data.rows.organization = [{ id: "org-1", name: "Synthetic" }];
+	data.rows.invitation = [
+		{
+			id: "invite-1",
+			organizationId: "org-1",
+			email: "synthetic@example.invalid",
+			role: "member",
+			status: "pending",
+			expiresAt: new Date(Date.now() + 60000),
+			...overrides,
+		},
+	];
+	const f = fixture({ persistence: data.db });
+	const login = await f.request("/sign-in/email", {
+		email: "synthetic@example.invalid",
+		password: "synthetic-password",
+	});
+	expect(login.status).toBe(200);
+	const cookie = login.headers
+		.getSetCookie()
+		.map((c) => c.split(";")[0])
+		.join("; ");
+	data.rows.session = f.storage.session;
+	return {
+		...f,
+		data,
+		cookie,
+		accept: () =>
+			f.request(
+				"/organization/accept-invitation",
+				{ invitationId: "invite-1" },
+				"POST",
+				cookie,
+			),
+	};
+}
+it("accepts an invitation once, preserves role, and activates the organization", async () => {
+	const f = await invitationFixture({ role: "observer" });
+	const response = await f.accept();
+	expect(response.status).toBe(200);
+	expect(f.data.rows.member?.[0]?.role).toBe("observer");
+	expect(f.data.rows.session?.[0]?.activeOrganizationId).toBe("org-1");
+	f.data.writes.length = 0;
+	expect((await f.accept()).status).toBe(403);
+	expect(f.data.writes).toEqual([]);
+});
+it("models serialized reuse in memory (not PostgreSQL lock evidence)", async () => {
+	const f = await invitationFixture();
+	const responses = await Promise.all([f.accept(), f.accept()]);
+	expect(responses.map((r) => r.status).sort()).toEqual([200, 403]);
+	expect(f.data.rows.member).toHaveLength(1);
+});
+it.each([
+	{ role: "owner" },
+	{ role: "custom" },
+	{ role: "constructor" },
+	{ role: "admin,member" },
+	{ status: "canceled" },
+	{ expiresAt: new Date(0) },
+	{ email: "wrong@example.invalid" },
+	{ organizationId: "absent-org" },
+])("refuses invalid invitation %j without writes", async (overrides) => {
+	const f = await invitationFixture(overrides);
+	expect((await f.accept()).status).toBe(403);
+	expect(f.data.writes).toEqual([]);
+});
+it("refuses conflicting membership without consuming the invitation", async () => {
+	const f = await invitationFixture();
+	f.data.rows.member = [
+		{
+			id: "existing",
+			userId: "user-1",
+			organizationId: "org-1",
+			role: "admin",
+		},
+	];
+	expect((await f.accept()).status).toBe(403);
+	expect(f.data.writes).toEqual([]);
+});
+it.each([
+	"member",
+	"observer",
+	"owner",
+	"admin",
+	"custom",
+	"constructor",
+	"admin,member",
+])("guards active-organization selection for %s", async (role) => {
+	const f = await invitationFixture();
+	f.data.rows.member = [
+		{ id: "existing", userId: "user-1", organizationId: "org-1", role },
+	];
+	const response = await f.request(
+		"/organization/set-active",
+		{ organizationId: "org-1" },
+		"POST",
+		f.cookie,
+	);
+	expect(response.status).toBe(
+		["member", "observer", "owner", "admin"].includes(role) ? 200 : 403,
+	);
+	if (response.status === 403) expect(f.data.writes).toEqual([]);
+});
+it("refuses null/cross-organization selection without writes", async () => {
+	const f = await invitationFixture();
+	for (const organizationId of [null, "", "org-2"])
+		expect(
+			(
+				await f.request(
+					"/organization/set-active",
+					{ organizationId },
+					"POST",
+					f.cookie,
+				)
+			).status,
+		).toBe(403);
+	expect(f.data.writes).toEqual([]);
+});
+
+it.each([
+	"member",
+	"observer",
+	"admin",
+	"owner",
+	"custom",
+	"constructor",
+	"admin,member",
+])("validates invitation role %s again during signup", async (role) => {
+	const data = syntheticDatabase();
+	data.rows.member = [
+		{ userId: "existing-owner", role: "owner", organization: { id: "org-1" } },
+	];
+	data.rows.invitation = [
+		{ id: "signup-invite", organization: { id: "org-1" } },
+	];
+	const f = fixture({
+		persistence: data.db,
+		tokenLookup: async () => ({
+			id: "signup-invite",
+			inviterId: "existing-owner",
+			role,
+			email: "new@example.invalid",
+			status: "pending",
+			isExpired: false,
+			userAlreadyExists: false,
+		}),
+	});
+	const before = f.storage.user.length;
+	const response = await f.request(
+		"/sign-up/email",
+		{
+			name: "New Synthetic",
+			email: "new@example.invalid",
+			password: "synthetic-password",
+		},
+		"POST",
+		undefined,
+		{ "x-dokploy-token": "signup-invite" },
+	);
+	const allowed = ["member", "observer", "admin"].includes(role);
+	expect(response.status).toBe(allowed ? 200 : 400);
+	expect(f.storage.user.length).toBe(before + (allowed ? 1 : 0));
+	expect(data.writes).toEqual([]);
+	if (allowed) {
+		const cookie = response.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+		const validate = createRequestValidator(data.db, f.auth.internal);
+		expect(
+			await validate({ headers: { cookie } } as unknown as IncomingMessage),
+		).toEqual({ session: null, user: null });
+	}
+});
+
+it("registers a synthetic ES256 passkey and signs in with a real verified assertion", async () => {
+	const f = fixture();
+	const cookies = (response: Response) =>
+		response.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+	const login = await f.request("/sign-in/email", {
+		email: "synthetic@example.invalid",
+		password: "synthetic-password",
+	});
+	const registration = await f.request(
+		"/passkey/generate-register-options",
+		{},
+		"GET",
+		cookies(login),
+	);
+	const options = await registration.json();
+	const { publicKey, privateKey } = generateKeyPairSync("ec", {
+		namedCurve: "prime256v1",
+	});
+	const jwk = publicKey.export({ format: "jwk" });
+	const credential = Buffer.alloc(32, 7);
+	const credentialId = credential.toString("base64url");
+	const coseKey = Buffer.concat([
+		Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
+		Buffer.from(jwk.x!, "base64url"),
+		Buffer.from([0x22, 0x58, 0x20]),
+		Buffer.from(jwk.y!, "base64url"),
+	]);
+	const rpHash = createHash("sha256").update(options.rp.id).digest();
+	const authenticatorData = Buffer.concat([
+		rpHash,
+		Buffer.from([0x45]),
+		Buffer.alloc(4),
+		Buffer.alloc(16),
+		Buffer.from([0, 32]),
+		credential,
+		coseKey,
+	]);
+	const text = (value: string) =>
+		Buffer.concat([Buffer.from([0x60 + value.length]), Buffer.from(value)]);
+	const attestation = Buffer.concat([
+		Buffer.from([0xa3]),
+		text("fmt"),
+		text("none"),
+		text("authData"),
+		Buffer.from([0x58, authenticatorData.length]),
+		authenticatorData,
+		text("attStmt"),
+		Buffer.from([0xa0]),
+	]);
+	const clientData = (type: string, challenge: string) =>
+		Buffer.from(
+			JSON.stringify({
+				type,
+				challenge,
+				origin: "http://localhost:3000",
+				crossOrigin: false,
+			}),
+		);
+	const registered = await f.request(
+		"/passkey/verify-registration",
+		{
+			response: {
+				id: credentialId,
+				rawId: credentialId,
+				type: "public-key",
+				authenticatorAttachment: "platform",
+				clientExtensionResults: {},
+				response: {
+					clientDataJSON: clientData(
+						"webauthn.create",
+						options.challenge,
+					).toString("base64url"),
+					attestationObject: attestation.toString("base64url"),
+					transports: ["internal"],
+				},
+			},
+		},
+		"POST",
+		`${cookies(login)}; ${cookies(registration)}`,
+	);
+	expect(registered.status).toBe(200);
+	const challenge = await f.request(
+		"/passkey/generate-authenticate-options",
+		{},
+		"GET",
+	);
+	const challengeOptions = await challenge.json();
+	const assertionData = Buffer.concat([
+		rpHash,
+		Buffer.from([0x05]),
+		Buffer.from([0, 0, 0, 1]),
+	]);
+	const assertionClient = clientData(
+		"webauthn.get",
+		challengeOptions.challenge,
+	);
+	const signature = sign(
+		"sha256",
+		Buffer.concat([
+			assertionData,
+			createHash("sha256").update(assertionClient).digest(),
+		]),
+		privateKey,
+	);
+	const response = await f.request(
+		"/passkey/verify-authentication",
+		{
+			response: {
+				id: credentialId,
+				rawId: credentialId,
+				type: "public-key",
+				authenticatorAttachment: "platform",
+				clientExtensionResults: {},
+				response: {
+					clientDataJSON: assertionClient.toString("base64url"),
+					authenticatorData: assertionData.toString("base64url"),
+					signature: signature.toString("base64url"),
+					userHandle: null,
+				},
+			},
+		},
+		"POST",
+		cookies(challenge),
+	);
+	expect(response.status).toBe(200);
+	expect(cookies(response).includes("session_token")).toBe(true);
+});
+
+it("bounds rejected transactions without leaking or retrying", async () => {
+	const f = await invitationFixture();
+	const transaction = vi
+		.spyOn(f.data.db, "transaction")
+		.mockRejectedValue(new Error("private database detail"));
+	const response = await f.accept();
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({
+		code: "AUTH_STATE_WRITE_FAILED",
+		message: "Unable to update authentication state",
+	});
+	expect(transaction).toHaveBeenCalledTimes(1);
+	expect(f.data.writes).toEqual([]);
+});
+it("freezes distinct reuse and existing-member errors", async () => {
+	const reused = await invitationFixture({ status: "accepted" });
+	const response = await reused.accept();
+	expect(response.status).toBe(403);
+	expect((await response.json()).code).toBe("INVITATION_NOT_PENDING");
+	const existing = await invitationFixture();
+	existing.data.rows.member = [
+		{ userId: "user-1", organizationId: "org-1", role: "member" },
+	];
+	const conflict = await existing.accept();
+	expect(conflict.status).toBe(403);
+	expect((await conflict.json()).code).toBe("MEMBERSHIP_ALREADY_EXISTS");
+});
+it("carries the existing cookie from session B to accepted A in memory", async () => {
+	const f = await invitationFixture();
+	f.data.rows.session![0]!.activeOrganizationId = "org-B";
+	const unrelated = {
+		id: "member-B",
+		userId: "user-1",
+		organizationId: "org-B",
+		role: "admin",
+	};
+	f.data.rows.member = [unrelated];
+	const usersBefore = JSON.stringify(f.storage.user);
+	const before = await f.request("/get-session", {}, "GET", f.cookie);
+	expect((await before.json()).session.activeOrganizationId).toBe("org-B");
+	const accepted = await f.accept();
+	expect(accepted.status).toBe(200);
+	const jar = new Map(
+		f.cookie.split("; ").map((pair) => {
+			const at = pair.indexOf("=");
+			return [pair.slice(0, at), pair.slice(at + 1)];
+		}),
+	);
+	for (const raw of accepted.headers.getSetCookie()) {
+		const pair = raw.split(";", 1)[0]!;
+		const at = pair.indexOf("=");
+		jar.set(pair.slice(0, at), pair.slice(at + 1));
+	}
+	const read = await f.request(
+		"/get-session",
+		{},
+		"GET",
+		[...jar].map(([name, value]) => `${name}=${value}`).join("; "),
+	);
+	expect(read.status).toBe(200);
+	const body = await read.json();
+	expect(body.user.id).toBe("user-1");
+	expect(body.session.activeOrganizationId).toBe("org-1");
+	expect(
+		f.data.rows.member!.filter((row) => row.organizationId === "org-1"),
+	).toHaveLength(1);
+	expect(f.data.rows.member!.find((row) => row.id === "member-B")).toEqual(
+		unrelated,
+	);
+	expect(JSON.stringify(f.storage.user) === usersBefore).toBe(true);
+});
+it.each(["foreign", "", null, false])(
+	"actual update-session cannot write protected fields (%s)",
+	async (value) => {
+		const f = fixture();
+		const login = await f.request("/sign-in/email", {
+			email: "synthetic@example.invalid",
+			password: "synthetic-password",
+		});
+		expect(login.status).toBe(200);
+		const cookie = login.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+		const before = JSON.stringify(f.storage);
+		const result = await f.request(
+			"/update-session",
+			{ activeOrganizationId: value, impersonatedBy: value },
+			"POST",
+			cookie,
+		);
+		expect(result.status).toBe(400);
+		expect(JSON.stringify(f.storage)).toBe(before);
+		expect(f.write).not.toHaveBeenCalled();
+	},
+);
+it.each(["/update-user", "/change-email"])(
+	"actual %s refuses email mutation",
+	async (route) => {
+		const f = fixture();
+		const login = await f.request("/sign-in/email", {
+			email: "synthetic@example.invalid",
+			password: "synthetic-password",
+		});
+		expect(login.status).toBe(200);
+		const cookie = login.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.join("; ");
+		const before = JSON.stringify(f.storage);
+		const result = await f.request(
+			route,
+			{ email: "other@example.invalid", newEmail: "other@example.invalid" },
+			"POST",
+			cookie,
+		);
+		expect(result.status).toBe(400);
+		expect(JSON.stringify(f.storage)).toBe(before);
+		expect(f.write).not.toHaveBeenCalled();
+	},
+);
+
+it.each(["accept", "set-active"])(
+	"%s zero-row session update rejects the actual transaction boundary",
+	async (operation) => {
+		const f = await invitationFixture();
+		// Adapter session lookup still succeeds; injected persistence models a concurrent deletion.
+		f.data.rows.session = [];
+		if (operation === "set-active")
+			f.data.rows.member = [
+				{
+					id: "membership",
+					userId: "user-1",
+					organizationId: "org-1",
+					role: "member",
+				},
+			];
+		const tx = vi.spyOn(f.data.db, "transaction");
+		const response =
+			operation === "accept"
+				? await f.accept()
+				: await f.request(
+						"/organization/set-active",
+						{ organizationId: "org-1" },
+						"POST",
+						f.cookie,
+					);
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			code: "AUTH_STATE_WRITE_FAILED",
+			message: "Unable to update authentication state",
+		});
+		expect(tx).toHaveBeenCalledOnce();
+		await expect(tx.mock.results[0]!.value).rejects.toThrow(
+			"Session update refused",
+		);
+		expect(f.data.writes).toContainEqual({
+			table: "session",
+			operation: "update",
+		});
+		// Synthetic storage retains attempted writes and does NOT prove SQL rollback. Real PG remains parent-only.
+	},
+);
