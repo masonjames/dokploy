@@ -1,0 +1,8 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    {"idx": 0, "version": "5", "when": 1000, "tag": "0000_seed", "breakpoints": true},
+    {"idx": 1, "version": "5", "when": 2000, "tag": "0001_upgrade", "breakpoints": true}
+  ]
+}
