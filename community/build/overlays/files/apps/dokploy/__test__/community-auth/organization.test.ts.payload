@@ -1,0 +1,184 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const external = vi.hoisted(() => ({ db: {} as unknown, sink: vi.fn() }));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return external.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({ validateRequest: external.sink }));
+vi.mock("@dokploy/server/index", () => ({
+	IS_CLOUD: false,
+	sendInvitationEmail: external.sink,
+	syncAllCaddyInBackground: external.sink,
+}));
+vi.mock("@/server/api/utils/plan-limits", () => ({
+	assertMemberLimit: external.sink,
+	assertOrganizationLimit: external.sink,
+}));
+import { organizationRouter } from "@/server/api/routers/organization";
+let fixture = syntheticDatabase();
+const member = (id: string, role: string, organizationId = "org-1") => ({
+	id,
+	userId: id,
+	organizationId,
+	role,
+	user: { email: `${id}@example.invalid` },
+});
+function caller(role = "owner") {
+	const actor = member("actor", role);
+	fixture.rows.member = [
+		actor,
+		...(fixture.rows.member ?? []).filter((row) => row.id !== "actor"),
+	];
+	return organizationRouter.createCaller({
+		db: fixture.db,
+		user: { id: "actor", role, email: "actor@example.invalid" },
+		session: { userId: "actor", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof organizationRouter.createCaller>[0]);
+}
+beforeEach(() => {
+	fixture = syntheticDatabase();
+	external.db = fixture.db;
+	external.sink.mockReset();
+	fixture.rows.organization = [{ id: "org-1", ownerId: "actor" }];
+});
+it("cancels an invitation without deleting its row", async () => {
+	fixture.rows.invitation = [
+		{ id: "invite", organizationId: "org-1", status: "pending" },
+	];
+	await caller().cancelInvitation({ invitationId: "invite" });
+	expect(fixture.rows.invitation).toEqual([
+		{ id: "invite", organizationId: "org-1", status: "canceled" },
+	]);
+	expect(fixture.writes).toEqual([
+		{ table: "invitation", operation: "update" },
+	]);
+});
+it.each(["member", "observer", "custom", "constructor", "admin,member"])(
+	"denies cancellation by %s before a write",
+	async (role) => {
+		await expect(
+			caller(role).cancelInvitation({ invitationId: "invite" }),
+		).rejects.toBeTruthy();
+		expect(fixture.writes).toEqual([]);
+	},
+);
+it("unlinks only a current-organization membership", async () => {
+	fixture.rows.member = [
+		member("target", "member"),
+		member("other-membership", "member", "org-2"),
+	];
+	fixture.rows.user = [{ id: "target" }];
+	await caller().removeMember({ memberId: "target" });
+	expect(
+		fixture.rows.member?.some((row) => row.id === "other-membership"),
+	).toBe(true);
+	expect(fixture.rows.user).toEqual([{ id: "target" }]);
+	expect(fixture.writes).toEqual([{ table: "member", operation: "delete" }]);
+});
+it.each([
+	["owner", "owner", "org-1"],
+	["admin", "admin", "org-1"],
+	["owner", "member", "org-2"],
+	["member", "member", "org-1"],
+])("refuses forbidden unlink %s %s %s", async (actor, target, org) => {
+	fixture.rows.member = [member("target", target!, org)];
+	await expect(
+		caller(actor).removeMember({ memberId: "target" }),
+	).rejects.toBeTruthy();
+	expect(fixture.writes).toEqual([]);
+});
+it("refuses self unlink", async () => {
+	await expect(
+		caller().removeMember({ memberId: "actor" }),
+	).rejects.toBeTruthy();
+	expect(fixture.writes).toEqual([]);
+});
+it.each(["owner", "observer", "custom", "__proto__", "admin,member"])(
+	"refuses default role %s",
+	async (role) => {
+		await expect(
+			caller().update({
+				organizationId: "org-1",
+				name: "Synthetic",
+				defaultRole: role as "admin",
+			}),
+		).rejects.toBeTruthy();
+		expect(fixture.writes).toEqual([]);
+	},
+);
+it.each(["admin", "member", null, undefined] as const)(
+	"retains valid default role %s",
+	async (defaultRole) => {
+		await caller().update({
+			organizationId: "org-1",
+			name: "Synthetic",
+			defaultRole,
+		});
+		expect(fixture.writes).toEqual([
+			{ table: "organization", operation: "update" },
+		]);
+	},
+);
+it("allows admin to promote a member, but not modify an existing admin", async () => {
+	fixture.rows.member = [member("target", "member")];
+	await caller("admin").updateMemberRole({ memberId: "target", role: "admin" });
+	fixture.writes.length = 0;
+	await expect(
+		caller("admin").updateMemberRole({ memberId: "target", role: "member" }),
+	).rejects.toBeTruthy();
+	expect(fixture.writes).toEqual([]);
+});
+it.each(["owner", "custom", "constructor", "admin,member"])(
+	"refuses invitation role %s",
+	async (role) => {
+		await expect(
+			caller().inviteMember({
+				email: "new@example.invalid",
+				role: role as "admin",
+			}),
+		).rejects.toBeTruthy();
+		expect(fixture.writes).toEqual([]);
+	},
+);
+it.each(["admin", "member", "observer"] as const)(
+	"creates invitation with supported role %s",
+	async (role) => {
+		await caller().inviteMember({ email: "new@example.invalid", role });
+		expect(fixture.rows.invitation?.[0]?.role).toBe(role);
+	},
+);
+
+it.each(["admin", "deleted", "foreign"])(
+	"member role compare-and-set refuses concurrent %s target",
+	async (change) => {
+		fixture.rows.member = [member("target", "member")];
+		const c = caller("admin");
+		fixture.controls.beforeUpdate = () => {
+			if (change === "deleted")
+				fixture.rows.member = fixture.rows.member!.filter(
+					(r) => r.id !== "target",
+				);
+			else
+				Object.assign(
+					fixture.rows.member!.find((r) => r.id === "target")!,
+					change === "foreign"
+						? { organizationId: "org-2" }
+						: { role: "admin" },
+				);
+		};
+		await expect(
+			c.updateMemberRole({ memberId: "target", role: "observer" }),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+		expect(fixture.rows.member!.some((r) => r.role === "observer")).toBe(false);
+		expect(external.sink).not.toHaveBeenCalled();
+	},
+);
+it("unknown saved member role refuses before update", async () => {
+	fixture.rows.member = [member("target", "custom")];
+	await expect(
+		caller().updateMemberRole({ memberId: "target", role: "member" }),
+	).rejects.toMatchObject({ code: "FORBIDDEN" });
+	expect(fixture.writes).toEqual([]);
+});

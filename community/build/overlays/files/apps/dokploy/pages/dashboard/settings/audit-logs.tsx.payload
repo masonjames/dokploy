@@ -1,0 +1,12 @@
+import { communityCapabilities } from "@dokploy/server/lib/community-policy";
+import { DashboardLayout } from "@/components/layouts/dashboard-layout";
+export default function Page() {
+	return (
+		<DashboardLayout metaName="Audit">
+			<p>
+				Enterprise audit storage is {communityCapabilities.enterpriseAudit} in
+				community.
+			</p>
+		</DashboardLayout>
+	);
+}

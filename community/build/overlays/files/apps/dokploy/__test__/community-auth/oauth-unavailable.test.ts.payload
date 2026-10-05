@@ -1,0 +1,149 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { expect, it, vi } from "vitest";
+import github from "@/pages/api/providers/github/setup";
+import gitlab from "@/pages/api/providers/gitlab/callback";
+import authorize from "@/pages/api/providers/gitea/authorize";
+import callback from "@/pages/api/providers/gitea/callback";
+import fs from "node:fs";
+import path from "node:path";
+const routes = { github, gitlab, authorize, callback };
+for (const [name, handler] of Object.entries(routes)) {
+	it.each([
+		"GET",
+		"POST",
+		"PUT",
+		"PATCH",
+		"DELETE",
+		"HEAD",
+		"OPTIONS",
+		"TRACE",
+		undefined,
+	])(
+		`${name} refuses %s independently of parameters without effects`,
+		(method) => {
+			const effect = vi.fn(() => {
+				throw new Error("Unexpected external call");
+			});
+			vi.stubGlobal("fetch", effect);
+			try {
+				for (const query of [
+					{},
+					{
+						code: "synthetic",
+						state: "gh_setup:foreign",
+						installation_id: "42",
+					},
+					{
+						state: '{"giteaId":"foreign"}',
+						gitlabId: ["foreign"],
+						code: ["one", "two"],
+					},
+					{ state: null, code: null },
+				]) {
+					const status = vi.fn();
+					const json = vi.fn();
+					const res = { status, json };
+					status.mockReturnValue(res);
+					handler(
+						{ method, query, body: query } as unknown as NextApiRequest,
+						res as unknown as NextApiResponse,
+					);
+					expect(status).toHaveBeenCalledWith(503);
+					expect(json).toHaveBeenCalledWith({
+						code: "PROVIDER_OAUTH_UNAVAILABLE",
+						message: "Provider OAuth setup is unavailable in community",
+					});
+				}
+				expect(effect).not.toHaveBeenCalled();
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		},
+	);
+}
+it("refusal routes have no runtime dependencies; helper route is absent; UI cannot initiate OAuth", () => {
+	const root = path.resolve(__dirname, "../..");
+	for (const file of [
+		"github/setup",
+		"gitlab/callback",
+		"gitea/authorize",
+		"gitea/callback",
+	]) {
+		const source = fs.readFileSync(
+			path.join(root, `pages/api/providers/${file}.ts`),
+			"utf8",
+		);
+		expect(source.match(/^import /gm)).toHaveLength(1);
+		expect(source).toContain("import type ");
+		expect(source).not.toMatch(/\b(await|fetch|require)\b/);
+	}
+	expect(
+		fs.existsSync(path.join(root, "pages/api/providers/gitea/helper.ts")),
+	).toBe(false);
+	for (const file of [
+		"github/add-github-provider",
+		"gitlab/add-gitlab-provider",
+		"gitea/add-gitea-provider",
+		"gitea/edit-gitea-provider",
+		"show-git-providers",
+	]) {
+		const source = fs.readFileSync(
+			path.join(root, `components/dashboard/settings/git/${file}.tsx`),
+			"utf8",
+		);
+		expect(source).not.toMatch(
+			/gh_setup|oauth\/authorize|window.open|getGiteaOAuthUrl|providers\/.*\/callback/,
+		);
+		expect(source).toContain("disabled");
+	}
+});
+
+it("SSO-required sign-in explains refusal and profile/membership UI matches source capability", () => {
+	const root = path.resolve(__dirname, "../..");
+	const login = fs.readFileSync(path.join(root, "pages/index.tsx"), "utf8");
+	expect(login).toContain("This installation requires SSO");
+	expect(login).toContain("Contact your administrator");
+	expect(login).not.toContain("false ? <></>");
+	const profile = fs.readFileSync(
+		path.join(root, "components/dashboard/settings/profile/profile-form.tsx"),
+		"utf8",
+	);
+	expect(profile.slice(profile.indexOf('name="email"'))).toMatch(
+		/<Input\s+disabled/,
+	);
+	const users = fs.readFileSync(
+		path.join(root, "components/dashboard/settings/users/show-users.tsx"),
+		"utf8",
+	);
+	expect(users).not.toContain("api.user.remove");
+	expect(users).toContain("api.organization.removeMember");
+	expect(users).toContain("Remove from organization");
+	expect(users).toMatch(
+		/const canUnlink =\s*FREE_ROLES\.includes\(member\.role\) && canRemove;/,
+	);
+});
+
+it("source strings: unsupported roles are never preselected as member and stale organization refusal points to existing recovery", () => {
+	const root = path.resolve(__dirname, "../..");
+	const role = fs.readFileSync(
+		path.join(root, "components/dashboard/settings/users/change-role.tsx"),
+		"utf8",
+	);
+	expect(role).toContain("role: editableRole");
+	expect(role).toContain("Stored role unsupported; editing unavailable");
+	expect(role).not.toMatch(/:\s*"member"/);
+	const side = fs.readFileSync(
+		path.join(root, "components/layouts/side.tsx"),
+		"utf8",
+	);
+	expect(side).toContain('organizationError?.data?.code === "UNAUTHORIZED"');
+	expect(side).not.toContain('organizationError?.data?.code === "FORBIDDEN"');
+	expect(side).toContain("Account → Log out");
+	expect(side).toContain("If access remains unavailable");
+	const nav = fs.readFileSync(
+		path.join(root, "components/layouts/user-nav.tsx"),
+		"utf8",
+	);
+	expect(nav).toContain("authClient.signOut");
+	expect(nav).toContain("Log out");
+});

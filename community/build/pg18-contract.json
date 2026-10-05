@@ -1,0 +1,36 @@
+{
+	"oracle_sha256": "40116667785c6ea8d1bc32f4df97148dc21adef33f3df66b97b9de017e7825a8",
+	"source_base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"status": "NOT RUN: parent inspection and explicit dispatch required",
+	"startup": false,
+	"admission": false,
+	"runtime": false,
+	"http": {
+		"success": { "status": 200 },
+		"refusal": { "status": 403, "code": "AUTHORIZATION_DENIED" },
+		"not_pending": { "status": 403, "code": "INVITATION_NOT_PENDING" },
+		"existing_member": { "status": 403, "code": "MEMBERSHIP_ALREADY_EXISTS" },
+		"write_failure": { "status": 500, "code": "AUTH_STATE_WRITE_FAILED" }
+	},
+	"fault_sqlstate_class": "PZ",
+	"negative_control": "While an independent holder owns A FOR UPDATE, two plain reads complete; two actual handler backends must then be observed waiting on real DB locks with blocking PIDs before release.",
+	"cases": [
+		"single",
+		"same-invitation",
+		"distinct-invitations",
+		"transaction-failure",
+		"separate-recovery",
+		"unauthenticated",
+		"wrong_email",
+		"expired",
+		"custom_role",
+		"invalid_organization",
+		"malformed"
+	],
+	"replacements": {
+		"persistence": "Fresh owned PostgreSQL18 schema tables, no imported state or member org/user uniqueness",
+		"crypto": "Production bcrypt10 configuration and installed BetterAuth cookie/session implementation",
+		"effects": "Read-only settings/origin constants; token lookup, host initialization and mail throw if called",
+		"clock": "Real clock; fresh seeded expiry relative to test start"
+	}
+}

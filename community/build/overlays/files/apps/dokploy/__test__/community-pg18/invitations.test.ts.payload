@@ -1,0 +1,558 @@
+// OPT-IN ONLY. Parent-owned dispatch; no default-suite inclusion or app listener.
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { SQL, getTableName } from "drizzle-orm";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { it } from "vitest";
+import * as schema from "@dokploy/server/db/schema";
+import { createBetterAuth } from "@dokploy/server/lib/auth-factory";
+import { communityPassword } from "@dokploy/server/lib/community-password";
+
+const ORACLE =
+	"40116667785c6ea8d1bc32f4df97148dc21adef33f3df66b97b9de017e7825a8";
+const digest = (value: unknown) =>
+	createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+it("satisfies the independently frozen invitation oracle", async () => {
+	let failureCheckSha256: string | undefined;
+	function check(condition: unknown, label: string): asserts condition {
+		if (!condition) {
+			failureCheckSha256 = createHash("sha256").update(label).digest("hex");
+			throw new Error(`Synthetic PG contract failed: ${label}`);
+		}
+	}
+	check(process.env.COMMUNITY_PG18_OPT_IN === ORACLE, "explicit opt-in");
+	const socket = process.env.COMMUNITY_PG18_SOCKET!;
+	const output = process.env.COMMUNITY_PG18_RESULT!;
+	check(
+		socket.startsWith("/private/tmp/ha-pg-") &&
+			output.startsWith("/private/tmp/ha-pg-"),
+		"owned paths",
+	);
+	const contract = JSON.parse(
+		readFileSync(process.env.COMMUNITY_PG18_CONTRACT!, "utf8"),
+	);
+	check(contract.oracle_sha256 === ORACLE, "oracle identity");
+	const connect = (name: string, max = 1) =>
+		postgres({
+			host: socket,
+			port: 55439,
+			database: "auth_fixture",
+			username: "auth_fixture",
+			max,
+			connect_timeout: 5,
+			idle_timeout: 5,
+			onnotice: () => {},
+			connection: {
+				application_name: name,
+				statement_timeout: 15000,
+				lock_timeout: 12000,
+			},
+		});
+	const sql = connect("observer");
+	const writer = connect("handler", 4);
+	const control = connect("barrier");
+	const plain = connect("negative-control", 2);
+	const db = drizzle(writer, { schema });
+	const observations: Record<string, unknown>[] = [];
+	let currentCase = "setup";
+	let passed = false;
+	// No raw adapter/framework errors reach Vitest output, even on a failing case.
+	const originalError = console.error;
+	const originalWarn = console.warn;
+	console.error = () => {};
+	console.warn = () => {};
+	try {
+		const tables = [
+			schema.user,
+			schema.organization,
+			schema.member,
+			schema.invitation,
+			schema.session,
+			schema.account,
+			schema.verification,
+		];
+		const dialect = new PgDialect();
+		for (const table of tables) {
+			const config = getTableConfig(table);
+			const columns = config.columns.map((c) => {
+				let value = "";
+				if (c.default !== undefined) {
+					if (c.default instanceof SQL) {
+						const query = dialect.sqlToQuery(c.default);
+						check(query.params.length === 0, "literal schema default");
+						value = query.sql;
+					} else
+						value =
+							typeof c.default === "string"
+								? `'${c.default.replaceAll("'", "''")}'`
+								: String(c.default);
+				}
+				return `${quote(c.name)} ${c.getSQLType()}${c.notNull ? " NOT NULL" : ""}${c.primary ? " PRIMARY KEY" : ""}${c.isUnique ? " UNIQUE" : ""}${value ? ` DEFAULT ${value}` : ""}`;
+			});
+			await sql.unsafe(
+				`CREATE TABLE ${quote(config.name)} (${columns.join(",")})`,
+			);
+		}
+		for (const table of tables)
+			for (const fk of getTableConfig(table).foreignKeys) {
+				const ref = fk.reference();
+				await sql.unsafe(
+					`ALTER TABLE ${quote(getTableName(table))} ADD FOREIGN KEY (${ref.columns.map((c) => quote(c.name)).join(",")}) REFERENCES ${quote(getTableName(ref.foreignTable))} (${ref.foreignColumns.map((c) => quote(c.name)).join(",")})`,
+				);
+			}
+		const auth = createBetterAuth({
+			db,
+			database: drizzleAdapter(db, { provider: "pg", schema }),
+			secret: "synthetic-only-invitation-fixture-secret-000000000",
+			password: communityPassword,
+			readSettings: async () => ({ enforceSSO: false }),
+			trustedOrigins: async () => ["http://localhost:3000"],
+			getUserByToken: async () => {
+				throw new Error("Unused synthetic effect");
+			},
+			initializeHost: async () => {
+				throw new Error("Forbidden synthetic effect");
+			},
+			sendEmail: async () => {
+				throw new Error("Forbidden synthetic effect");
+			},
+		});
+		let jar = new Map<string, string>();
+		let seededInvitations = new Map<string, string>();
+		let successfulCount = 0;
+		let previousLoginCompleted = 0;
+		const mergeCookies = (response: Response) => {
+			for (const raw of response.headers.getSetCookie()) {
+				const pair = raw.split(";", 1)[0]!;
+				const at = pair.indexOf("=");
+				jar.set(pair.slice(0, at), pair.slice(at + 1));
+			}
+		};
+		const request = (
+			path: string,
+			body: unknown = {},
+			authenticated = true,
+			method = "POST",
+		) =>
+			auth.handler(
+				new Request(`http://localhost:3000/api/auth${path}`, {
+					method,
+					headers: {
+						origin: "http://localhost:3000",
+						"content-type": "application/json",
+						...(authenticated
+							? { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") }
+							: {}),
+					},
+					...(method === "GET" ? {} : { body: JSON.stringify(body) }),
+				}),
+			);
+		const projection = async () => {
+			const result: Record<string, unknown> = {};
+			for (const table of tables)
+				result[getTableName(table)] = await sql.unsafe(
+					`SELECT * FROM ${quote(getTableName(table))} ORDER BY id`,
+				);
+			return result;
+		};
+		const unchanged = async () => ({
+			users: await sql`SELECT * FROM "user" ORDER BY id`,
+			organizations: await sql`SELECT * FROM organization ORDER BY id`,
+			membersB:
+				await sql`SELECT * FROM member WHERE organization_id = 'B' ORDER BY id`,
+			otherSessions:
+				await sql`SELECT * FROM session WHERE user_id <> 'recipient' ORDER BY id`,
+			accounts: await sql`SELECT * FROM account ORDER BY id`,
+		});
+		const seed = async () => {
+			await sql`TRUNCATE "user", organization, member, invitation, session, account, verification CASCADE`;
+			const now = new Date();
+			for (const id of ["recipient", "inviter", "other"])
+				await db.insert(schema.user).values({
+					id,
+					firstName: id,
+					email: `${id}@example.invalid`,
+					emailVerified: true,
+					updatedAt: now,
+				});
+			for (const id of ["A", "B"])
+				await db
+					.insert(schema.organization)
+					.values({ id, name: id, ownerId: "inviter", createdAt: now });
+			await db.insert(schema.member).values([
+				{
+					id: "recipient-B",
+					organizationId: "B",
+					userId: "recipient",
+					role: "member",
+					createdAt: now,
+					isDefault: true,
+				},
+				{
+					id: "other-B",
+					organizationId: "B",
+					userId: "other",
+					role: "admin",
+					createdAt: now,
+				},
+			]);
+			await db.insert(schema.account).values({
+				id: "credential",
+				accountId: "recipient",
+				userId: "recipient",
+				providerId: "credential",
+				password: await communityPassword.hash("fixture-password"),
+				createdAt: now,
+				updatedAt: now,
+			});
+			await db.insert(schema.session).values({
+				id: "other-session",
+				userId: "other",
+				token: "synthetic-other-session",
+				createdAt: now,
+				updatedAt: now,
+				expiresAt: new Date(now.getTime() + 3600000),
+				activeOrganizationId: "B",
+			});
+			for (const [id, role] of [
+				["I1", "member"],
+				["I2", "admin"],
+			] as const)
+				await db.insert(schema.invitation).values({
+					id,
+					role,
+					organizationId: "A",
+					inviterId: "inviter",
+					email: "recipient@example.invalid",
+					status: "pending",
+					expiresAt: new Date(now.getTime() + 3600000),
+				});
+			seededInvitations = new Map(
+				(await sql`SELECT * FROM invitation ORDER BY id`).map((row) => [
+					String(row.id),
+					digest(row),
+				]),
+			);
+			jar = new Map();
+			// Keep production's shared 3-per-10-second sign-in limiter enabled.
+			// Each allowed login refreshes the window; wait after every three successes.
+			if (successfulCount > 0 && successfulCount % 3 === 0)
+				await new Promise((resolve) =>
+					setTimeout(
+						resolve,
+						Math.max(0, previousLoginCompleted + 10100 - Date.now()),
+					),
+				);
+			const login = await request(
+				"/sign-in/email",
+				{ email: "recipient@example.invalid", password: "fixture-password" },
+				false,
+			);
+			check(login.status === 200, "seed login");
+			previousLoginCompleted = Date.now();
+			successfulCount += 1;
+			mergeCookies(login);
+			const session = await (
+				await request("/get-session", {}, true, "GET")
+			).json();
+			check(
+				session.user.id === "recipient" &&
+					session.session.activeOrganizationId === "B",
+				"initial session B",
+			);
+			return digest(await unchanged());
+		};
+		const accept = (id: string) =>
+			request("/organization/accept-invitation", { invitationId: id });
+		const outcome = async (response: Response, expected: string) => {
+			const rule = contract.http[expected];
+			check(response.status === rule.status, `${expected} status`);
+			if (rule.code)
+				check(
+					(await response.clone().json()).code === rule.code,
+					`${expected} code`,
+				);
+			return { status: response.status, code: rule.code ?? null };
+		};
+		const success = async (
+			id: string,
+			response: Response,
+			protectedHash: string,
+		) => {
+			await outcome(response, "success");
+			mergeCookies(response);
+			const members =
+				await sql`SELECT role FROM member WHERE organization_id = 'A' AND user_id = 'recipient'`;
+			check(
+				members.length === 1 &&
+					members[0]!.role === (id === "I1" ? "member" : "admin"),
+				"single winner exact role",
+			);
+			const invites = await sql`SELECT * FROM invitation ORDER BY id`;
+			check(
+				invites.every(
+					(i) => i.status === (i.id === id ? "accepted" : "pending"),
+				),
+				"winner only accepted",
+			);
+			check(
+				invites.every(
+					(row) =>
+						digest({ ...row, status: "pending" }) ===
+						seededInvitations.get(String(row.id)),
+				),
+				"invitation fields unchanged except winning status",
+			);
+			const sessions =
+				await sql`SELECT active_organization_id FROM session WHERE user_id = 'recipient'`;
+			check(
+				sessions.length === 1 && sessions[0]!.active_organization_id === "A",
+				"DB session A",
+			);
+			const read = await request("/get-session", {}, true, "GET");
+			check(read.status === 200, "session read status");
+			const body = await read.json();
+			check(
+				body.user.id === "recipient" &&
+					body.session.activeOrganizationId === "A",
+				"cookie continuity A",
+			);
+			check(
+				digest(await unchanged()) === protectedHash,
+				"unrelated state preserved",
+			);
+			return {
+				membership_count: members.length,
+				role: members[0]!.role,
+				winner: id,
+				response_cookie_count: response.headers.getSetCookie().length,
+				cookie_continuity: true,
+				active_organization: "A",
+				protected_hash: protectedHash,
+				after_hash: digest(await projection()),
+			};
+		};
+		currentCase = "single";
+		let protectedHash = await seed();
+		const single = await accept("I1");
+		observations.push({
+			case: currentCase,
+			...(await success("I1", single, protectedHash)),
+		});
+		// The external holder makes actual handler lock waits deterministic. Independent
+		// plain reads are the negative control: same rows/connections complete without
+		// waiting, whereas two handler backends must be observed blocked on DB locks.
+		for (const distinct of [false, true]) {
+			currentCase = distinct ? "distinct-invitations" : "same-invitation";
+			protectedHash = await seed();
+			let release = () => {};
+			let held = () => {};
+			const acquired = new Promise<void>((resolve) => {
+				held = resolve;
+			});
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const holder = control.begin(async (tx) => {
+				await tx`SELECT id FROM organization WHERE id = 'A' FOR UPDATE`;
+				held();
+				await gate;
+			});
+			let pending: Promise<Response>[] = [];
+			try {
+				await Promise.race([
+					acquired,
+					holder.then(() => {
+						throw new Error("Barrier ended before acquisition");
+					}),
+					new Promise<never>((_, reject) => {
+						const deadline = setTimeout(
+							() => reject(new Error("Barrier acquisition deadline")),
+							7000,
+						);
+						deadline.unref();
+					}),
+				]);
+				const readers = await Promise.all([
+					plain`SELECT id FROM organization WHERE id = 'A'`,
+					plain`SELECT id FROM organization WHERE id = 'A'`,
+				]);
+				check(
+					readers.every((rows) => rows.length === 1),
+					"negative control nonlocking reads complete",
+				);
+				pending = [accept("I1"), accept(distinct ? "I2" : "I1")];
+				const deadline = Date.now() + 7000;
+				let blocked: { pid: number; query: string }[] = [];
+				while (Date.now() < deadline) {
+					blocked = await sql<
+						{ pid: number; query: string }[]
+					>`SELECT pid, query FROM pg_stat_activity WHERE application_name = 'handler' AND wait_event_type = 'Lock' AND cardinality(pg_blocking_pids(pid)) > 0`;
+					if (blocked.length === 2) break;
+					await new Promise((resolve) => setTimeout(resolve, 20));
+				}
+				check(
+					blocked.length === 2 && new Set(blocked.map((b) => b.pid)).size === 2,
+					"two real blocked handler backends",
+				);
+				if (distinct)
+					check(
+						blocked.every(
+							(row) =>
+								row.query.includes('"organization"') &&
+								/for update/i.test(row.query),
+						),
+						"both distinct requests wait at organization boundary",
+					);
+				observations.push({
+					case: currentCase,
+					overlap: true,
+					blocked_connections: 2,
+					nonlocking_negative_control_completed: true,
+				});
+			} finally {
+				release();
+				await holder;
+			}
+			const responses = await Promise.all(pending);
+			const winnerIndex = responses.findIndex((r) => r.status === 200);
+			check(
+				winnerIndex >= 0 &&
+					responses.filter((r) => r.status === 200).length === 1,
+				"one concurrent success",
+			);
+			const winner = distinct && winnerIndex === 1 ? "I2" : "I1";
+			const loser = await outcome(
+				responses[1 - winnerIndex]!,
+				distinct ? "existing_member" : "not_pending",
+			);
+			observations.push({
+				case: currentCase,
+				statuses: responses.map((r) => r.status),
+				loser,
+				...(await success(winner, responses[winnerIndex]!, protectedHash)),
+				transactions_completed: true,
+			});
+			const before = digest(await projection());
+			await outcome(await accept(winner), "not_pending");
+			check(digest(await projection()) === before, "replay no writes");
+		}
+		currentCase = "transaction-failure";
+		protectedHash = await seed();
+		await sql`CREATE SEQUENCE fixture_fault_attempts`;
+		await sql.unsafe(
+			`CREATE FUNCTION fixture_reject_accept() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'accepted' AND EXISTS (SELECT 1 FROM member WHERE organization_id = NEW.organization_id AND user_id = 'recipient') THEN PERFORM nextval('fixture_fault_attempts'); RAISE EXCEPTION USING ERRCODE = 'PZ001', MESSAGE = 'synthetic fault'; END IF; RETURN NEW; END $$`,
+		);
+		await sql`CREATE TRIGGER fixture_reject_accept BEFORE UPDATE ON invitation FOR EACH ROW EXECUTE FUNCTION fixture_reject_accept()`;
+		// Observe the declared trigger SQLSTATE independently, in a rolled-back probe.
+		let faultClass: string | undefined;
+		try {
+			await sql.begin(async (tx) => {
+				await tx`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES ('probe', 'A', 'recipient', 'member', now())`;
+				await tx`UPDATE invitation SET status = 'accepted' WHERE id = 'I1'`;
+			});
+		} catch (error) {
+			if (error instanceof postgres.PostgresError)
+				faultClass = error.code.slice(0, 2);
+		}
+		check(faultClass === "PZ", "independent SQLSTATE class");
+		const before = digest(await projection());
+		const attempts = await sql`SELECT last_value FROM fixture_fault_attempts`;
+		const failure = await outcome(await accept("I1"), "write_failure");
+		const after = digest(await projection());
+		check(before === after, "independent rollback projection");
+		const triggered = await sql`SELECT last_value FROM fixture_fault_attempts`;
+		check(
+			Number(triggered[0]!.last_value) === Number(attempts[0]!.last_value) + 1,
+			"exactly one fault after membership attempt and no retry",
+		);
+		observations.push({
+			case: currentCase,
+			...failure,
+			before_hash: before,
+			after_hash: after,
+			sqlstate_class: faultClass,
+			rollback_observed_from_separate_connection: true,
+			membership_attempt_observed: true,
+		});
+		await sql`DROP TRIGGER fixture_reject_accept ON invitation`;
+		currentCase = "separate-recovery";
+		observations.push({
+			case: currentCase,
+			...(await success("I1", await accept("I1"), protectedHash)),
+		});
+		for (const refusal of [
+			"unauthenticated",
+			"wrong_email",
+			"expired",
+			"custom_role",
+			"invalid_organization",
+			"malformed",
+		]) {
+			currentCase = refusal;
+			await seed();
+			if (refusal === "wrong_email")
+				await sql`UPDATE invitation SET email = 'other@example.invalid' WHERE id = 'I1'`;
+			if (refusal === "expired")
+				await sql`UPDATE invitation SET expires_at = now() - interval '1 minute' WHERE id = 'I1'`;
+			if (refusal === "custom_role")
+				await sql`UPDATE invitation SET role = 'custom' WHERE id = 'I1'`;
+			const before = digest(await projection());
+			const response =
+				refusal === "invalid_organization"
+					? await request("/organization/set-active", { organizationId: "A" })
+					: await request(
+							"/organization/accept-invitation",
+							{ invitationId: refusal === "malformed" ? null : "I1" },
+							refusal !== "unauthenticated",
+						);
+			const result = await outcome(response, "refusal");
+			const after = digest(await projection());
+			check(before === after, "refusal protected state");
+			observations.push({
+				case: currentCase,
+				...result,
+				before_hash: before,
+				after_hash: after,
+			});
+		}
+		passed = true;
+	} catch {
+		throw new Error(
+			`Synthetic PG fixture failed at ${currentCase}; only sanitized receipt is shareable`,
+		);
+	} finally {
+		await Promise.all([
+			sql.end({ timeout: 3 }),
+			writer.end({ timeout: 3 }),
+			control.end({ timeout: 3 }),
+			plain.end({ timeout: 3 }),
+		]);
+		console.error = originalError;
+		console.warn = originalWarn;
+		writeFileSync(
+			output,
+			JSON.stringify(
+				{
+					passed,
+					...(failureCheckSha256 === undefined
+						? {}
+						: { failure_check_sha256: failureCheckSha256 }),
+					case: currentCase,
+					oracle_sha256: ORACLE,
+					observations,
+					startup: false,
+					admission: false,
+					runtime: false,
+				},
+				null,
+				2,
+			),
+			{ mode: 0o600 },
+		);
+	}
+});

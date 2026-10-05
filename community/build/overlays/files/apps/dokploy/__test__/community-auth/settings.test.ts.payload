@@ -1,0 +1,31 @@
+import { expect, it, vi } from "vitest";
+const external = vi.hoisted(() => ({
+	read: vi.fn(async () => undefined),
+	write: vi.fn(() => {
+		throw new Error("Unexpected write");
+	}),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	db: {
+		query: { webServerSettings: { findFirst: external.read } },
+		insert: external.write,
+		update: external.write,
+	},
+}));
+import {
+	readWebServerSettings,
+	updateWebServerSettings,
+} from "@dokploy/server/services/web-server-settings";
+it("read-only lookup never creates missing settings", async () => {
+	expect(await readWebServerSettings()).toBeUndefined();
+	expect(external.write).not.toHaveBeenCalled();
+});
+it.each([true, false, undefined])(
+	"generic updates cannot write an enforceSSO property %s",
+	async (enforceSSO) => {
+		external.read.mockClear();
+		await expect(updateWebServerSettings({ enforceSSO })).rejects.toBeTruthy();
+		expect(external.read).not.toHaveBeenCalled();
+		expect(external.write).not.toHaveBeenCalled();
+	},
+);

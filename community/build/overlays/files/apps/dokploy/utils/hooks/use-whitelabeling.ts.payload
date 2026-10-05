@@ -1,0 +1,16 @@
+// Community attribution defaults derived from nonrestricted UI fallbacks.
+export const communityBranding = {
+	appName: "Dokploy",
+	appDescription: "Deploy your applications",
+	logoUrl: null,
+	loginLogoUrl: null,
+	errorPageTitle: null,
+	errorPageDescription: null,
+	footerText: null,
+	docsUrl: "https://docs.dokploy.com",
+	supportUrl: "https://github.com/Dokploy/dokploy/issues",
+};
+export function useWhitelabeling() {
+	return { config: communityBranding, isLoading: false };
+}
+export const useWhitelabelingPublic = useWhitelabeling;

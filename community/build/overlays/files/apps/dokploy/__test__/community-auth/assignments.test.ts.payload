@@ -1,0 +1,151 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const external = vi.hoisted(() => ({
+	db: {} as unknown,
+	unused: vi.fn(() => {
+		throw new Error("Unexpected external effect");
+	}),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return external.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({
+	validateRequest: external.unused,
+}));
+vi.mock("bcrypt", () => ({
+	hashSync: external.unused,
+	compareSync: external.unused,
+}));
+vi.mock("@dokploy/server", () => ({
+	IS_CLOUD: false,
+	createApiKey: external.unused,
+	createOrganizationUserWithCredentials: external.unused,
+	findNotificationById: external.unused,
+	findOrganizationById: external.unused,
+	findPasskeysByUserId: external.unused,
+	findUserById: external.unused,
+	getDokployUrl: external.unused,
+	getUserByToken: external.unused,
+	getWebServerSettings: external.unused,
+	removeUserById: external.unused,
+	renderInvitationEmail: external.unused,
+	sendEmailNotification: external.unused,
+	sendResendNotification: external.unused,
+	updateUser: external.unused,
+}));
+import { userRouter } from "@/server/api/routers/user";
+let data = syntheticDatabase();
+const input = {
+	id: "target",
+	accessedProjects: ["allowed"],
+	accessedEnvironments: ["allowed"],
+	accessedServices: ["allowed"],
+	accessedServers: ["allowed"],
+	accessedGitProviders: ["allowed"],
+	canCreateProjects: false,
+	canCreateServices: false,
+	canDeleteProjects: false,
+	canDeleteServices: false,
+	canAccessToDocker: false,
+	canAccessToTraefikFiles: false,
+	canAccessToAPI: false,
+	canAccessToSSHKeys: false,
+	canAccessToGitProviders: false,
+	canDeleteEnvironments: false,
+	canCreateEnvironments: false,
+};
+function caller(role = "owner") {
+	data.rows.member = [
+		{ id: "actor", userId: "actor", organizationId: "org-1", role },
+		...(data.rows.member ?? []).filter((r) => r.id !== "actor"),
+	];
+	return userRouter.createCaller({
+		db: data.db,
+		user: { id: "actor", role, email: "actor@example.invalid" },
+		session: { userId: "actor", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof userRouter.createCaller>[0]);
+}
+beforeEach(() => {
+	data = syntheticDatabase();
+	external.db = data.db;
+	data.rows.member = [
+		{
+			id: "target-membership",
+			userId: "target",
+			organizationId: "org-1",
+			role: "member",
+		},
+	];
+	// Denormalized joined rows retain the actual SQL organization predicate.
+	for (const table of [
+		"project",
+		"environment",
+		"server",
+		"git_provider",
+		"application",
+		"compose",
+		"postgres",
+		"mysql",
+		"mariadb",
+		"mongo",
+		"redis",
+		"libsql",
+	])
+		data.rows[table] = [
+			{ id: "allowed", organizationId: "org-1" },
+			{ id: "foreign", organizationId: "org-2" },
+		];
+});
+it("writes complete same-org assignments in one update", async () => {
+	await caller().assignPermissions(input);
+	expect(data.writes).toEqual([{ table: "member", operation: "update" }]);
+	expect(
+		data.rows.member?.find((r) => r.userId === "target")?.accessedServers,
+	).toEqual(["allowed"]);
+});
+it.each([
+	"accessedProjects",
+	"accessedEnvironments",
+	"accessedServices",
+	"accessedServers",
+	"accessedGitProviders",
+] as const)(
+	"rejects a mixed same/cross-org %s request atomically",
+	async (field) => {
+		await expect(
+			caller().assignPermissions({ ...input, [field]: ["allowed", "foreign"] }),
+		).rejects.toBeTruthy();
+		expect(data.writes).toEqual([]);
+	},
+);
+it.each([
+	"admin",
+	"member",
+	"observer",
+	"custom",
+	"constructor",
+	"admin,member",
+])("refuses assignment actor %s", async (role) => {
+	await expect(caller(role).assignPermissions(input)).rejects.toBeTruthy();
+	expect(data.writes).toEqual([]);
+});
+it("requires target membership", async () => {
+	data.rows.member = [];
+	await expect(caller().assignPermissions(input)).rejects.toBeTruthy();
+	expect(data.writes).toEqual([]);
+});
+it("supports explicitly empty assignments", async () => {
+	await caller().assignPermissions({
+		...input,
+		accessedProjects: [],
+		accessedEnvironments: [],
+		accessedServices: [],
+		accessedServers: [],
+		accessedGitProviders: [],
+	});
+	expect(
+		data.rows.member?.find((r) => r.userId === "target")?.accessedServers,
+	).toEqual([]);
+});

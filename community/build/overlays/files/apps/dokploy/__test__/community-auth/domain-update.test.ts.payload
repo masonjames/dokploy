@@ -1,0 +1,69 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const x = vi.hoisted(() => ({ db: {} as unknown, effect: vi.fn() }));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return x.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({ validateRequest: x.effect }));
+vi.mock("@dokploy/server/utils/caddy/sync", () => ({
+	caddyUnsupported: () => false,
+	assertCaddySupports: x.effect,
+	syncCaddyInBackground: x.effect,
+}));
+vi.mock("@dokploy/server", async () => ({
+	...(await import("@dokploy/server/services/domain")),
+	syncCaddy: x.effect,
+}));
+import { domainRouter } from "@/server/api/routers/domain";
+let data = syntheticDatabase();
+beforeEach(() => {
+	data = syntheticDatabase();
+	x.db = data.db;
+	x.effect.mockClear();
+	data.rows.domain = [
+		{ domainId: "domain", host: "before.invalid", forwardAuthEnabled: false },
+	];
+});
+function caller() {
+	return domainRouter.createCaller({
+		db: data.db,
+		user: { id: "actor", role: "owner" },
+		session: { userId: "actor", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof domainRouter.createCaller>[0]);
+}
+it.each(["omitted", "undefined", "false"])(
+	"ordinary domain edit with %s protected field preserves it",
+	async (mode) => {
+		await caller().update({
+			domainId: "domain",
+			host: "after.invalid",
+			...(mode === "omitted"
+				? {}
+				: { forwardAuthEnabled: mode === "false" ? false : undefined }),
+		});
+		expect(data.rows.domain![0]).toMatchObject({
+			host: "after.invalid",
+			forwardAuthEnabled: false,
+		});
+		expect(data.writes).toEqual([{ table: "domain", operation: "update" }]);
+	},
+);
+it.each(["saved", "requested"])(
+	"%s enabled forward auth refuses before writes or effects",
+	async (mode) => {
+		if (mode === "saved") data.rows.domain![0]!.forwardAuthEnabled = true;
+		const before = JSON.stringify(data.rows);
+		await expect(
+			caller().update({
+				domainId: "domain",
+				host: "after.invalid",
+				forwardAuthEnabled: mode === "requested",
+			}),
+		).rejects.toBeTruthy();
+		expect(JSON.stringify(data.rows)).toBe(before);
+		expect(data.writes).toEqual([]);
+		expect(x.effect).not.toHaveBeenCalled();
+	},
+);

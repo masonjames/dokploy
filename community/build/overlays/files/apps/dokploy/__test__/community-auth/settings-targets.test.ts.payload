@@ -1,0 +1,297 @@
+// Actual router and shared target/provider guards; synthetic DB and fake remote/scheduler sinks.
+import { beforeEach, expect, it, vi } from "vitest";
+import { syntheticDatabase } from "./synthetic-db";
+const x = vi.hoisted(() => ({
+	db: {} as unknown,
+	effect: vi.fn(async (..._args: unknown[]) => [] as unknown),
+	schedule: vi.fn(),
+	probe: vi.fn(),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	get db() {
+		return x.db;
+	},
+}));
+vi.mock("@dokploy/server/lib/auth", () => ({ validateRequest: x.effect }));
+vi.mock("@/server/api/root", () => ({ appRouter: {} }));
+vi.mock("@/server/queues/queueSetup", () => ({
+	cleanAllDeploymentQueue: x.effect,
+}));
+vi.mock("@/server/utils/backup", () => ({
+	removeJob: x.schedule,
+	schedule: x.schedule,
+}));
+vi.mock("node-schedule", () => ({
+	scheduledJobs: {},
+	scheduleJob: x.schedule,
+}));
+vi.mock("@dokploy/server", async () => ({
+	defaultCommand: x.effect,
+	IS_CLOUD: false,
+	CLEANUP_CRON_JOB: "0 0 * * *",
+	paths: (await import("@dokploy/server/constants")).paths,
+	isCaddyPath: () => false,
+	assertTraefikProvider: (
+		await import("@dokploy/server/services/web-server-settings")
+	).assertTraefikProvider,
+	getWebServerProvider: async (id?: string) => {
+		x.probe();
+		return (
+			await import("@dokploy/server/services/web-server-settings")
+		).getWebServerProvider(id);
+	},
+	caddyFilePath: x.effect,
+	caddySwitch: x.effect,
+	caddySyncError: x.effect,
+	checkGPUStatus: x.effect,
+	checkPortInUse: x.effect,
+	checkPostgresHealth: x.effect,
+	checkTraefikHealth: x.effect,
+	checkWebServerSwitch: x.effect,
+	cleanupAll: x.effect,
+	cleanupAllBackground: x.effect,
+	cleanupBuilders: x.effect,
+	cleanupContainers: x.effect,
+	cleanupImages: x.effect,
+	cleanupSystem: x.effect,
+	cleanupVolumes: x.effect,
+	DEFAULT_UPDATE_DATA: x.effect,
+	dispatchDokployUpdate: x.effect,
+	findServerById: x.effect,
+	getDockerDiskUsage: x.effect,
+	getDokployImageTag: x.effect,
+	getLogCleanupStatus: x.effect,
+	getUpdateData: x.effect,
+	getWebServerSettings: x.effect,
+	listCaddyFiles: x.effect,
+	parseRawConfig: x.effect,
+	prepareEnvironmentVariables: x.effect,
+	processLogs: x.effect,
+	readConfig: x.effect,
+	readConfigInPath: x.effect,
+	readDirectory: x.effect,
+	readEnvironmentVariables: x.effect,
+	readMainConfig: x.effect,
+	readPorts: x.effect,
+	readRequestLog: x.effect,
+	recreateDirectory: x.effect,
+	reloadDockerResource: x.effect,
+	saveCaddyFile: x.effect,
+	sendDockerCleanupNotifications: x.effect,
+	setCaddyRequestLogs: x.effect,
+	setupGPUSupport: x.effect,
+	startLogCleanup: x.effect,
+	stopLogCleanup: x.effect,
+	switchWebServer: x.effect,
+	syncCaddy: x.effect,
+	updateLetsEncryptEmail: x.effect,
+	updateServerById: x.effect,
+	updateServerTraefik: x.effect,
+	updateWebServerSettings: x.effect,
+	writeConfig: x.effect,
+	writeMainConfig: x.effect,
+	writeTraefikConfigInPath: x.effect,
+	writeTraefikSetup: x.effect,
+}));
+import { serverRouter } from "@/server/api/routers/server";
+import { settingsRouter } from "@/server/api/routers/settings";
+let data = syntheticDatabase();
+function caller(role = "owner", assigned = true) {
+	data.rows.member = [
+		{
+			id: "actor",
+			userId: "actor",
+			organizationId: "org-1",
+			role,
+			canAccessToTraefikFiles: true,
+			accessedServers: assigned ? ["own"] : [],
+		},
+	];
+	return settingsRouter.createCaller({
+		db: data.db,
+		user: { id: "actor", role },
+		session: { userId: "actor", activeOrganizationId: "org-1" },
+	} as unknown as Parameters<typeof settingsRouter.createCaller>[0]);
+}
+beforeEach(() => {
+	data = syntheticDatabase();
+	x.db = data.db;
+	x.effect.mockClear();
+	x.schedule.mockClear();
+	x.probe.mockClear();
+	data.rows.server = [
+		{
+			serverId: "own",
+			organizationId: "org-1",
+			serverStatus: "active",
+			webServerProvider: "traefik",
+			enableDockerCleanup: false,
+		},
+		{
+			serverId: "foreign",
+			organizationId: "org-2",
+			serverStatus: "active",
+			webServerProvider: "traefik",
+		},
+	];
+	data.rows.webServerSettings = [{ id: "local", webServerProvider: "traefik" }];
+});
+type Caller = ReturnType<typeof caller>;
+const cases: [string, (c: Caller, serverId: string) => Promise<unknown>][] = [
+	["reloadTraefik", (c, serverId) => c.reloadTraefik({ serverId })],
+	[
+		"getWebServerProvider",
+		(c, serverId) => c.getWebServerProvider({ serverId }),
+	],
+	[
+		"checkWebServerSwitch",
+		(c, serverId) => c.checkWebServerSwitch({ serverId, provider: "traefik" }),
+	],
+	[
+		"switchWebServer",
+		(c, serverId) =>
+			c.switchWebServer({ serverId, provider: "traefik", acknowledged: true }),
+	],
+	[
+		"toggleDashboard",
+		(c, serverId) => c.toggleDashboard({ serverId, enableDashboard: false }),
+	],
+	["cleanUnusedImages", (c, serverId) => c.cleanUnusedImages({ serverId })],
+	["cleanUnusedVolumes", (c, serverId) => c.cleanUnusedVolumes({ serverId })],
+	[
+		"cleanStoppedContainers",
+		(c, serverId) => c.cleanStoppedContainers({ serverId }),
+	],
+	["cleanDockerBuilder", (c, serverId) => c.cleanDockerBuilder({ serverId })],
+	["cleanDockerPrune", (c, serverId) => c.cleanDockerPrune({ serverId })],
+	["cleanAll", (c, serverId) => c.cleanAll({ serverId })],
+	[
+		"updateDockerCleanup",
+		(c, serverId) =>
+			c.updateDockerCleanup({ serverId, enableDockerCleanup: true }),
+	],
+	["readDirectories", (c, serverId) => c.readDirectories({ serverId })],
+	[
+		"updateTraefikFile",
+		(c, serverId) =>
+			c.updateTraefikFile({
+				serverId,
+				path: "file.yml",
+				traefikConfig: "synthetic",
+			}),
+	],
+	[
+		"readTraefikFile",
+		(c, serverId) => c.readTraefikFile({ serverId, path: "file.yml" }),
+	],
+	["readTraefikEnv", (c, serverId) => c.readTraefikEnv({ serverId })],
+	[
+		"writeTraefikEnv",
+		(c, serverId) => c.writeTraefikEnv({ serverId, env: "SYNTHETIC=1" }),
+	],
+	[
+		"haveTraefikDashboardPortEnabled",
+		(c, serverId) => c.haveTraefikDashboardPortEnabled({ serverId }),
+	],
+	["setupGPU", (c, serverId) => c.setupGPU({ serverId })],
+	["checkGPUStatus", (c, serverId) => c.checkGPUStatus({ serverId })],
+	[
+		"updateTraefikPorts",
+		(c, serverId) => c.updateTraefikPorts({ serverId, additionalPorts: [] }),
+	],
+	["getTraefikPorts", (c, serverId) => c.getTraefikPorts({ serverId })],
+];
+for (const [name, invoke] of cases) {
+	it.each(["foreign", "deleted", ""])(
+		`${name} refuses target %s before effects`,
+		async (id) => {
+			const c = caller();
+			const before = JSON.stringify(data.rows);
+			await expect(invoke(c, id)).rejects.toBeTruthy();
+			expect(JSON.stringify(data.rows)).toBe(before);
+			expect(data.writes).toEqual([]);
+			expect(x.effect).not.toHaveBeenCalled();
+			expect(x.schedule).not.toHaveBeenCalled();
+			expect(x.probe).not.toHaveBeenCalled();
+		},
+	);
+}
+it.each(["owner", "admin"])(
+	"%s own server cleanup schedules only after scoped successful update",
+	async (role) => {
+		await caller(role, false).updateDockerCleanup({
+			serverId: "own",
+			enableDockerCleanup: true,
+		});
+		expect(data.rows.server![0]!.enableDockerCleanup).toBe(true);
+		expect(x.schedule).toHaveBeenCalledOnce();
+	},
+);
+it.each(["inactive", "no-row", "write-failure"])(
+	"cleanup %s cannot schedule",
+	async (mode) => {
+		const c = caller();
+		if (mode === "inactive") data.rows.server![0]!.serverStatus = "inactive";
+		else
+			data.controls.beforeUpdate = () => {
+				if (mode === "write-failure")
+					throw new Error("synthetic write failure");
+				data.rows.server![0]!.organizationId = "org-2";
+			};
+		await expect(
+			c.updateDockerCleanup({ serverId: "own", enableDockerCleanup: true }),
+		).rejects.toBeTruthy();
+		expect(x.schedule).not.toHaveBeenCalled();
+		expect(x.effect).not.toHaveBeenCalled();
+		expect(data.rows.server![0]!.enableDockerCleanup).toBe(false);
+		if (mode === "inactive") expect(data.writes).toEqual([]);
+	},
+);
+it.each(["readDirectories", "readTraefikFile"] as const)(
+	"%s uses member assignment intersection",
+	async (name) => {
+		const invoke = cases.find(([n]) => n === name)![1];
+		await expect(invoke(caller("member", false), "own")).rejects.toBeTruthy();
+		expect(x.effect).not.toHaveBeenCalled();
+		await invoke(caller("member", true), "own");
+		expect(x.effect).toHaveBeenCalled();
+	},
+);
+it.each([
+	"toggleDashboard",
+	"readTraefikEnv",
+	"writeTraefikEnv",
+	"haveTraefikDashboardPortEnabled",
+	"updateTraefikPorts",
+	"getTraefikPorts",
+])("%s Caddy refusal precedes env/ports/container probes", async (name) => {
+	data.rows.server![0]!.webServerProvider = "caddy";
+	await expect(
+		cases.find(([n]) => n === name)![1](caller(), "own"),
+	).rejects.toBeTruthy();
+	expect(x.effect).not.toHaveBeenCalled();
+	expect(x.schedule).not.toHaveBeenCalled();
+	expect(data.writes).toEqual([]);
+});
+it("same-org and omitted-ID cleanup retain dispatch; omission is unqualified shared-manager behavior", async () => {
+	const c = caller();
+	await c.cleanUnusedImages({ serverId: "own" });
+	await c.cleanUnusedImages();
+	expect(x.effect).toHaveBeenNthCalledWith(1, "own");
+	expect(x.effect).toHaveBeenNthCalledWith(2, undefined);
+});
+
+it.each(["foreign", "deleted", ""])(
+	"server.getDefaultCommand refuses %s metadata access",
+	async (serverId) => {
+		caller();
+		const c = serverRouter.createCaller({
+			db: data.db,
+			user: { id: "actor", role: "owner" },
+			session: { userId: "actor", activeOrganizationId: "org-1" },
+		} as unknown as Parameters<typeof serverRouter.createCaller>[0]);
+		await expect(c.getDefaultCommand({ serverId })).rejects.toBeTruthy();
+		expect(x.effect).not.toHaveBeenCalled();
+		expect(data.writes).toEqual([]);
+	},
+);

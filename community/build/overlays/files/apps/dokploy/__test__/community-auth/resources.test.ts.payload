@@ -1,0 +1,181 @@
+import {
+	canAccessDockerOverWss,
+	canAccessTerminalOverWss,
+} from "@/server/wss/authorize";
+import { beforeEach, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
+const external = vi.hoisted(() => ({
+	member: vi.fn(),
+	providers: vi.fn(),
+	provider: vi.fn(),
+	servers: vi.fn(),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	db: {
+		query: {
+			member: { findFirst: external.member },
+			gitProvider: {
+				findMany: external.providers,
+				findFirst: external.provider,
+			},
+			server: { findMany: external.servers },
+		},
+	},
+}));
+import {
+	getAccessibleGitProviderIds,
+	canEditDeployGitSource,
+	canViewGitProviderSecrets,
+} from "@dokploy/server/services/git-provider";
+import { getAccessibleServerIds } from "@dokploy/server/services/server";
+const current = { userId: "user-1", activeOrganizationId: "org-1" };
+const providers = [
+	{
+		gitProviderId: "own",
+		organizationId: "org-1",
+		userId: "user-1",
+		sharedWithOrganization: false,
+	},
+	{
+		gitProviderId: "shared",
+		organizationId: "org-1",
+		userId: "other",
+		sharedWithOrganization: true,
+	},
+	{
+		gitProviderId: "assigned",
+		organizationId: "org-1",
+		userId: "other",
+		sharedWithOrganization: false,
+	},
+	{
+		gitProviderId: "private",
+		organizationId: "org-1",
+		userId: "other",
+		sharedWithOrganization: false,
+	},
+	{
+		gitProviderId: "cross-org",
+		organizationId: "org-2",
+		userId: "user-1",
+		sharedWithOrganization: true,
+	},
+];
+const params = (where: SQL) => new PgDialect().sqlToQuery(where).params;
+beforeEach(() => {
+	vi.resetAllMocks();
+	external.providers.mockImplementation(async ({ where }: { where: SQL }) =>
+		providers.filter((p) => params(where).includes(p.organizationId)),
+	);
+	external.provider.mockImplementation(async ({ where }: { where: SQL }) =>
+		providers.find(
+			(p) =>
+				params(where).includes(p.organizationId) &&
+				params(where).includes(p.gitProviderId),
+		),
+	);
+	external.servers.mockImplementation(async ({ where }: { where: SQL }) =>
+		[
+			{ serverId: "assigned", organizationId: "org-1" },
+			{ serverId: "private", organizationId: "org-1" },
+			{ serverId: "cross-org", organizationId: "org-2" },
+		].filter((s) => params(where).includes(s.organizationId)),
+	);
+});
+const roles: unknown[] = [
+	undefined,
+	"owner",
+	"admin",
+	"member",
+	"observer",
+	"custom",
+	"constructor",
+	"__proto__",
+	"owner,admin",
+	["owner"],
+];
+it.each(roles)("intersects use/assignment authority for %j", async (role) => {
+	external.member.mockResolvedValue(
+		role === undefined
+			? undefined
+			: {
+					role,
+					accessedGitProviders: ["assigned", "cross-org"],
+					accessedServers: ["assigned", "cross-org"],
+				},
+	);
+	const privileged = role === "owner" || role === "admin";
+	expect([...(await getAccessibleServerIds(current))]).toEqual(
+		privileged
+			? ["assigned", "private"]
+			: role === "member"
+				? ["assigned"]
+				: [],
+	);
+	expect([...(await getAccessibleGitProviderIds(current))]).toEqual(
+		privileged
+			? ["own", "shared", "assigned", "private"]
+			: role === "member"
+				? ["own", "shared", "assigned"]
+				: [],
+	);
+	for (const provider of providers) {
+		const sameOrg = provider.organizationId === current.activeOrganizationId;
+		const edit =
+			sameOrg &&
+			(role === "owner" ||
+				((role === "admin" || role === "member") &&
+					(provider.userId === current.userId ||
+						provider.sharedWithOrganization)));
+		expect(
+			await canEditDeployGitSource(provider.gitProviderId, current),
+			provider.gitProviderId,
+		).toBe(edit);
+		expect(
+			await canViewGitProviderSecrets(current, provider),
+			provider.gitProviderId,
+		).toBe(sameOrg && privileged);
+	}
+});
+it("empty assignments give no assigned server/provider use", async () => {
+	external.member.mockResolvedValue({
+		role: "member",
+		accessedGitProviders: [],
+		accessedServers: [],
+	});
+	expect([...(await getAccessibleServerIds(current))]).toEqual([]);
+	expect([...(await getAccessibleGitProviderIds(current))]).toEqual([
+		"own",
+		"shared",
+	]);
+});
+
+it.each([
+	"owner",
+	"admin",
+	"member",
+	"observer",
+	"custom",
+	"constructor",
+	"admin,member",
+])("uses real permission/server checks for WebSocket role %s", async (role) => {
+	external.member.mockResolvedValue({
+		role,
+		accessedServices: ["service-1"],
+		accessedServers: ["assigned"],
+		canAccessToDocker: true,
+	});
+	const user = { id: current.userId };
+	const session = { activeOrganizationId: current.activeOrganizationId };
+	expect(await canAccessTerminalOverWss(user, session)).toBe(
+		role === "owner" || role === "admin",
+	);
+	expect(await canAccessDockerOverWss(user, session, "assigned")).toBe(
+		["owner", "admin", "member"].includes(role),
+	);
+	expect(await canAccessDockerOverWss(user, session, "cross-org")).toBe(false);
+	expect(await canAccessDockerOverWss(user, session, null, "service-1")).toBe(
+		["owner", "admin", "member"].includes(role),
+	);
+});

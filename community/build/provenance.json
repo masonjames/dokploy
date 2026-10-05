@@ -1,0 +1,22 @@
+{
+	"authority": "Accepted revised B1\u2013B6 plan; parent-confirmed GPT-6 Astra medium launcher",
+	"source_base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+	"source_tree": "714618d089473c2e7200f0bd4127b4bdde5d49f7",
+	"build_files": {
+		"qualification.md": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"restricted-inventory.json": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"export-contract.json": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"export_source.py": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"verify_export.py": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"changes.md": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"overlays/manifest.json": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"tests/preservation-before.json": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"tests/test_preservation.py": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"tests/test_export.py": "Independently authored source/validation from accepted policy and nonrestricted inputs; committed overlay revision supplies byte identity",
+		"test-contract.json": "Corrective source contract; independently frozen oracle bound, PostgreSQL execution reserved to parent",
+		"pg18-contract.json": "Corrective source contract; independently frozen oracle bound, PostgreSQL execution reserved to parent",
+		"pg18_fixture.py": "Corrective source contract; independently frozen oracle bound, PostgreSQL execution reserved to parent"
+	},
+	"payloads": "Every exported payload has its exact provenance/before/after identities in overlays/manifest.json",
+	"restricted_inventory": "Historical SHA-256 evidence plus current Git path/blob equality; no restricted implementation body read"
+}

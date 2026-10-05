@@ -1,0 +1,52 @@
+import fs from "node:fs";
+import path from "node:path";
+import { defineConfig } from "vitest/config";
+const resolutions: {
+	source: string;
+	importer?: string;
+	resolved: string | null;
+}[] = [];
+export default defineConfig({
+	plugins: [
+		{
+			name: "community-resolution-receipt",
+			enforce: "pre",
+			transform(_code, id) {
+				resolutions.push({ source: id, resolved: id });
+			},
+			async resolveId(source, importer, options) {
+				const result = await this.resolve(source, importer, {
+					...options,
+					skipSelf: true,
+				});
+				resolutions.push({ source, importer, resolved: result?.id ?? null });
+				return result;
+			},
+			buildEnd() {
+				if (process.env.COMMUNITY_TEST_GRAPH && resolutions.length)
+					fs.writeFileSync(
+						process.env.COMMUNITY_TEST_GRAPH,
+						JSON.stringify(resolutions, null, 2),
+					);
+			},
+		},
+	],
+	server: { host: "127.0.0.1" },
+	resolve: {
+		alias: {
+			"@dokploy/server": path.resolve(
+				__dirname,
+				"../../../../packages/server/src",
+			),
+			"@": path.resolve(__dirname, "../.."),
+		},
+	},
+	test: {
+		include: [
+			"__test__/community-auth/*.test.ts",
+			"__test__/permissions/*.test.ts",
+			"__test__/wss/authorize.test.ts",
+		],
+		pool: "forks",
+	},
+});

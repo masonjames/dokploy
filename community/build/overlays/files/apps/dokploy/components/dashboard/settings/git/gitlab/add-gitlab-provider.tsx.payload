@@ -1,0 +1,10 @@
+import { Button } from "@/components/ui/button";
+export const AddGitlabProvider = () => (
+	<div>
+		<Button disabled>Gitlab</Button>
+		<p className="text-sm text-muted-foreground">
+			Gitlab OAuth setup is unavailable in community. Configured providers
+			remain usable.
+		</p>
+	</div>
+);

@@ -1,0 +1,2458 @@
+{
+  "source_base": "aebf69526ed168e985f50f9a973a85ea1f7519f9",
+  "files": {
+    "apps/dokploy/server/api/routers/application.ts": {
+      "source_sha256": "f2c015d34fec996bffc25d453c607acb4c4eaaf1472e736ed3eb3041c2a8383a",
+      "calls": [
+        {
+          "line": 135,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 224,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 253,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 337,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 411,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 550,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 572,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 606,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 619,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 650,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 675,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 702,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 730,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 757,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 783,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 806,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 837,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 862,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 915,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 931,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 966,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 984,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1012,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1028,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1052,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1068,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1142,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1167,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1215,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1247,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f2c015d34fec996bffc25d453c607acb4c4eaaf1472e736ed3eb3041c2a8383a"
+    },
+    "apps/dokploy/server/api/routers/backup.ts": {
+      "source_sha256": "f7a1e150454b14b4c99131d17145db576720ae7d60558f9c924f967eecffab2d",
+      "calls": [
+        {
+          "line": 156,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 236,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 278,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 306,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 337,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 364,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 391,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 418,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 445,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 465,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f7a1e150454b14b4c99131d17145db576720ae7d60558f9c924f967eecffab2d"
+    },
+    "apps/dokploy/server/api/routers/bitbucket.ts": {
+      "source_sha256": "a5b16222d7d58885f9666beceda743c03d3bd178c920ee644b7c5a192d66536b",
+      "calls": [
+        {
+          "line": 39,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 134,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "4b225249587109f96b83ad7ca5c8fb8ab43874e15224e4070cb7285dbc432e1a"
+    },
+    "apps/dokploy/server/api/routers/certificate.ts": {
+      "source_sha256": "a0ac61b9d2cd40df6bc6468b4e934996fe3121114a28c5ea311a4b55432826b4",
+      "calls": [
+        {
+          "line": 34,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 65,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "a0ac61b9d2cd40df6bc6468b4e934996fe3121114a28c5ea311a4b55432826b4"
+    },
+    "apps/dokploy/server/api/routers/cluster.ts": {
+      "source_sha256": "8e3c5079b4133183b3772e5e7bafe0d6efb235f420779094e44ed8d9d76658b8",
+      "calls": [
+        {
+          "line": 65,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "8e3c5079b4133183b3772e5e7bafe0d6efb235f420779094e44ed8d9d76658b8"
+    },
+    "apps/dokploy/server/api/routers/compose.ts": {
+      "source_sha256": "34f4aefa621e6461da5e192bdec57d2c558b07e5532696e9c3a4b2e45f6b8dd0",
+      "calls": [
+        {
+          "line": 130,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 203,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 229,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 276,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 307,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 395,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 414,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 459,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 475,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 508,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 524,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 544,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 560,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 593,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 707,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 789,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 826,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1062,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 1106,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "34f4aefa621e6461da5e192bdec57d2c558b07e5532696e9c3a4b2e45f6b8dd0"
+    },
+    "apps/dokploy/server/api/routers/deployment.ts": {
+      "source_sha256": "ce5f592c8b74a4da48be75b137d561b7f2e4ae732cf0e3daa50a43ab93736bc3",
+      "calls": [
+        {
+          "line": 255,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 285,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "ce5f592c8b74a4da48be75b137d561b7f2e4ae732cf0e3daa50a43ab93736bc3"
+    },
+    "apps/dokploy/server/api/routers/destination.ts": {
+      "source_sha256": "262905236b84abcdf5274fb4d7260e1750212f78b02f5dd30aa4e59dd273af4b",
+      "calls": [
+        {
+          "line": 33,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 139,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 165,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "262905236b84abcdf5274fb4d7260e1750212f78b02f5dd30aa4e59dd273af4b"
+    },
+    "apps/dokploy/server/api/routers/dns-provider.ts": {
+      "source_sha256": "d85d33fb508898269ed3897f0cf88670250dc1ad901f6aafe440120dd3f462c2",
+      "calls": [
+        {
+          "line": 40,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 61,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 77,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 167,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 195,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 216,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "d85d33fb508898269ed3897f0cf88670250dc1ad901f6aafe440120dd3f462c2"
+    },
+    "apps/dokploy/server/api/routers/docker-disk-usage.ts": {
+      "source_sha256": "c89aa61311ab46c8cda9f20e19abddf964f78215901590848cc5608594e9fe3d",
+      "calls": [
+        {
+          "line": 59,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "c89aa61311ab46c8cda9f20e19abddf964f78215901590848cc5608594e9fe3d"
+    },
+    "apps/dokploy/server/api/routers/docker-image.ts": {
+      "source_sha256": "f1c305f7a5e1d1c38d0f2a71b0f5be5e69cbc51291df094efec9315dee3a2207",
+      "calls": [
+        {
+          "line": 72,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f1c305f7a5e1d1c38d0f2a71b0f5be5e69cbc51291df094efec9315dee3a2207"
+    },
+    "apps/dokploy/server/api/routers/docker-volume.ts": {
+      "source_sha256": "b0839fca83d763f6c6ef1a037c5519eeb5704c40278a5009056319d5864f3a8c",
+      "calls": [
+        {
+          "line": 132,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 162,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 208,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "b0839fca83d763f6c6ef1a037c5519eeb5704c40278a5009056319d5864f3a8c"
+    },
+    "apps/dokploy/server/api/routers/docker.ts": {
+      "source_sha256": "a64c243ee6dd2b53f5e1e52cf9784182b8897d23a117a39a738b81f3dad5b90b",
+      "calls": [
+        {
+          "line": 98,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 124,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 150,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 176,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 202,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 416,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 446,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "a64c243ee6dd2b53f5e1e52cf9784182b8897d23a117a39a738b81f3dad5b90b"
+    },
+    "apps/dokploy/server/api/routers/domain.ts": {
+      "source_sha256": "8a80a449551e7d5baa2b8dbae7ada2480818b7a058a95785a1ca3db3d06fd463",
+      "calls": [
+        {
+          "line": 53,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 127,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 171,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 238,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "8a80a449551e7d5baa2b8dbae7ada2480818b7a058a95785a1ca3db3d06fd463"
+    },
+    "apps/dokploy/server/api/routers/environment.ts": {
+      "source_sha256": "916c5ee2cad6c34c02bfd031ab7cc5c0ede175b9b12a4e59fc537e56244fd0af",
+      "calls": [
+        {
+          "line": 60,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 191,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 261,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 308,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "916c5ee2cad6c34c02bfd031ab7cc5c0ede175b9b12a4e59fc537e56244fd0af"
+    },
+    "apps/dokploy/server/api/routers/git-provider.ts": {
+      "source_sha256": "3c6cfcec886266fc1e5579b82d15fbb23a0fc20cb05428617e250f27e9f82327",
+      "calls": [
+        {
+          "line": 102,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 162,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "00488260dd8e9115afaed4768127689289e9a7de20074d568ac1dc92791b9f49"
+    },
+    "apps/dokploy/server/api/routers/gitea.ts": {
+      "source_sha256": "a28a44e891f53f90512508b55595f2a5e38006d0fdb45ab8c00789b4e03dc450",
+      "calls": [
+        {
+          "line": 41,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 205,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "337d1a3ba7b0961a437db96d5af0c00b3fc251ec14e02a14f9fb322345450bae"
+    },
+    "apps/dokploy/server/api/routers/github.ts": {
+      "source_sha256": "b2eecfdf05eb645bec4e48610eff417712224c3c00e86a923a5d3942af7b413d",
+      "calls": [
+        {
+          "line": 118,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "b5641c019bd8d39f327ec7d6a783f85177dd333812370d3010658c4e697bcc53"
+    },
+    "apps/dokploy/server/api/routers/gitlab.ts": {
+      "source_sha256": "1a431293078ed06287739566b03e5df87794b16bd78b61beb6d9a5c7959ac18d",
+      "calls": [
+        {
+          "line": 41,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 154,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "0a34bb8735a00314e8cdfa64ae5e748516f75cd04528449da672b1333969025f"
+    },
+    "apps/dokploy/server/api/routers/libsql.ts": {
+      "source_sha256": "ec9f00934978f47726421e31fd8f49e857fb48db47135c35d26003ebf5cddd47",
+      "calls": [
+        {
+          "line": 96,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 142,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 167,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 229,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 244,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 299,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 323,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 359,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 390,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 416,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 452,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 468,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "ec9f00934978f47726421e31fd8f49e857fb48db47135c35d26003ebf5cddd47"
+    },
+    "apps/dokploy/server/api/routers/mariadb.ts": {
+      "source_sha256": "24db9cf88adc813783f22fcc446082829e3f80395138faa945508d183179fc4b",
+      "calls": [
+        {
+          "line": 107,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 154,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 179,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 212,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 228,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 267,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 291,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 329,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 360,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 386,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 442,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 479,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 495,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "24db9cf88adc813783f22fcc446082829e3f80395138faa945508d183179fc4b"
+    },
+    "apps/dokploy/server/api/routers/mongo.ts": {
+      "source_sha256": "78f2e5d54de74b22932f618408ef84b66571b3d4db9bbd96f2c4df42832dba40",
+      "calls": [
+        {
+          "line": 106,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 159,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 184,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 217,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 232,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 288,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 320,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 344,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 383,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 408,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 457,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 494,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 511,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "78f2e5d54de74b22932f618408ef84b66571b3d4db9bbd96f2c4df42832dba40"
+    },
+    "apps/dokploy/server/api/routers/mount.ts": {
+      "source_sha256": "77b799481f33cd619710eafc96a4a77991a2f62bb47b04bb3ee6491f8f7d084b",
+      "calls": [
+        {
+          "line": 84,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 110,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 156,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "77b799481f33cd619710eafc96a4a77991a2f62bb47b04bb3ee6491f8f7d084b"
+    },
+    "apps/dokploy/server/api/routers/mysql.ts": {
+      "source_sha256": "845aa60c3e71e6afba25e378ef3839895ff3183aecababb16eff46b89dd133d8",
+      "calls": [
+        {
+          "line": 107,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 159,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 183,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 216,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 231,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 287,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 318,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 341,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 379,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 404,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 460,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 497,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 514,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "845aa60c3e71e6afba25e378ef3839895ff3183aecababb16eff46b89dd133d8"
+    },
+    "apps/dokploy/server/api/routers/network.ts": {
+      "source_sha256": "f9796edc6914872d434adee384e0be1aeec9b44d18666d0fab7d6d2777ecb7b8",
+      "calls": [
+        {
+          "line": 59,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 90,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 124,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 147,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 167,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f9796edc6914872d434adee384e0be1aeec9b44d18666d0fab7d6d2777ecb7b8"
+    },
+    "apps/dokploy/server/api/routers/notification.ts": {
+      "source_sha256": "47f3f4c90a64bb34c63d8036da45465dcd3ef7f06c60224386da5e894aa87c83",
+      "calls": [
+        {
+          "line": 102,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 131,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 167,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 196,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 233,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 262,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 305,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 333,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 371,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 399,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 443,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 558,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 589,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 623,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 654,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 696,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 727,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 761,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 789,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 823,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 854,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 889,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 920,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 956,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 987,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "47f3f4c90a64bb34c63d8036da45465dcd3ef7f06c60224386da5e894aa87c83"
+    },
+    "apps/dokploy/server/api/routers/organization.ts": {
+      "source_sha256": "a1c4d2470297fe279a46ab041737a31f400467fcd44d7f229a5b7ac2f07bfa5e",
+      "calls": [
+        {
+          "line": 74,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 223,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 294,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 410,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 452,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 538,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 586,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "85c962dbb68ae45ca08a0e19b6b4035494b7733fc35be70930c75d6ae03846bb"
+    },
+    "apps/dokploy/server/api/routers/patch.ts": {
+      "source_sha256": "7ef8f64c48d79c44f68d59e54b87bdd1ffcbf79cb91e64fe47329dc5718197bf",
+      "calls": [
+        {
+          "line": 66,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 106,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 125,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 146,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 172,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 270,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 283,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 310,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 324,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "7ef8f64c48d79c44f68d59e54b87bdd1ffcbf79cb91e64fe47329dc5718197bf"
+    },
+    "apps/dokploy/server/api/routers/port.ts": {
+      "source_sha256": "9d0501197974c423b1b05e5b11f0993a78882ec2e29467549ed49afd793b789c",
+      "calls": [
+        {
+          "line": 26,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 71,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 98,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "9d0501197974c423b1b05e5b11f0993a78882ec2e29467549ed49afd793b789c"
+    },
+    "apps/dokploy/server/api/routers/postgres.ts": {
+      "source_sha256": "db881adb6113e09df0645ae8dbe18586bcbc2bc58c0bd36b4ee28b10120babe7",
+      "calls": [
+        {
+          "line": 110,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 163,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 187,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 220,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 235,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 293,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 317,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 356,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 387,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 414,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 463,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 500,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 517,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "db881adb6113e09df0645ae8dbe18586bcbc2bc58c0bd36b4ee28b10120babe7"
+    },
+    "apps/dokploy/server/api/routers/preview-deployment.ts": {
+      "source_sha256": "6c8ab93afded8bb14b10a7f5ad9e1eafacda28da0ef5629dc0bc2e5412e64d94",
+      "calls": [
+        {
+          "line": 53,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 96,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 111,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "6c8ab93afded8bb14b10a7f5ad9e1eafacda28da0ef5629dc0bc2e5412e64d94"
+    },
+    "apps/dokploy/server/api/routers/project.ts": {
+      "source_sha256": "e58e77ad651dea28ff030516d1156618ab5533353feb1716659d4f8492eb2c41",
+      "calls": [
+        {
+          "line": 95,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 781,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 828,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 1259,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "8361ad583579f404ee023633a7cd90afb0f74d81856ba23d2b2ce56e6ebb4ee4"
+    },
+    "apps/dokploy/server/api/routers/redirects.ts": {
+      "source_sha256": "5ce5403f39c2d29d756844ad0d22859c69fc1545cfbbee013a099cf280368bc6",
+      "calls": [
+        {
+          "line": 24,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 51,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 67,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "5ce5403f39c2d29d756844ad0d22859c69fc1545cfbbee013a099cf280368bc6"
+    },
+    "apps/dokploy/server/api/routers/redis.ts": {
+      "source_sha256": "79eb3e69cd019efc2e36a6cd459c5bf44ef1f45594266abc23280189f6143528",
+      "calls": [
+        {
+          "line": 104,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 150,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 182,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 207,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 240,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 255,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 310,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 334,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 370,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 395,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 444,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 481,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 497,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "79eb3e69cd019efc2e36a6cd459c5bf44ef1f45594266abc23280189f6143528"
+    },
+    "apps/dokploy/server/api/routers/registry.ts": {
+      "source_sha256": "bbf888dc25e0c0aad49b8fa4293bc98fd044951a66f40a504eb7f88f69cb2787",
+      "calls": [
+        {
+          "line": 30,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 48,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 78,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "bbf888dc25e0c0aad49b8fa4293bc98fd044951a66f40a504eb7f88f69cb2787"
+    },
+    "apps/dokploy/server/api/routers/rollbacks.ts": {
+      "source_sha256": "5acabebcf33322ede03640d7cbb9917bdbbf4c28c7f9dc22399d8d011ee63974",
+      "calls": [
+        {
+          "line": 25,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 54,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "5acabebcf33322ede03640d7cbb9917bdbbf4c28c7f9dc22399d8d011ee63974"
+    },
+    "apps/dokploy/server/api/routers/schedule.ts": {
+      "source_sha256": "a0d4f98c107dbaad2bb725a0b9a7d70bf5e0d000e7d56da3aef247c41c3dc79f",
+      "calls": [
+        {
+          "line": 79,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 155,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 194,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 335,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "a0d4f98c107dbaad2bb725a0b9a7d70bf5e0d000e7d56da3aef247c41c3dc79f"
+    },
+    "apps/dokploy/server/api/routers/security.ts": {
+      "source_sha256": "1926683a3c93f8e3919a3139f67f3b29ea05d791859aaec865e10f57995d96fc",
+      "calls": [
+        {
+          "line": 24,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 51,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 67,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "1926683a3c93f8e3919a3139f67f3b29ea05d791859aaec865e10f57995d96fc"
+    },
+    "apps/dokploy/server/api/routers/server.ts": {
+      "source_sha256": "6f35e60eaf457ed14126676830ec13786765150038f2d9e9ce2df8152f5caf4d",
+      "calls": [
+        {
+          "line": 81,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 293,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 467,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 498,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 546,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "e2f1bc9064e800b748e4fb3a71b2485ea4da51fd5f59b533e8ac1436ca47081e"
+    },
+    "apps/dokploy/server/api/routers/settings.ts": {
+      "source_sha256": "08deac1afcda7b13222c583427dde2e0403cf04e60a2e75eb86abf80ae49b0c7",
+      "calls": [
+        {
+          "line": 132,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 144,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 161,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 174,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 213,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 262,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 273,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 284,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 295,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 306,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 317,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 329,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 342,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 364,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 397,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 411,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 495,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 517,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 539,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 561,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 585,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 608,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 632,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 656,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 711,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 759,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 875,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 987,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1017,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 1076,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 1172,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 1211,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "18a7c4b046e6d2433e02712576a19e807a60c09e0ef169bd841dec09a15b5e23"
+    },
+    "apps/dokploy/server/api/routers/ssh-key.ts": {
+      "source_sha256": "f9b0d1c574dfc450006ab27755ebc7569be546f970921a19389b4383a2100203",
+      "calls": [
+        {
+          "line": 35,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 60,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 117,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f9b0d1c574dfc450006ab27755ebc7569be546f970921a19389b4383a2100203"
+    },
+    "apps/dokploy/server/api/routers/user.ts": {
+      "source_sha256": "5a9ac853ca4bf6fadc5702ba59aad6263b28db325efaffbe859ae9c813e27e1f",
+      "calls": [
+        {
+          "line": 274,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 367,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 454,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 502,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 615,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        },
+        {
+          "line": 648,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 696,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 849,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "198a45c16fd98578960d4c11b76d6946fa481dfa1e6666e09a77607ded79a4b3"
+    },
+    "apps/dokploy/server/api/routers/vault-provider.ts": {
+      "source_sha256": "f5a34298507ad1f9dc7b73d384eb6c9bd0d23c6ca6f1d1a71d9870c429836315",
+      "calls": [
+        {
+          "line": 34,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 56,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 72,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "f5a34298507ad1f9dc7b73d384eb6c9bd0d23c6ca6f1d1a71d9870c429836315"
+    },
+    "apps/dokploy/server/api/routers/volume-backups.ts": {
+      "source_sha256": "7eabe67d953c5f0ec65d199ad90ced32c9d9b2eb4e0180bdc0606b021f1b7fdf",
+      "calls": [
+        {
+          "line": 125,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 179,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 238,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 266,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 1,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "7eabe67d953c5f0ec65d199ad90ced32c9d9b2eb4e0180bdc0606b021f1b7fdf"
+    },
+    "apps/dokploy/server/api/utils/audit.ts": {
+      "source_sha256": "2c9235f1a6da04e071134cabc13e2e564b125734fbfc0b585e9bfdf5d56f9404",
+      "calls": [
+        {
+          "line": 25,
+          "awaited": false,
+          "resultConsumed": true,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "4c714bb103599e0c6aaf7e12f63bb251e2355d2a99a5c1f2a298835bdd1a3201"
+    },
+    "packages/server/src/lib/auth.ts": {
+      "source_sha256": "7e24d32e4bcc8cda78ded1e9f6a8e2bbc195c00e2d4682b34d471edf4177c371",
+      "calls": [
+        {
+          "line": 388,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        },
+        {
+          "line": 412,
+          "awaited": true,
+          "resultConsumed": false,
+          "catches": 0,
+          "transactions": 0
+        }
+      ],
+      "exported_sha256": "4f2102430221bc818cb7d3a516c0da755b8c0fa15531676f7d6feb2d61c0dcda"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+import { DashboardLayout } from "@/components/layouts/dashboard-layout";
+export default function Page() {
+	return (
+		<DashboardLayout metaName="Community">
+			<p>Cloud billing is unavailable in community.</p>
+		</DashboardLayout>
+	);
+}

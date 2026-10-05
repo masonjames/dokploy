@@ -1,0 +1,17 @@
+import { expect, it } from "vitest";
+import { audit } from "@/server/api/utils/audit";
+import { communityCapabilities } from "@dokploy/server/lib/community-policy";
+it("does not read inputs or fabricate a persistence result", async () => {
+	const context = {
+		get user(): never {
+			throw new Error("read");
+		},
+		get session(): never {
+			throw new Error("read");
+		},
+	};
+	expect(
+		await audit(context, { action: "create", resourceType: "user" }),
+	).toBeUndefined();
+	expect(communityCapabilities.enterpriseAudit).toBe("unavailable");
+});

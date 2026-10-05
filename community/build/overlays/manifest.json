@@ -1,0 +1,1468 @@
+{
+	"counted_test_contract_sha256": "6341a3c41c373710d357f7d4f328dffe98da17919f5a3a5029c733e6953152e0",
+	"operations": [
+		{
+			"after_sha256": "71abffda489da1445051bec7ea524420f77ad6985cb62041fec8ae6226e44277",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/account-boundary.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/account-boundary.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "241fab684ef292c8f7e4b6623556077152dbd14a1465bfe02e10a2e35d749bfc",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/assignments.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/assignments.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "9e3dfea93c9dec101adec26c334428f40da3ec76fdf7a2af2ef26ad9ef2e2a76",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/audit-callers.json",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/audit-callers.json.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "6751452d40b1f2d817999000d338fad4eb0ba917622959afdbd137f9eac185c0",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/audit-disabled.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/audit-disabled.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "94bf7ec87bd2d90b5dd4b7ed2ea6985e490f042ea6d449ea51fc61ef29203f57",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/audit-inventory.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/audit-inventory.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "bf1a08bc0211fc821f2629d84c2f988568a552668f8c9cbac69c6ae304119069",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/audit-operation.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/audit-operation.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "6f86dcf7c1bf4bfbaedbea85fb593162ee5dcc26568b85c5a2d23d3cc473425f",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/auth.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/auth.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "dfd0477949c2f1f767127655614892157bb05af019bb6c01fd0945991d763806",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/domain-update.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/domain-update.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "fadcac3170411393e05c76d11e15c8bdfc5f4b2bf12f916f0c586660711c6419",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/oauth-unavailable.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/oauth-unavailable.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "66504fc7dc09fb036f4c0f85bfea70e6445984f367f211d7410f964a7429113e",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/organization.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/organization.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "810bb33a8ad2cfdd2647b6def62d37a75f95a01f4eb3842987f049f89b6f178b",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/protected-state.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/protected-state.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "aa08dd0345d9d298b9085afbe70220aad174b40c3847e877a7c0d9c162d6f51c",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/provider-leaves.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/provider-leaves.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "6f26856798cfac9fbd5c31639f559c34237ada8a252b58180fe0a412dc05b8c2",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/resources.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/resources.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "05144b2af749e8f3e8300d430685a9d094ec852076223860377715075ed2bab9",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/settings-targets.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/settings-targets.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "33190d39a0d270c78395ca03fc458737099143b03e788f82c764b1c2133d3024",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/settings.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/settings.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "1af164c31905c51423aadef98a574414b6146412e831d674f7825775041387a4",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/synthetic-db.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/synthetic-db.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "d581299034856a9418d05e666b6ad8ea56c304968279b8b5e5eb727d7476515d",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-auth/vitest.config.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-auth/vitest.config.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "d26e48cebbbfd525b40730f2c8dc99cec9cc5787ccbeae82701a8befbd82123c",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-pg18/invitations.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-pg18/invitations.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "fccf501c78b5fb21fb22004a0eb20ba177f283a451c557b3068142ae6ff7cbbc",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/__test__/community-pg18/vitest.config.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/community-pg18/vitest.config.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"before": {
+				"git_blob": "714607538ec500777b282c9264a894a1ab967124",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "ebdb04724ccb40c5ba4981531f6f43d78838fad3c5612f2441f9e42bcd82c243"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/__test__/git-provider/git-provider-access.test.ts",
+			"provenance": "Superseded license/custom-role suite; explicit equivalent community resource/provider/WebSocket coverage in test-contract.json"
+		},
+		{
+			"before": {
+				"git_blob": "6c1e3977118ebf4921712f4c39038b7f66c9b74a",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a2255df5173002994927db4f42228ae65653810405bf7f93ef8be0c34e09a107"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/__test__/git-provider/git-provider-idor.test.ts",
+			"provenance": "Superseded license/custom-role suite; explicit equivalent community resource/provider/WebSocket coverage in test-contract.json"
+		},
+		{
+			"after_sha256": "5359c988bb6210a522025247d3bd4c4d59f13c574fbf57a2fd660f37c81eb9e0",
+			"before": {
+				"git_blob": "242724c6e7fb4ff1a4bddcbfa7e6a6da10aa1b10",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "58f1f8eccc4a9cc3a80493b32337beaec728583306a92df61ea7dd2db8f3ff07"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/permissions/check-permission.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/permissions/check-permission.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/permissions/check-permission.test.ts"
+		},
+		{
+			"after_sha256": "ea9e4e8002f6f478a3207e07740d645ddcd36c1ba1be06826efa99ced9530b51",
+			"before": {
+				"git_blob": "0427d82862dbb304e8d64dc94cbf55618fb66493",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "7cb88f96fd59ec11d433e6b8eeb44475f3b4c057b5882a2507111bfdbc5b6d88"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/permissions/observer-api-key-boundary.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/permissions/observer-api-key-boundary.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/permissions/observer-api-key-boundary.test.ts"
+		},
+		{
+			"after_sha256": "b02156029bbad400cc4d553154963b14f41de2408ea9addff9095a03edfa70a4",
+			"before": {
+				"git_blob": "26c7cb79561b746e17a109114fbcc7de99a273b6",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "d350fd97864100ebed2fe5d5e3f59cedd3aa0dae18feed00d40b0ffd75bb147f"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/permissions/observer-procedure.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/permissions/observer-procedure.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/permissions/observer-procedure.test.ts"
+		},
+		{
+			"after_sha256": "8b320f8fb8ce606f32a14cc4331497598441ca06511acee9c1eb0b3643316a89",
+			"before": {
+				"git_blob": "439c9d3d466dee96b9c070c4d5b0e81fac511004",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "089ccd746bde89458441531d935ae511c056f7306e0689890bd2b16cc5af5af5"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/permissions/resolve-permissions.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/permissions/resolve-permissions.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/permissions/resolve-permissions.test.ts"
+		},
+		{
+			"before": {
+				"git_blob": "01545f97e6348bd70d88f10a57edd72416c61295",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "752d17802833c4e5496d01476d18327da227e3f2b14104afea5420b27d5c76e5"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/__test__/permissions/server-terminal.test.ts",
+			"provenance": "Superseded license/custom-role suite; explicit equivalent community resource/provider/WebSocket coverage in test-contract.json"
+		},
+		{
+			"after_sha256": "0f732b7ab06ad0fa3c37f6c011b8eabf68fd1cebee469aae1b1127220847edbc",
+			"before": {
+				"git_blob": "b3786807db2683138e937ecd1ba0b6ee304464d9",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "2af2d530c04abfd30a395d676da116d9f6b066441a3124c79776125717cd4668"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/permissions/service-access.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/permissions/service-access.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/permissions/service-access.test.ts"
+		},
+		{
+			"after_sha256": "1690bd2ec1b73a7bfa74368b20d52f352d1d2f7e4bc1649b23ecb0162926ac01",
+			"before": {
+				"git_blob": "63fe1b9ac27df1b5432b02ebaa6a1dd72e1140e0",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "1301eca042ef6b1509ba5a0ba0b9547651af1762c94abea3ae2ec6cb7f8b7bf8"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/__test__/wss/authorize.test.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/__test__/wss/authorize.test.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/__test__/wss/authorize.test.ts"
+		},
+		{
+			"before": {
+				"git_blob": "fc0d8dc43c3f2639a31ac933882ffbb2e72d1d67",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "d00df040378a4c359b1e4f7883da4f541fea120428b5a030c80ec923f8ce585d"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/application/domains/handle-forward-auth.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "a56b6c14c7bdce2ef363cfcb56deb45a1e005fb47d7f0c051cd216495868cd58",
+			"before": {
+				"git_blob": "f4206ee95dff10295edc2d5a57ecd81ef6cd10bd",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "c20f90498838d92a28a0023d5c54354971e5e0a2ef4ba23125abdd8953b12529"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/application/domains/show-domains.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/application/domains/show-domains.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/application/domains/show-domains.tsx"
+		},
+		{
+			"before": {
+				"git_blob": "0c5bfdffb95292284061e72798669a270e3dd069",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "ec0aaa0501e78065a63e49b1a56fbff8ddc1aea48f5ea6c418e31bdfae2b41b1"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/billing/trial-banner.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"before": {
+				"git_blob": "c6c72fae628d436d33a7d8ad9e03b83e95677234",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "d3a3a0dd19308fbae065b71788a6db27212ff0f5395083209f819d1f483859bf"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/impersonation/impersonation-bar.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "1bdf7557ec523fd319463d4333f2e9761ea0d5400383a1fe104220e8c826d965",
+			"before": {
+				"git_blob": "da29cae7cf9d534edc834a1e07525632945d9311",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "3729a17b0a51ccb8cf94191ac858c6bb655b451ab3491b7d9cc81e5d771ed8ba"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/onboarding/onboarding-wizard.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/onboarding/onboarding-wizard.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/onboarding/onboarding-wizard.tsx"
+		},
+		{
+			"before": {
+				"git_blob": "9fe8a4947b5a58048c04f06f3af42f6901626053",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "564ece2902344fed0341ecca484dc84852647609043c8e10a53cde8f1e08e9c6"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/onboarding/steps/plan-step.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "e5fe0722431617245eff76b120c175f9393f9832f8154d35cc3ebef2dd5b7a2e",
+			"before": {
+				"git_blob": "08efb12c3e98ddf81b8e7a0b62562d3cd8796325",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "8718971b7f156a9ad3b5ef282585ead1e281c07d0a1dfd7b993b62a5da1d2d68"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/onboarding/steps/server-step.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/onboarding/steps/server-step.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/onboarding/steps/server-step.tsx"
+		},
+		{
+			"before": {
+				"git_blob": "67c15ee636152a89a5865fbcddb671fedca03747",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "916aa2ccc1a8f146a5407202f90b0cd9eb4fc2a575a8b53e98a5cdc95aee2673"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/settings/billing/show-billing-invoices.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"before": {
+				"git_blob": "a85b3242e521d47a785969462d152b1be5dd6005",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "460e25b5d0f9e55a6005700d87a26163d510053853db4fb57a27ce2cc37be082"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/settings/billing/show-billing.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"before": {
+				"git_blob": "b10e09596b5560bcd7e5e78257494f88ea3023d4",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "239e2913dbdd31c80e4bd0298b680c8db2afb2757ed7cf5a0408b7e789668675"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/settings/billing/show-invoices.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "5c8835b9c70bdef9a2f975ce0bdb97607c8832ca2071ce76cf7042badf8648ff",
+			"before": {
+				"git_blob": "89307b1ce2dc5201a68cce5ef40adc09cdca2e9f",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "5652fc6562f61b8c335e36696d4a72dd3df8d17527e420737f10ec03f382ad4a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/git/gitea/add-gitea-provider.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/git/gitea/add-gitea-provider.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/git/gitea/add-gitea-provider.tsx"
+		},
+		{
+			"after_sha256": "6b2ada01db51b8b18e28a11846dd86c39ffb50d8d0be5a8acc85f06eb078380c",
+			"before": {
+				"git_blob": "b59687004ac25264386447a2993c0fdbb68a40f6",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "425126bffd035bf84c97b7bf4b0cd3b709961876c7cdf5c5a2c595f6dd00dc64"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/git/gitea/edit-gitea-provider.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/git/gitea/edit-gitea-provider.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/git/gitea/edit-gitea-provider.tsx"
+		},
+		{
+			"after_sha256": "50bc6775766e491ea1420d2d2b422bce476a541036b8b27fa58d373a8f4c08ef",
+			"before": {
+				"git_blob": "51722e781e32a14a888d54640be1639fcecde5f5",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "0a916707246d7a61ba8e4f5feeeea9c29425d562de1cc05c0aa37db2f0ea8ccc"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/git/github/add-github-provider.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/git/github/add-github-provider.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/git/github/add-github-provider.tsx"
+		},
+		{
+			"after_sha256": "8d6b0c78fbff78c1305f0d364f1f34e4a11631a48a0dbf181c3c90f31d2d4ecd",
+			"before": {
+				"git_blob": "b48f8253b8ec342777abf5df873bb0626658ebbd",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "18f31c37685300a1ed1079e330352d38c2792ee2fc8d72ef54382e0c54b0cdd2"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/git/gitlab/add-gitlab-provider.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/git/gitlab/add-gitlab-provider.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/git/gitlab/add-gitlab-provider.tsx"
+		},
+		{
+			"after_sha256": "b61af7299228d523f5a8dad034056848b95e61357905e6c01b6e7ef65fe75baa",
+			"before": {
+				"git_blob": "f4f00063784fdd8b6a5c86f07934f57c56531ea6",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a2eb238e6840bd2ad6b8fa691ba8153f833d2f64f3d06045924bbc570c117496"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/git/show-git-providers.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/git/show-git-providers.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/git/show-git-providers.tsx"
+		},
+		{
+			"after_sha256": "23fa1291668f15bc6659cf06e2a7d21e6bb9259cc4195a097d853ec921b5dc4e",
+			"before": {
+				"git_blob": "ceb6d3cd1be7f0613185a1221d73817c85bc5edb",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "637669477982536e58387df6feb96793ed885b11ee0910acd4c4d3c3b6a82722"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/profile/profile-form.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/profile/profile-form.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/profile/profile-form.tsx"
+		},
+		{
+			"before": {
+				"git_blob": "a3210584a1f097b5bbd889bd14af43cc19b8b164",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "044b3f8eb1aba47d9461fa888b28fdc3be9966dee74601ce178c7d7a9df59d70"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/settings/servers/actions/toggle-enforce-sso.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"before": {
+				"git_blob": "668864e540bb3ef222f5088b19a9894984534994",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "587b334c516a9b76fb7f677c31f6e8d1056f60201eb08079fdc85964720e38e9"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/components/dashboard/settings/servers/actions/toggle-remote-servers-only.tsx",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "cae6151269c1305fe17643d57f1412cc17af3e48a97a00ea5c67da275eabf620",
+			"before": {
+				"git_blob": "d2c158f91318e06a7696e9d7c569392b68dec63a",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "6da77bd3dc26ebf25992b7a231190b9df51eb7577b021b6335c7b3ab676f8d33"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/servers/handle-servers.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/servers/handle-servers.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/servers/handle-servers.tsx"
+		},
+		{
+			"after_sha256": "feac8c31538e145affb7dac1e3675b05c2184df36b1a3d9d6cb80d34564d88f8",
+			"before": {
+				"git_blob": "735626354de893a8d811b8fdfa1ac6c760aaec54",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a04c02cc3e5bf9df01e3fee49d9d24f97cd9678d9217aeb5de5ca909726532f5"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/servers/show-servers.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/servers/show-servers.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/servers/show-servers.tsx"
+		},
+		{
+			"after_sha256": "ccc7eba8599f53d3c0d1e42ee0eee53ea09d5b74c4f16db4639b53be7822284d",
+			"before": {
+				"git_blob": "a94313c90dc32f29a0e6fbb5c22b439d6c2b4c0b",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "50686b6f502d85cac93533b61f32a9827d27c33e30526ec6350b84e1b14caf56"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/users/add-invitation.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/users/add-invitation.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/users/add-invitation.tsx"
+		},
+		{
+			"after_sha256": "60ea0e722c18abde8bab95e5a70c6c0c8e9f48e105bf7275fb9815c687382eab",
+			"before": {
+				"git_blob": "3eccc2dc70db92d564a14d612f221e3c37288beb",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "80b16e086420328d349d7eff9d8b52b62106ec072c0efc351f1eec7e2f8508e9"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/users/add-permissions.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/users/add-permissions.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/users/add-permissions.tsx"
+		},
+		{
+			"after_sha256": "c46eb2cb898e616ef8d3bd1596cc52b804795e109a617198c620e8a731066021",
+			"before": {
+				"git_blob": "c9125966dcabb5d11b0ba41a5b928b6dc4eb0422",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "7dd3032f98d67a80cc11e9eefa78cbc91675c40628c73ea05b03bcd539a8ff26"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/users/change-role.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/users/change-role.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/users/change-role.tsx"
+		},
+		{
+			"after_sha256": "0ada03e7131a8740cfa9a9c0f0205a76c7428cb985423beef3ed7df5c8b4885e",
+			"before": {
+				"git_blob": "b6e95cb75aff7bf61ce8d63e96bd389f33d32bb0",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "46793dc37fa25085005332d5412ff7f2e2437cbc0a5fa4eacdd61571f1ab860a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/users/show-invitations.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/users/show-invitations.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/users/show-invitations.tsx"
+		},
+		{
+			"after_sha256": "bd06bfacb76043363ba4724655a2ee381a8a96b6992db53ff6e032135bfd1970",
+			"before": {
+				"git_blob": "51c076254673c42f3dbceea66da87cf212b0a5c2",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "aa129f4b509fb21017550ee9f8e8c6dd2934aaa8ca7bc1eb0a67a19105901427"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/dashboard/settings/users/show-users.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/dashboard/settings/users/show-users.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/dashboard/settings/users/show-users.tsx"
+		},
+		{
+			"after_sha256": "6b9e33b9d1a2081db2714dd03863a9f0a172e26c294d622eac3978613c099757",
+			"before": {
+				"git_blob": "816e7bc6ee73eebd0b4be359aa16035aeeafd1d8",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "4411ec2cf7ee800424aab4448131456d926e78911596b044846b32cd3d0e787e"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/layouts/dashboard-layout.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/layouts/dashboard-layout.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/layouts/dashboard-layout.tsx"
+		},
+		{
+			"after_sha256": "c86ea967f20f7dc53590fb9c4a794e6b8c4a17ae46af593b06a81b6a93ee2792",
+			"before": {
+				"git_blob": "1e20a0fbe89c9a4bfff016d351f02448ba4edcc9",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "b1554bb60b6f98f379c7ba6a4e11223f13422ebba2c445954d5c29a660d4df3d"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/components/layouts/side.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/components/layouts/side.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/components/layouts/side.tsx"
+		},
+		{
+			"after_sha256": "ad9a0ec6be954dacff76078d4ffd6b0ff6c6cdf9aaa4ad16b33777dcb0bd5da5",
+			"before": {
+				"git_blob": "31235c94ea3b8cfa0b97f49fb9c8eb27a6e234bd",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "b9bab8d6bc2046d10430543d50a81be4689baa98657bf9fddaf9bf3ecf035b93"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/lib/auth-client.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/lib/auth-client.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/lib/auth-client.ts"
+		},
+		{
+			"after_sha256": "879741880b6ab48da99dcc06dcc674d381c9826137b0496bf7bb368f302de9fc",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "apps/dokploy/next-env.d.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/next-env.d.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "8dcca1af3d844e474e525287ea38717ad5bcb6b5eadcda1f1edbfb063cdc21cd",
+			"before": {
+				"git_blob": "2f12eccee93f3fde5b28ef935940912fb2e8e7e8",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "417d04025c6177798cbdd1f3010ca972fd78cd3353be18026bef02c04d21f234"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/next.config.mjs",
+			"payload": "community/build/overlays/files/apps/dokploy/next.config.mjs.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/next.config.mjs"
+		},
+		{
+			"after_sha256": "88580977b74a6855c60993b13c1dc1202c6ae75e8e424ab98a785516a6adaf32",
+			"before": {
+				"git_blob": "a8f3b593100367899ed30574d2ff12c369ee2d9b",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "01063f655d2e6165b7c1a848c253a84ae8a722b9bb9bb03cf3df4a8094486de0"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/_document.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/_document.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/_document.tsx"
+		},
+		{
+			"after_sha256": "3d54f8336cd9c02552a92c02a8af45db916e0de8b73f290d66862c802b02e7ea",
+			"before": {
+				"git_blob": "48aa037069b5ba224e635d9724da50ef51392bb5",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "7f252b4629f9358f6a097843b0c190554f65f33bba349cd73d109c85a3fb22b3"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/api/auth/[...all].ts",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/api/auth/[...all].ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/api/auth/[...all].ts"
+		},
+		{
+			"after_sha256": "40f90c9dfe9b1476f27f8c2c744cea587b52a4daa5db8d3d7f1743252ec87e51",
+			"before": {
+				"git_blob": "8ab0e70f9a9fb92b9048e6146c0bc9bc93f0fed7",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "243edc87d0c8418551eade4f5c5098d64743c76353e10502b6094f5508e9536a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/api/providers/gitea/authorize.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/api/providers/gitea/authorize.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/api/providers/gitea/authorize.ts"
+		},
+		{
+			"after_sha256": "40f90c9dfe9b1476f27f8c2c744cea587b52a4daa5db8d3d7f1743252ec87e51",
+			"before": {
+				"git_blob": "9e7e66a5604fb76bb60f511905d2aa7bf65c7d76",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "9a80cbb3e87250208c3edaf4b589cdec56b1a1047fbd1e6c6c104aeb3ef76488"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/api/providers/gitea/callback.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/api/providers/gitea/callback.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/api/providers/gitea/callback.ts"
+		},
+		{
+			"before": {
+				"git_blob": "67d630436ada3927a350e68135924b37391d7890",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "2363c83796d8b30be49ad6c1e0223c53a80f87a8f238e46d6ec0f99f657e2743"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/pages/api/providers/gitea/helper.ts",
+			"provenance": "Unused helper under Pages API; OAuth authorize/callback imports removed, so omit accidental route"
+		},
+		{
+			"after_sha256": "40f90c9dfe9b1476f27f8c2c744cea587b52a4daa5db8d3d7f1743252ec87e51",
+			"before": {
+				"git_blob": "ecf86e2d0809f5258103bbd22dc84bcfb02b0161",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "7afb964da67ea37771cded2b239d3e457ce308443201ce8b288329d590dd2042"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/api/providers/github/setup.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/api/providers/github/setup.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/api/providers/github/setup.ts"
+		},
+		{
+			"after_sha256": "40f90c9dfe9b1476f27f8c2c744cea587b52a4daa5db8d3d7f1743252ec87e51",
+			"before": {
+				"git_blob": "a43e8889034fd0d57e91360df61979981edf2f63",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "8e508175050b6673ae858312ebd0ad21821a135d17c5df32d35fc3c38a28e266"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/api/providers/gitlab/callback.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/api/providers/gitlab/callback.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/api/providers/gitlab/callback.ts"
+		},
+		{
+			"before": {
+				"git_blob": "ef8f9063219111d05f494ee2b3f040b4d1be1c78",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "8033632533a57b67922e4ceda931025bf800d72b60d55d9e0ae5d2240fb2b56b"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/pages/api/stripe/webhook.ts",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "de234c50e7be18ebd86102bfca3f5e6f31fc1db2671f7a7fdf4b20c3d3ebe0e0",
+			"before": {
+				"git_blob": "366aa32dab88f0cc0ac589c6db0bb1d7e4ffd940",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "2b6bd3b68df8b100bd84f6a1c09cb4dd086c1e742d864bdf1848866379197590"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/audit-logs.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/audit-logs.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/audit-logs.tsx"
+		},
+		{
+			"after_sha256": "9fb88c974d9b0b95987f0d1a025ef2f700b998ce47d8927c546ff320f4e9fcf6",
+			"before": {
+				"git_blob": "40ed5dc987f0f054fe17f0e9efa29dfc9a43b0e8",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "0456ce8e31651a780e0deab5f2268ab564bb65a5a2fbba91a3c3e94f98999924"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/billing.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/billing.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/billing.tsx"
+		},
+		{
+			"after_sha256": "9fb88c974d9b0b95987f0d1a025ef2f700b998ce47d8927c546ff320f4e9fcf6",
+			"before": {
+				"git_blob": "5ff4f62e7697d52eb9953dbc5285ab9c54475be5",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "638df0a6b7d6cab7c1598f2a097bd5dbe371dcfa9756ee084ef8930f3dbafc4a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/invoices.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/invoices.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/invoices.tsx"
+		},
+		{
+			"after_sha256": "ee85ab3051f397a4de7a1011c2d0ca38fb9523369ea97f586692ba44ad4201e2",
+			"before": {
+				"git_blob": "92ab9a8e52f7ab353d06cbe621d8344367b03dd2",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "6774671773b30afa53f6efbca2a739713115e27174727d87fcffd2f621e5983a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/license.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/license.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/license.tsx"
+		},
+		{
+			"after_sha256": "ee85ab3051f397a4de7a1011c2d0ca38fb9523369ea97f586692ba44ad4201e2",
+			"before": {
+				"git_blob": "526e1c3dbae0de31b40b644dc0a66aae3d0535f1",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "6a16856f091ccbfaf59be46734917469a46649919c132eddd2c9f7b4852346be"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/sso.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/sso.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/sso.tsx"
+		},
+		{
+			"after_sha256": "79c9335549dbcf17db51e44ab07ab1ce2f07fc75591fdc6128fe7deab092624c",
+			"before": {
+				"git_blob": "e32839084a27339e4209a13b0065287de64e207d",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "f6dac2f6098590467069d022cfd93e8023e97bfb6a3089d2a24426b28b5557ec"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/users.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/users.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/users.tsx"
+		},
+		{
+			"after_sha256": "ee85ab3051f397a4de7a1011c2d0ca38fb9523369ea97f586692ba44ad4201e2",
+			"before": {
+				"git_blob": "aa7cf738bc30cfab9a3fd1d6264d7c9f722e812d",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "f825e29340145787c593cec016ea9739135f8fcebf52258e1d179795510bea1c"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/dashboard/settings/whitelabeling.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/dashboard/settings/whitelabeling.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/dashboard/settings/whitelabeling.tsx"
+		},
+		{
+			"after_sha256": "b1c5ea52460a197b76fdd43b453bb245a53687157466087d4063d3225a8bd2c2",
+			"before": {
+				"git_blob": "3e41abae37c34f63fe3262bf74b573c79d9bfdf2",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "0d6e2aa505654a342efe3a1ab5ebe71d1cca5deee080dcb37f018e24bca2ba45"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/index.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/index.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/index.tsx"
+		},
+		{
+			"after_sha256": "41413fb7401ca8eac6b416428262b0c3422487788296ce5291fe249a2f8587fd",
+			"before": {
+				"git_blob": "da648221952f862b2fa63a93d4f651974d9986be",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "9355f065e6f9252ed616103ccf8aad52714b9ad91693d29ac26ba1173e7bd048"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/invitation.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/invitation.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/invitation.tsx"
+		},
+		{
+			"after_sha256": "0ad96f6d51eb3b469d216eda9696242606b59e692aa05a62cabf76379cae40ff",
+			"before": {
+				"git_blob": "20c95bea6837cc750740bde87c931694d72b0bf8",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "5a9d1122d4477c973ef7e837a6635ea4dfc8b029ef3ffe75804708f12054d155"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/register.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/register.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/register.tsx"
+		},
+		{
+			"after_sha256": "a7b30264105062c58f1d909abb7d52b490c4230505efd1a2c9bc21e6aa67142b",
+			"before": {
+				"git_blob": "2f41e50c99db4596087f9284b50dcdef09406a8c",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "b6e041f01af1f8bba1e452c2c50a1e3c752ee14277e97a93e7aee2740501871a"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/pages/send-reset-password.tsx",
+			"payload": "community/build/overlays/files/apps/dokploy/pages/send-reset-password.tsx.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/pages/send-reset-password.tsx"
+		},
+		{
+			"after_sha256": "386e6d9669b43de42b5c1b035b818d9d3b0cbec8eb20c6c6aa371d99523e0b1d",
+			"before": {
+				"git_blob": "ecd67439f7cf52245925b00b85b7457a961ed26b",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "c55869ab125d0327776c84f925a81cc0a2d11aef7cf83547dea1ac93e1a098ad"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/root.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/root.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/root.ts"
+		},
+		{
+			"after_sha256": "4b225249587109f96b83ad7ca5c8fb8ab43874e15224e4070cb7285dbc432e1a",
+			"before": {
+				"git_blob": "ce79df1e008b32cac25ba659fe906a369a625770",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a5b16222d7d58885f9666beceda743c03d3bd178c920ee644b7c5a192d66536b"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/bitbucket.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/bitbucket.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/bitbucket.ts"
+		},
+		{
+			"after_sha256": "00488260dd8e9115afaed4768127689289e9a7de20074d568ac1dc92791b9f49",
+			"before": {
+				"git_blob": "8f92ade3f85cb1253935489db4ba0e78d8892cb1",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "3c6cfcec886266fc1e5579b82d15fbb23a0fc20cb05428617e250f27e9f82327"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/git-provider.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/git-provider.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/git-provider.ts"
+		},
+		{
+			"after_sha256": "337d1a3ba7b0961a437db96d5af0c00b3fc251ec14e02a14f9fb322345450bae",
+			"before": {
+				"git_blob": "63cfc4e798af25009699a99bca92d38011250f4e",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a28a44e891f53f90512508b55595f2a5e38006d0fdb45ab8c00789b4e03dc450"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/gitea.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/gitea.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/gitea.ts"
+		},
+		{
+			"after_sha256": "b5641c019bd8d39f327ec7d6a783f85177dd333812370d3010658c4e697bcc53",
+			"before": {
+				"git_blob": "dd765dee880c28ec89c945f115ea2a12349d8f56",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "b2eecfdf05eb645bec4e48610eff417712224c3c00e86a923a5d3942af7b413d"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/github.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/github.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/github.ts"
+		},
+		{
+			"after_sha256": "0a34bb8735a00314e8cdfa64ae5e748516f75cd04528449da672b1333969025f",
+			"before": {
+				"git_blob": "133610763b1c27de1780df79009ab053fc1421fd",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "1a431293078ed06287739566b03e5df87794b16bd78b61beb6d9a5c7959ac18d"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/gitlab.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/gitlab.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/gitlab.ts"
+		},
+		{
+			"after_sha256": "85c962dbb68ae45ca08a0e19b6b4035494b7733fc35be70930c75d6ae03846bb",
+			"before": {
+				"git_blob": "3d36acae00421afdf0c57c04d20669f1a93a87ef",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a1c4d2470297fe279a46ab041737a31f400467fcd44d7f229a5b7ac2f07bfa5e"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/organization.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/organization.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/organization.ts"
+		},
+		{
+			"after_sha256": "8361ad583579f404ee023633a7cd90afb0f74d81856ba23d2b2ce56e6ebb4ee4",
+			"before": {
+				"git_blob": "7085b3bef3d3458e382b91407333f3138736de43",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "e58e77ad651dea28ff030516d1156618ab5533353feb1716659d4f8492eb2c41"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/project.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/project.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/project.ts"
+		},
+		{
+			"after_sha256": "e2f1bc9064e800b748e4fb3a71b2485ea4da51fd5f59b533e8ac1436ca47081e",
+			"before": {
+				"git_blob": "d0491142b24585f8220905be04b8202edfcacf1a",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "6f35e60eaf457ed14126676830ec13786765150038f2d9e9ce2df8152f5caf4d"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/server.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/server.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/server.ts"
+		},
+		{
+			"after_sha256": "18a7c4b046e6d2433e02712576a19e807a60c09e0ef169bd841dec09a15b5e23",
+			"before": {
+				"git_blob": "682352b78a9123d82dfccab6b7461c2b11be351e",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "08deac1afcda7b13222c583427dde2e0403cf04e60a2e75eb86abf80ae49b0c7"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/settings.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/settings.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/settings.ts"
+		},
+		{
+			"before": {
+				"git_blob": "ce5e15151c86bfd58a708d6bf60dea3b7b562260",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "c907e2120a8dc7f1c6f2afe73d109e25ab116d3f220f7d5c57be2d77260e15fd"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/server/api/routers/stripe.ts",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "198a45c16fd98578960d4c11b76d6946fa481dfa1e6666e09a77607ded79a4b3",
+			"before": {
+				"git_blob": "764413a2eb3abba93b837d84c51e15ca367df1e4",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "5a9ac853ca4bf6fadc5702ba59aad6263b28db325efaffbe859ae9c813e27e1f"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/routers/user.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/routers/user.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/routers/user.ts"
+		},
+		{
+			"after_sha256": "d4c7565514c82d6d418adadb14a0a059c988e4f1c78004ef3db80684206a8455",
+			"before": {
+				"git_blob": "e689e9c173a6541a5211aaf731628009f3d217f3",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "9578b7c553c0930c8ff0204f414734696e297bf23cbb3ca38748fca10d42bbfe"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/trpc.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/trpc.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/trpc.ts"
+		},
+		{
+			"after_sha256": "4c714bb103599e0c6aaf7e12f63bb251e2355d2a99a5c1f2a298835bdd1a3201",
+			"before": {
+				"git_blob": "64f46dea4e97f0b9acdb5731692279074b79bd7d",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "2c9235f1a6da04e071134cabc13e2e564b125734fbfc0b585e9bfdf5d56f9404"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/api/utils/audit.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/api/utils/audit.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/api/utils/audit.ts"
+		},
+		{
+			"after_sha256": "49c385d74108e914ed5c9ce6637cfbafd2ebc788fd9c83e45194af9f8058c124",
+			"before": {
+				"git_blob": "9ba9cc6a331ca6b74fd24b2727db2b810b301ec4",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "f5f920c7ffc0a6833310483ceca6854f08199b901c1924399d70ea85f3cb91f7"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/server.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/server.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/server.ts"
+		},
+		{
+			"after_sha256": "8d33c385fcfd547aa99f2273b15dfe36e25f292f32ca3efe64910d1e2210d589",
+			"before": {
+				"git_blob": "f2a98fa02eb1e0c6056affc5929555daa1ada15f",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "28f352cdb04cd2897f36a3f8fb889c3db7d3d3f18607a33f5e2ead8f34dd5505"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/utils/billing.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/utils/billing.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/utils/billing.ts"
+		},
+		{
+			"before": {
+				"git_blob": "bd151f4d13a21abd25fbcf04800aff593e4c3bb3",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "3a9996d7fe9f161a070fabc73f0ab62b91d4063156f88debb4ae9e45dd69802b"
+			},
+			"operation": "omit",
+			"path": "apps/dokploy/server/utils/enterprise.ts",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "50aa5a26aa8de64e40d9d5d50ef49e1a8d9d7b3c017b50973c1396e2dc7c3af5",
+			"before": {
+				"git_blob": "740e0d9b5857ca199780523d3613665fe3516a66",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "930f4d3319ba87234128f7d58c8e5ccb642c0f6c5751c42061e01b8959112edd"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/server/wss/authorize.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/server/wss/authorize.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/server/wss/authorize.ts"
+		},
+		{
+			"after_sha256": "ff19da74be7af720349e332ba6a78d29317527aadf27863ee1ab9105cf556ff0",
+			"before": {
+				"git_blob": "0970f04f9b7efbea0adb911ea92a683f89d9944a",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "d9eb7b8953dca3006aa88e7e056a932b8179c302710eb0af028cf5c24f55815b"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "apps/dokploy/utils/hooks/use-whitelabeling.ts",
+			"payload": "community/build/overlays/files/apps/dokploy/utils/hooks/use-whitelabeling.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:apps/dokploy/utils/hooks/use-whitelabeling.ts"
+		},
+		{
+			"after_sha256": "879741880b6ab48da99dcc06dcc674d381c9826137b0496bf7bb368f302de9fc",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/next-env.d.ts",
+			"payload": "community/build/overlays/files/packages/server/next-env.d.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "22df8c21a8d7fc34f97827edf094e5353356fdefb47d78f630e279f96d38acc6",
+			"before": {
+				"git_blob": "6aaecce64537a218f49a1dae1cc661910b8e3786",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "1c89b45afd218b15d8741f7e2841ca0a535d056b370c7d770b2e222ec3cd7236"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/constants/index.ts",
+			"payload": "community/build/overlays/files/packages/server/src/constants/index.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/constants/index.ts"
+		},
+		{
+			"after_sha256": "d11f2e654b11b3a36327f1a4714ed32cd6860493754389f36ea06ad83ec70ce0",
+			"before": {
+				"git_blob": "a749a221aa19a817020f3afc6afadb0973e95415",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "8981094b5af5c7bbdba33e6aad1aee7377b67db89981274858f0c2bf20a80c96"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/index.ts",
+			"payload": "community/build/overlays/files/packages/server/src/index.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/index.ts"
+		},
+		{
+			"after_sha256": "f1957e8d8bf0e544a459703c47647a849d8d355b3535753e5234835023147bc6",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/lib/auth-factory.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/auth-factory.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "886e0b3c2d9aa7e5899348bac153417ce510c71028a7bbaf55aed9a8ec259be0",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/lib/auth-request.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/auth-request.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "4f2102430221bc818cb7d3a516c0da755b8c0fa15531676f7d6feb2d61c0dcda",
+			"before": {
+				"git_blob": "019456ddc39f7225c8f33ee416cba69dd8b87698",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "7e24d32e4bcc8cda78ded1e9f6a8e2bbc195c00e2d4682b34d471edf4177c371"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/lib/auth.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/auth.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/lib/auth.ts"
+		},
+		{
+			"after_sha256": "d495974598882f928725a9b54e5a671e06392b2cf21886756fece1b67d4af595",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/lib/community-auth-routes.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/community-auth-routes.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "a4482034f9463955a48a963e20eeb8e7f7a77c97d9b0e863de23c52f51b45b94",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/lib/community-password.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/community-password.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "7e2036ba79226e92946f5751a66973c02c5747ddcd8bd6181ffbff1b94c1a975",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/lib/community-policy.ts",
+			"payload": "community/build/overlays/files/packages/server/src/lib/community-policy.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "b132f12882c5af7bf1e8d1afaab7b28a334ea8718b4770fa561bbbb6a101e581",
+			"before": {
+				"git_blob": "bd877e801ccd223c4f1c47fb2cabb418e6084114",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "4875a07f1a78ba5e9d594a633615bc98f84e34a7949a7216c33b3ee0cfa616d3"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/bitbucket.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/bitbucket.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/bitbucket.ts"
+		},
+		{
+			"after_sha256": "71ee8ac3c6862b8e5051d4afc914cc32a1b87109a64f6eb7356bedad896eb6b1",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/services/community-assignments.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/community-assignments.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "fd82258eba9d5966be6afe27a289efbcd3759126f7b8dd4042ca87881edf55ed",
+			"before": null,
+			"mode": "100644",
+			"operation": "add",
+			"path": "packages/server/src/services/community-server-target.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/community-server-target.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9; new community implementation"
+		},
+		{
+			"after_sha256": "ba5fbd82917c9feac6efa7507b51365dd24dd3803d8daefa4a23828229f085ec",
+			"before": {
+				"git_blob": "b1d9456c5fed5bd3eee15db9b822b2c3d9031bc2",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "c77abd2844aa94c6b3f6db49b664e2f870c14b37a1f11045b521f7cb5663e7ae"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/domain.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/domain.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/domain.ts"
+		},
+		{
+			"after_sha256": "f01da4100d28ff2351f2d49e28c001f4344cad0da002e9d5771550a19126923a",
+			"before": {
+				"git_blob": "b9d86d3cebb8b26253e84781eabccaeefe6c81c6",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "dab65147a1d1e41f6ef651d0d12c1b988017c22837f910505e5cdae5fff42d88"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/git-provider.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/git-provider.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/git-provider.ts"
+		},
+		{
+			"after_sha256": "ddc365593e6db6b7b9474aaae5807d65f2317f4aa3d45a3dec15f355efd4de2b",
+			"before": {
+				"git_blob": "3dc087cabb5465688c18f9bd3ffb4cc7f4e4ba66",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "9dde26571095e7eb2a6a44b4587c7df512cd7c8fda32292de047f95ca2c55a50"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/permission.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/permission.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/permission.ts"
+		},
+		{
+			"after_sha256": "7d020b1308bf35f9dd9c73335b5a783fcc45c9f81749c6c84177f58b64948989",
+			"before": {
+				"git_blob": "aee6234831894124b2ecd024c7dc50f1ef5d9c58",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "8f4e9fbaa6ede004e1885be930ff7953344bba9cd4e7998b8b445c165479f99c"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/server.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/server.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/server.ts"
+		},
+		{
+			"after_sha256": "5d44e813156d58cc3fbaa7ecf4176b8372439241d9f4bdbef5cb41072eb64065",
+			"before": {
+				"git_blob": "dbc78c275a96b5e7634af864b88438632ac5f443",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "e41bc0369d62d907c86392525f0f2cfe69a0140edbe6cc0fa7eb7f60b376c218"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/user.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/user.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/user.ts"
+		},
+		{
+			"after_sha256": "e541620dc59983f04e8e961ce8bc67996fb6779e2d47cbe0abbcd0469035b0de",
+			"before": {
+				"git_blob": "e2c4944aa2a77aa9a0df242c4a7fec75deae0152",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "649f0ce23870e23b908facacc958fbd73cd5354cf3c25b7d8bda4e209ee5629d"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/services/web-server-settings.ts",
+			"payload": "community/build/overlays/files/packages/server/src/services/web-server-settings.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/services/web-server-settings.ts"
+		},
+		{
+			"after_sha256": "60f0795dd66321edf7dac3cf04df898039ead449fc377d6789fe5e0fa160de9f",
+			"before": {
+				"git_blob": "e26764018e6bdc124ee7e910ababcc2a512e8195",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "2bb55a20456e585e2594db98bcfd63971e42ab5f42f07a2e19a86bcf06a5916b"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/setup/forward-auth-setup.ts",
+			"payload": "community/build/overlays/files/packages/server/src/setup/forward-auth-setup.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/setup/forward-auth-setup.ts"
+		},
+		{
+			"before": {
+				"git_blob": "a9026c6417c4979ef531b5f051d94271d824cf60",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "a6cab434fa42e6b8d595a605573c27a7c277524bff6d6c7bbb900e35310ae639"
+			},
+			"operation": "omit",
+			"path": "packages/server/src/utils/crons/enterprise.ts",
+			"provenance": "Unsupported enterprise/cloud UI or license activity; callers removed by community overlays"
+		},
+		{
+			"after_sha256": "09b55ca557498887bf2b43e35c170f7238321f62815d15ac142573435ce9c2fe",
+			"before": {
+				"git_blob": "814aba943f64cc51a6202443194f3219b2bbc7d1",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "c5f12a25867d3a930d223cd33be6486ebce93ed1694581df9489188317615d28"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/utils/traefik/domain.ts",
+			"payload": "community/build/overlays/files/packages/server/src/utils/traefik/domain.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/utils/traefik/domain.ts"
+		},
+		{
+			"after_sha256": "ee3f2c52b6371d71257aed989f7c610aea990e4c79e543a053bdbe14fbfd0699",
+			"before": {
+				"git_blob": "3d6c207e340b65b1c0ca3fb1fc983732f9b06cf1",
+				"kind": "blob",
+				"mode": "100644",
+				"sha256": "f4cc9784fdc0c226e8de2a87235e9d8cc4fb4ae3059831f54e24cafb309c0332"
+			},
+			"mode": "100644",
+			"operation": "replace",
+			"path": "packages/server/src/utils/traefik/forward-auth.ts",
+			"payload": "community/build/overlays/files/packages/server/src/utils/traefik/forward-auth.ts.payload",
+			"provenance": "Authored from accepted B1\u2013B6 policy and nonrestricted source at aebf69526ed168e985f50f9a973a85ea1f7519f9:packages/server/src/utils/traefik/forward-auth.ts"
+		}
+	],
+	"pg18_contract_sha256": "4873f86e032a86fa8972946d5a12328299d81e15e46b495661c38e90e6aecc5e",
+	"root_oracle_sha256": "40116667785c6ea8d1bc32f4df97148dc21adef33f3df66b97b9de017e7825a8"
+}

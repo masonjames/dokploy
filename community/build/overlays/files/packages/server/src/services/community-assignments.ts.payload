@@ -1,0 +1,147 @@
+// Derived from nonrestricted resource schemas and the accepted assignment matrix.
+import { db } from "../db";
+import {
+	member,
+	projects,
+	environments,
+	server,
+	gitProvider,
+	applications,
+	compose,
+	postgres,
+	mysql,
+	mariadb,
+	mongo,
+	redis,
+	libsql,
+} from "../db/schema";
+import { and, eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { isCommunityRole } from "../lib/community-policy";
+interface Assignments {
+	id: string;
+	accessedProjects: string[];
+	accessedEnvironments: string[];
+	accessedServices: string[];
+	accessedServers: string[];
+	accessedGitProviders: string[];
+}
+export async function validateCommunityAssignments(
+	organizationId: string,
+	input: Assignments,
+) {
+	const target = await db.query.member.findFirst({
+		where: and(
+			eq(member.userId, input.id),
+			eq(member.organizationId, organizationId),
+		),
+	});
+	if (!target || !isCommunityRole(target.role))
+		throw new TRPCError({ code: "FORBIDDEN" });
+	const projectRows = await db
+		.select({ id: projects.projectId })
+		.from(projects)
+		.where(eq(projects.organizationId, organizationId));
+	const environmentRows = await db
+		.select({ id: environments.environmentId })
+		.from(environments)
+		.innerJoin(projects, eq(projects.projectId, environments.projectId))
+		.where(eq(projects.organizationId, organizationId));
+	const serverRows = await db
+		.select({ id: server.serverId })
+		.from(server)
+		.where(eq(server.organizationId, organizationId));
+	const providerRows = await db
+		.select({ id: gitProvider.gitProviderId })
+		.from(gitProvider)
+		.where(eq(gitProvider.organizationId, organizationId));
+	const serviceRows = [
+		...(await db
+			.select({ id: applications.applicationId })
+			.from(applications)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, applications.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: compose.composeId })
+			.from(compose)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, compose.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: postgres.postgresId })
+			.from(postgres)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, postgres.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: mysql.mysqlId })
+			.from(mysql)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, mysql.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: mariadb.mariadbId })
+			.from(mariadb)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, mariadb.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: mongo.mongoId })
+			.from(mongo)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, mongo.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: redis.redisId })
+			.from(redis)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, redis.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+		...(await db
+			.select({ id: libsql.libsqlId })
+			.from(libsql)
+			.innerJoin(
+				environments,
+				eq(environments.environmentId, libsql.environmentId),
+			)
+			.innerJoin(projects, eq(projects.projectId, environments.projectId))
+			.where(eq(projects.organizationId, organizationId))),
+	];
+	const pairs: [string[], { id: string }[]][] = [
+		[input.accessedProjects, projectRows],
+		[input.accessedEnvironments, environmentRows],
+		[input.accessedServices, serviceRows],
+		[input.accessedServers, serverRows],
+		[input.accessedGitProviders, providerRows],
+	];
+	for (const [ids, rows] of pairs) {
+		const valid = new Set(rows.map((row) => row.id));
+		if (ids.some((id) => !valid.has(id)))
+			throw new TRPCError({
+				code: "FORBIDDEN",
+				message: "Assignment outside the current organization",
+			});
+	}
+}

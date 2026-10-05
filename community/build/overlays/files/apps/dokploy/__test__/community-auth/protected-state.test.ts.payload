@@ -1,0 +1,69 @@
+import { expect, it, vi } from "vitest";
+const external = vi.hoisted(() => ({
+	effects: vi.fn(() => {
+		throw new Error("Unexpected effect");
+	}),
+	saved: vi.fn(async () => ({ forwardAuthEnabled: true })),
+}));
+vi.mock("@dokploy/server/db", () => ({
+	db: { query: { domains: { findFirst: external.saved } } },
+}));
+vi.mock("@dokploy/server/utils/traefik/application", () => ({
+	createServiceConfig: external.effects,
+	loadOrCreateConfig: external.effects,
+	loadOrCreateConfigRemote: external.effects,
+	removeTraefikConfig: external.effects,
+	removeTraefikConfigRemote: external.effects,
+	writeTraefikConfig: external.effects,
+	writeTraefikConfigRemote: external.effects,
+}));
+vi.mock("@dokploy/server/utils/traefik/middleware", () => ({
+	createPathMiddlewares: external.effects,
+	removePathMiddlewares: external.effects,
+	loadMiddlewares: external.effects,
+	loadRemoteMiddlewares: external.effects,
+	writeMiddleware: external.effects,
+}));
+vi.mock("@dokploy/server/setup/forward-auth-setup", () => ({
+	FORWARD_AUTH_PORT: 4180,
+	FORWARD_AUTH_SERVICE_NAME: "synthetic",
+}));
+import {
+	manageDomain,
+	removeDomain,
+	createRouterConfig,
+} from "@dokploy/server/utils/traefik/domain";
+import {
+	createForwardAuthMiddleware,
+	manageForwardAuthDomain,
+	removeForwardAuthDomain,
+} from "@dokploy/server/utils/traefik/forward-auth";
+it("refuses protected route regeneration/removal before filesystem or remote effects", async () => {
+	const app = {
+		applicationId: "app-1",
+		appName: "synthetic",
+		serverId: null,
+	} as Parameters<typeof manageDomain>[0];
+	const domain = { forwardAuthEnabled: true, uniqueConfigKey: 1 } as Parameters<
+		typeof manageDomain
+	>[1];
+	await expect(manageDomain(app, domain)).rejects.toThrow("separate admission");
+	await expect(createRouterConfig(app, domain, "web")).rejects.toThrow(
+		"separate admission",
+	);
+	await expect(removeDomain(app, 1)).rejects.toThrow("separate admission");
+	await expect(createForwardAuthMiddleware(app, domain)).rejects.toThrow(
+		"separate admission",
+	);
+	await expect(
+		manageForwardAuthDomain(null, {
+			authDomain: "synthetic.invalid",
+			https: true,
+			certificateType: "letsencrypt",
+		}),
+	).rejects.toThrow("separate admission");
+	await expect(removeForwardAuthDomain(null)).rejects.toThrow(
+		"separate admission",
+	);
+	expect(external.effects).not.toHaveBeenCalled();
+});

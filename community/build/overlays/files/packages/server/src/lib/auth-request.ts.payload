@@ -1,0 +1,168 @@
+// The production request boundary, injectable only at external persistence/auth dependencies.
+import type { IncomingMessage } from "node:http";
+import type { db as productionDb } from "../db";
+import * as schema from "../db/schema";
+import { and, desc, eq } from "drizzle-orm";
+import type { createBetterAuth } from "./auth-factory";
+import { isCommunityRole } from "./community-policy";
+export const createRequestValidator =
+	(
+		db: typeof productionDb,
+		api: ReturnType<typeof createBetterAuth>["internal"],
+	) =>
+	async (request: IncomingMessage) => {
+		const apiKey = request.headers["x-api-key"];
+		if (
+			apiKey !== undefined &&
+			(typeof apiKey !== "string" || apiKey.length === 0)
+		)
+			return { session: null, user: null };
+		if (apiKey) {
+			try {
+				const { valid, key, error } = await api.verifyApiKey({
+					body: {
+						key: apiKey,
+					},
+				});
+
+				if (error) {
+					throw new Error(
+						error.message?.toString() || "Error verifying API key",
+					);
+				}
+				if (!valid || !key) {
+					return {
+						session: null,
+						user: null,
+					};
+				}
+
+				const apiKeyRecord = await db.query.apikey.findFirst({
+					where: eq(schema.apikey.id, key.id),
+					with: {
+						user: true,
+					},
+				});
+
+				if (!apiKeyRecord) {
+					return {
+						session: null,
+						user: null,
+					};
+				}
+
+				const organizationId = (
+					JSON.parse(apiKeyRecord.metadata || "{}") as {
+						organizationId?: string;
+					}
+				).organizationId;
+
+				if (typeof organizationId !== "string" || !organizationId) {
+					return {
+						session: null,
+						user: null,
+					};
+				}
+
+				const member = await db.query.member.findFirst({
+					where: and(
+						eq(schema.member.userId, apiKeyRecord.user.id),
+						eq(schema.member.organizationId, organizationId),
+					),
+					with: {
+						organization: true,
+					},
+				});
+
+				if (
+					!member ||
+					!isCommunityRole(member.role) ||
+					apiKeyRecord.user.banned
+				)
+					return { session: null, user: null };
+				// When accessing from DB, use actual column names
+				const userFromDb = apiKeyRecord.user as typeof apiKeyRecord.user & {
+					firstName: string;
+					lastName: string;
+				};
+
+				const mockSession = {
+					session: {
+						userId: apiKeyRecord.user.id,
+						activeOrganizationId: organizationId || "",
+					},
+					user: {
+						id: userFromDb.id,
+						name: userFromDb.firstName, // Map firstName back to name for better-auth
+						email: userFromDb.email,
+						emailVerified: userFromDb.emailVerified,
+						image: userFromDb.image,
+						createdAt: userFromDb.createdAt,
+						updatedAt: userFromDb.updatedAt,
+						twoFactorEnabled: userFromDb.twoFactorEnabled,
+						role: member.role,
+						ownerId: member.organization.ownerId,
+						enableEnterpriseFeatures: userFromDb.enableEnterpriseFeatures,
+						isValidEnterpriseLicense: userFromDb.isValidEnterpriseLicense,
+					},
+				};
+
+				return mockSession;
+			} catch (error) {
+				console.error("Error verifying API key", error);
+				return {
+					session: null,
+					user: null,
+				};
+			}
+		}
+
+		// If no API key, proceed with normal session validation
+		const session = await api.getSession({
+			headers: new Headers({
+				cookie: request.headers.cookie || "",
+			}),
+		});
+
+		if (!session?.session || !session.user) {
+			return {
+				session: null,
+				user: null,
+			};
+		}
+
+		if (session?.user) {
+			if (!session.session.activeOrganizationId)
+				return { session: null, user: null };
+			const member = await db.query.member.findFirst({
+				where: and(
+					eq(schema.member.userId, session.user.id),
+					...(session.session.activeOrganizationId
+						? [
+								eq(
+									schema.member.organizationId,
+									session.session.activeOrganizationId || "",
+								),
+							]
+						: []),
+				),
+				orderBy: [desc(schema.member.isDefault), desc(schema.member.createdAt)],
+				with: {
+					organization: true,
+					user: true,
+				},
+			});
+
+			if (!member || !isCommunityRole(member.role) || member.user.banned)
+				return { session: null, user: null };
+			session.user.role = member.role;
+			session.user.enableEnterpriseFeatures =
+				member?.user.enableEnterpriseFeatures || false;
+			session.user.isValidEnterpriseLicense =
+				member?.user.isValidEnterpriseLicense || false;
+			session.session.activeOrganizationId = member.organization.id;
+			session.user.ownerId = member.organization.ownerId;
+		}
+
+		return session;
+	};

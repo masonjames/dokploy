@@ -1,0 +1,10 @@
+import { Button } from "@/components/ui/button";
+export const AddGithubProvider = () => (
+	<div>
+		<Button disabled>Github</Button>
+		<p className="text-sm text-muted-foreground">
+			Github OAuth setup is unavailable in community. Configured providers
+			remain usable.
+		</p>
+	</div>
+);

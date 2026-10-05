@@ -1,0 +1,22 @@
+// Authored from the accepted community policy; no restricted implementation inputs.
+export const communityCapabilities = Object.freeze({
+	enterpriseAudit: "unavailable",
+	sso: false,
+	dynamicRoles: false,
+	runtimeAdmitted: false,
+} as const);
+const roles = {
+	owner: true,
+	admin: true,
+	member: true,
+	observer: true,
+} as const;
+export type CommunityRole = keyof typeof roles;
+export function isCommunityRole(value: unknown): value is CommunityRole {
+	return typeof value === "string" && Object.hasOwn(roles, value);
+}
+export function isInvitationRole(
+	value: unknown,
+): value is Exclude<CommunityRole, "owner"> {
+	return isCommunityRole(value) && value !== "owner";
+}

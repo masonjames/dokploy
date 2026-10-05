@@ -1,0 +1,180 @@
+// Synthetic persistence boundary. Unsupported SQL is rejected; transactions serialize fixture writes.
+import {
+	getTableColumns,
+	getTableName,
+	type SQL,
+	type Table,
+} from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { db as productionDb } from "@dokploy/server/db";
+export type Row = Record<string, unknown>;
+export function syntheticDatabase() {
+	const rows: Record<string, Row[]> = {};
+	const controls: { beforeUpdate?: () => void } = {};
+	const writes: { table: string; operation: string }[] = [];
+	const aliases: Record<string, string> = {
+		projects: "project",
+		gitProvider: "git_provider",
+		environments: "environment",
+		applications: "application",
+		domains: "domain",
+	};
+	const keys: Record<string, string> = {
+		user_id: "userId",
+		organization_id: "organizationId",
+		inviter_id: "inviterId",
+		expires_at: "expiresAt",
+		created_at: "createdAt",
+		active_organization_id: "activeOrganizationId",
+		provider_id: "providerId",
+	};
+	const matches = (where?: SQL): ((row: Row) => boolean) => {
+		if (!where) return () => true;
+		const query = new PgDialect().sqlToQuery(where);
+		const comparison = /"([^"]+)"\."([^"]+)" (=|<>) \$(\d+)/g;
+		const inclusion = /"([^"]+)"\."([^"]+)" in \((\$\d+(?:, \$\d+)*)\)/g;
+		const predicates = [...query.sql.matchAll(comparison)];
+		const inclusions = [...query.sql.matchAll(inclusion)];
+		const remainder = query.sql
+			.replace(comparison, "")
+			.replace(inclusion, "")
+			.replace(/\band\b/g, "")
+			.replace(/[()\s]/g, "");
+		if (
+			remainder ||
+			(!predicates.length && !inclusions.length) ||
+			(predicates.length && inclusions.length)
+		)
+			throw new Error(`Unsupported synthetic SQL: ${query.sql}`);
+		if (inclusions.length) {
+			return (row) =>
+				inclusions.every(([, , name, values]) =>
+					[...values!.matchAll(/\$(\d+)/g)].some(
+						([, index]) =>
+							row[keys[name!] ?? name!] === query.params[Number(index) - 1],
+					),
+				);
+		}
+		return (row) =>
+			predicates.every(([, , name, operator, index]) => {
+				const value = row[keys[name!] ?? name!];
+				const expected = query.params[Number(index) - 1];
+				// SQL comparisons with NULL/undefined do not match.
+				if (value == null || expected == null) return false;
+				return operator === "=" ? value === expected : value !== expected;
+			});
+	};
+	function tableRows(table: string) {
+		return rows[table] ?? [];
+	}
+	const query = new Proxy(
+		{},
+		{
+			get: (_target, property: string) => {
+				const table = aliases[property] ?? property;
+				return {
+					findFirst: async (options: { where?: SQL } = {}) =>
+						tableRows(table).find(matches(options.where)),
+					findMany: async (options: { where?: SQL } = {}) =>
+						tableRows(table).filter(matches(options.where)),
+				};
+			},
+		},
+	);
+	let queue = Promise.resolve();
+	const database = {
+		query,
+		select: (_fields?: unknown) => ({
+			from: (table: Table) => {
+				const name = getTableName(table);
+				let where: SQL | undefined;
+				const chain = {
+					innerJoin: (_table: Table, _on: SQL) => chain,
+					where: (value: SQL) => {
+						where = value;
+						return chain;
+					},
+					for: async (_lock: string) => tableRows(name).filter(matches(where)),
+					then: (
+						resolve: (value: Row[]) => unknown,
+						reject?: (reason: unknown) => unknown,
+					) =>
+						Promise.resolve(tableRows(name).filter(matches(where))).then(
+							resolve,
+							reject,
+						),
+				};
+				return chain;
+			},
+		}),
+		insert: (table: Table) => ({
+			values: (value: Row) => {
+				const name = getTableName(table);
+				const inserted = {
+					id: `synthetic-${tableRows(name).length}`,
+					...value,
+				};
+				writes.push({ table: name, operation: "insert" });
+				(rows[name] ??= []).push(inserted);
+				return {
+					returning: async () => [inserted],
+					then: (resolve: (value: undefined) => unknown) =>
+						Promise.resolve(undefined).then(resolve),
+				};
+			},
+		}),
+		update: (table: Table) => ({
+			set: (value: Row) => {
+				if (!Object.values(value).some((field) => field !== undefined))
+					throw new Error("No values to set");
+				return {
+					where: (where: SQL) => {
+						controls.beforeUpdate?.();
+						const name = getTableName(table);
+						const found = tableRows(name).filter(matches(where));
+						writes.push({ table: name, operation: "update" });
+						// Drizzle omits undefined values from UPDATE assignments.
+						const defined = Object.fromEntries(
+							Object.entries(value).filter(([, field]) => field !== undefined),
+						);
+						for (const row of found) Object.assign(row, defined);
+						return {
+							returning: async () => found,
+							then: (resolve: (value: undefined) => unknown) =>
+								Promise.resolve(undefined).then(resolve),
+						};
+					},
+				};
+			},
+		}),
+		delete: (table: Table) => ({
+			where: async (where: SQL) => {
+				const name = getTableName(table);
+				writes.push({ table: name, operation: "delete" });
+				const predicate = matches(where);
+				rows[name] = tableRows(name).filter((row) => !predicate(row));
+			},
+		}),
+		transaction: async <T>(
+			operation: (tx: typeof productionDb) => Promise<T>,
+		): Promise<T> => {
+			const previous = queue;
+			let release = () => {};
+			queue = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			await previous;
+			try {
+				return await operation(database as unknown as typeof productionDb);
+			} finally {
+				release();
+			}
+		},
+	};
+	return {
+		db: database as unknown as typeof productionDb,
+		rows,
+		writes,
+		controls,
+	};
+}
