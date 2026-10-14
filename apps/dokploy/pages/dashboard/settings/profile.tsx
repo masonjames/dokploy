@@ -5,14 +5,14 @@ import type { ReactElement } from "react";
 import superjson from "superjson";
 import { ShowApiKeys } from "@/components/dashboard/settings/api/show-api-keys";
 import { LinkingAccount } from "@/components/dashboard/settings/linking-account/linking-account";
+import { DeleteAccount } from "@/components/dashboard/settings/profile/delete-account";
 import { ProfileForm } from "@/components/dashboard/settings/profile/profile-form";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { appRouter } from "@/server/api/root";
 import { api } from "@/utils/api";
-import { getLocale, serverSideTranslations } from "@/utils/i18n";
 
 const Page = () => {
-	const { data } = api.user.get.useQuery();
+	const { data: permissions } = api.user.getPermissions.useQuery();
 	const { data: isCloud } = api.settings.isCloud.useQuery();
 
 	return (
@@ -20,9 +20,8 @@ const Page = () => {
 			<div className="h-full rounded-xl max-w-5xl mx-auto flex flex-col gap-4">
 				<ProfileForm />
 				{isCloud && <LinkingAccount />}
-				{(data?.canAccessToAPI ||
-					data?.role === "owner" ||
-					data?.role === "admin") && <ShowApiKeys />}
+				{permissions?.api.read && <ShowApiKeys />}
+				<DeleteAccount />
 			</div>
 		</div>
 	);
@@ -37,7 +36,6 @@ export async function getServerSideProps(
 	ctx: GetServerSidePropsContext<{ serviceId: string }>,
 ) {
 	const { req, res } = ctx;
-	const locale = getLocale(req.cookies);
 	const { user, session } = await validateRequest(req);
 
 	const helpers = createServerSideHelpers({
@@ -58,7 +56,7 @@ export async function getServerSideProps(
 	if (!user) {
 		return {
 			redirect: {
-				permanent: true,
+				permanent: false,
 				destination: "/",
 			},
 		};
@@ -67,7 +65,6 @@ export async function getServerSideProps(
 	return {
 		props: {
 			trpcState: helpers.dehydrate(),
-			...(await serverSideTranslations(locale, ["settings"])),
 		},
 	};
 }

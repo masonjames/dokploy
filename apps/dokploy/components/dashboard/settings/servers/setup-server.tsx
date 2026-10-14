@@ -35,10 +35,10 @@ import { ValidateServer } from "./validate-server";
 
 interface Props {
 	serverId: string;
-	asButton?: boolean;
+	children?: React.ReactNode;
 }
 
-export const SetupServer = ({ serverId, asButton = false }: Props) => {
+export const SetupServer = ({ serverId, children }: Props) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const { data: server } = api.server.one.useQuery(
 		{
@@ -81,24 +81,19 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 
 	return (
 		<Dialog open={isOpen} onOpenChange={setIsOpen}>
-			{asButton ? (
+			{children ? (
+				<DialogTrigger asChild>{children}</DialogTrigger>
+			) : (
 				<DialogTrigger asChild>
-					<Button variant="outline" size="icon" className="h-9 w-9">
-						<Settings className="h-4 w-4" />
+					<Button className="w-full cursor-pointer " size="sm">
+						Setup Server <Settings className="size-4" />
 					</Button>
 				</DialogTrigger>
-			) : (
-				<Button
-					className="w-full cursor-pointer "
-					size="sm"
-					onClick={() => {
-						setIsOpen(true);
-					}}
-				>
-					Setup Server <Settings className="size-4" />
-				</Button>
 			)}
-			<DialogContent className="sm:max-w-4xl  ">
+			<DialogContent
+				className="sm:max-w-4xl  "
+				onCloseAutoFocus={(e) => e.preventDefault()}
+			>
 				<DialogHeader>
 					<div className="flex flex-col gap-1.5">
 						<DialogTitle className="flex items-center gap-2">
@@ -118,9 +113,10 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 					</div>
 				) : (
 					<div id="hook-form-add-gitlab" className="grid w-full gap-4">
-						<AlertBlock type="warning">
-							Using a root user is required to ensure everything works as
-							expected.
+						<AlertBlock type="info">
+							You can connect as root or as a non-root user with passwordless
+							sudo access. If using a non-root user, ensure passwordless sudo is
+							configured.
 						</AlertBlock>
 
 						<Tabs defaultValue="ssh-keys">
@@ -150,7 +146,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 							</TabsList>
 							<TabsContent
 								value="ssh-keys"
-								className="outline-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+								className="outline-hidden ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 							>
 								<div className="flex flex-col gap-2 text-sm text-muted-foreground pt-3">
 									<p className="text-primary text-base font-semibold">
@@ -160,7 +156,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 									<ul>
 										<li>
 											1. Add the public SSH Key when you create a server in your
-											preffered provider (Hostinger, Digital Ocean, Hetzner,
+											preferred provider (Hostinger, Digital Ocean, Hetzner,
 											etc){" "}
 										</li>
 										<li>2. Add The SSH Key to Server Manually</li>
@@ -190,7 +186,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 											Automatic process
 										</span>
 										<Link
-											href="https://docs.dokploy.com/docs/core/multi-server/instructions#requirements"
+											href="https://docs.dokploy.com/docs/core/remote-servers/instructions#requirements"
 											target="_blank"
 											className="text-primary flex flex-row gap-2"
 										>
@@ -324,7 +320,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 							</TabsContent>
 							<TabsContent
 								value="validate"
-								className="outline-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+								className="outline-hidden ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 							>
 								<div className="flex flex-col gap-2 text-sm text-muted-foreground pt-3">
 									<ValidateServer serverId={serverId} />
@@ -334,7 +330,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 								<>
 									<TabsContent
 										value="audit"
-										className="outline-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+										className="outline-hidden ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 									>
 										<div className="flex flex-col gap-2 text-sm text-muted-foreground pt-3">
 											<SecurityAudit serverId={serverId} />
@@ -342,7 +338,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 									</TabsContent>
 									<TabsContent
 										value="monitoring"
-										className="outline-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+										className="outline-hidden ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 									>
 										<div className="flex flex-col gap-2 text-sm pt-3">
 											<div className="rounded-xl bg-background shadow-md border">
@@ -352,7 +348,7 @@ export const SetupServer = ({ serverId, asButton = false }: Props) => {
 									</TabsContent>
 									<TabsContent
 										value="gpu-setup"
-										className="outline-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+										className="outline-hidden ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 									>
 										<div className="flex flex-col gap-2 text-sm text-muted-foreground pt-3">
 											<GPUSupport serverId={serverId} />

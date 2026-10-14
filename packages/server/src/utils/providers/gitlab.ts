@@ -8,8 +8,10 @@ import {
 } from "@dokploy/server/services/gitlab";
 import type { InferResultType } from "@dokploy/server/types/with";
 import { TRPCError } from "@trpc/server";
+import { quote } from "shell-quote";
+import type { z } from "zod";
 
-export const refreshGitlabToken = async (gitlabProviderId: string) => {
+const refreshGitlabTokenIfExpired = async (gitlabProviderId: string) => {
 	const gitlabProvider = await findGitlabById(gitlabProviderId);
 	const currentTime = Math.floor(Date.now() / 1000);
 
@@ -42,7 +44,9 @@ export const refreshGitlabToken = async (gitlabProviderId: string) => {
 
 	const data = await response.json();
 
-	const expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+	const expiresAt = data.expires_in
+		? Math.floor(Date.now() / 1000) + data.expires_in
+		: null;
 
 	await updateGitlab(gitlabProviderId, {
 		accessToken: data.access_token,
@@ -50,6 +54,23 @@ export const refreshGitlabToken = async (gitlabProviderId: string) => {
 		expiresAt,
 	});
 	return data;
+};
+
+// GitLab invalidates a refresh token when it is used, so concurrent callers must share one refresh
+const pendingRefreshes = new Map<
+	string,
+	ReturnType<typeof refreshGitlabTokenIfExpired>
+>();
+
+export const refreshGitlabToken = (gitlabProviderId: string) => {
+	let refresh = pendingRefreshes.get(gitlabProviderId);
+	if (!refresh) {
+		refresh = refreshGitlabTokenIfExpired(gitlabProviderId).finally(() => {
+			pendingRefreshes.delete(gitlabProviderId);
+		});
+		pendingRefreshes.set(gitlabProviderId, refresh);
+	}
+	return refresh;
 };
 
 export const haveGitlabRequirements = (gitlabProvider: Gitlab) => {
@@ -89,12 +110,14 @@ const getGitlabRepoClone = (
 	gitlab: GitlabInfo,
 	gitlabPathNamespace: string | null,
 ) => {
-	const repoClone = `${gitlab?.gitlabUrl.replace(/^https?:\/\//, "")}/${gitlabPathNamespace}.git`;
+	const url = gitlab?.gitlabInternalUrl || gitlab?.gitlabUrl;
+	const repoClone = `${url?.replace(/^https?:\/\//, "")}/${gitlabPathNamespace}.git`;
 	return repoClone;
 };
 
 const getGitlabCloneUrl = (gitlab: GitlabInfo, repoClone: string) => {
-	const isSecure = gitlab?.gitlabUrl.startsWith("https://");
+	const url = gitlab?.gitlabInternalUrl || gitlab?.gitlabUrl;
+	const isSecure = url?.startsWith("https://");
 	const cloneUrl = `http${isSecure ? "s" : ""}://oauth2:${gitlab?.accessToken}@${repoClone}`;
 	return cloneUrl;
 };
@@ -107,6 +130,7 @@ interface CloneGitlabRepository {
 	enableSubmodules: boolean;
 	serverId: string | null;
 	type?: "application" | "compose";
+	outputPathOverride?: string;
 }
 
 export const cloneGitlabRepository = async ({
@@ -121,6 +145,7 @@ export const cloneGitlabRepository = async ({
 		gitlabPathNamespace,
 		enableSubmodules,
 		serverId,
+		outputPathOverride,
 	} = entity;
 	const { COMPOSE_PATH, APPLICATIONS_PATH } = paths(!!serverId);
 
@@ -141,13 +166,13 @@ export const cloneGitlabRepository = async ({
 	}
 
 	const basePath = type === "compose" ? COMPOSE_PATH : APPLICATIONS_PATH;
-	const outputPath = join(basePath, appName, "code");
+	const outputPath = outputPathOverride ?? join(basePath, appName, "code");
 	command += `rm -rf ${outputPath};`;
 	command += `mkdir -p ${outputPath};`;
 	const repoClone = getGitlabRepoClone(gitlab, gitlabPathNamespace);
 	const cloneUrl = getGitlabCloneUrl(gitlab, repoClone);
-	command += `echo "Cloning Repo ${repoClone} to ${outputPath}: ✅";`;
-	command += `git clone --branch ${gitlabBranch} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} ${cloneUrl} ${outputPath} --progress;`;
+	command += `echo ${quote([`Cloning Repo ${repoClone} to ${outputPath}: ✅`])};`;
+	command += `git clone --branch ${quote([String(gitlabBranch ?? "")])} --depth 1 ${enableSubmodules ? "--recurse-submodules" : ""} ${quote([String(cloneUrl ?? "")])} ${quote([String(outputPath ?? "")])} --progress;`;
 	return command;
 };
 
@@ -169,7 +194,7 @@ export const getGitlabRepositories = async (gitlabId?: string) => {
 		if (groupName) {
 			return groupName
 				.split(",")
-				.some((name) =>
+				.some((name: string) =>
 					full_path.toLowerCase().startsWith(name.trim().toLowerCase()),
 				);
 		}
@@ -211,10 +236,13 @@ export const getGitlabBranches = async (input: {
 	const allBranches = [];
 	let page = 1;
 	const perPage = 100; // GitLab's max per page is 100
+	const baseUrl = (
+		gitlabProvider.gitlabInternalUrl || gitlabProvider.gitlabUrl
+	).replace(/\/+$/, "");
 
 	while (true) {
 		const branchesResponse = await fetch(
-			`${gitlabProvider.gitlabUrl}/api/v4/projects/${input.id}/repository/branches?page=${page}&per_page=${perPage}`,
+			`${baseUrl}/api/v4/projects/${input.id}/repository/branches?page=${page}&per_page=${perPage}`,
 			{
 				headers: {
 					Authorization: `Bearer ${gitlabProvider.accessToken}`,
@@ -254,7 +282,7 @@ export const getGitlabBranches = async (input: {
 };
 
 export const testGitlabConnection = async (
-	input: typeof apiGitlabTestConnection._type,
+	input: z.infer<typeof apiGitlabTestConnection>,
 ) => {
 	const { gitlabId, groupName } = input;
 
@@ -274,7 +302,7 @@ export const testGitlabConnection = async (
 		if (groupName) {
 			return groupName
 				.split(",")
-				.some((name) =>
+				.some((name: string) =>
 					full_path.toLowerCase().startsWith(name.trim().toLowerCase()),
 				);
 		}
@@ -289,10 +317,13 @@ export const validateGitlabProvider = async (gitlabProvider: Gitlab) => {
 		const allProjects = [];
 		let page = 1;
 		const perPage = 100; // GitLab's max per page is 100
+		const baseUrl = (
+			gitlabProvider.gitlabInternalUrl || gitlabProvider.gitlabUrl
+		).replace(/\/+$/, "");
 
 		while (true) {
 			const response = await fetch(
-				`${gitlabProvider.gitlabUrl}/api/v4/projects?membership=true&page=${page}&per_page=${perPage}`,
+				`${baseUrl}/api/v4/projects?membership=true&page=${page}&per_page=${perPage}`,
 				{
 					headers: {
 						Authorization: `Bearer ${gitlabProvider.accessToken}`,

@@ -45,5 +45,5 @@ yarn-error.log*
 
 .db
 
-# Development environment
-.devcontainer
+.playwright-*
+.credentials

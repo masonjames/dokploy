@@ -3,7 +3,14 @@ import { findServerById, IS_CLOUD, validateRequest } from "@dokploy/server";
 import { spawn } from "node-pty";
 import { Client } from "ssh2";
 import { WebSocketServer } from "ws";
-import { getShell, isValidContainerId } from "./utils";
+import { canAccessDockerOverWss } from "./authorize";
+import {
+	getShell,
+	isValidContainerId,
+	isValidSearch,
+	isValidSince,
+	isValidTail,
+} from "./utils";
 
 export const setupDockerContainerLogsWebSocketServer = (
 	server: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>,
@@ -30,11 +37,12 @@ export const setupDockerContainerLogsWebSocketServer = (
 	wssTerm.on("connection", async (ws, req) => {
 		const url = new URL(req.url || "", `http://${req.headers.host}`);
 		const containerId = url.searchParams.get("containerId");
-		const tail = url.searchParams.get("tail");
-		const search = url.searchParams.get("search");
-		const since = url.searchParams.get("since");
+		const tail = url.searchParams.get("tail") ?? "100";
+		const search = url.searchParams.get("search") ?? "";
+		const since = url.searchParams.get("since") ?? "all";
 		const serverId = url.searchParams.get("serverId");
 		const runType = url.searchParams.get("runType");
+		const serviceId = url.searchParams.get("serviceId");
 		const { user, session } = await validateRequest(req);
 
 		if (!containerId) {
@@ -48,8 +56,28 @@ export const setupDockerContainerLogsWebSocketServer = (
 			return;
 		}
 
+		if (!isValidTail(tail)) {
+			ws.close(4000, "Invalid tail parameter");
+			return;
+		}
+
+		if (!isValidSince(since)) {
+			ws.close(4000, "Invalid since parameter");
+			return;
+		}
+
+		if (search !== "" && !isValidSearch(search)) {
+			ws.close(4000, "Invalid search parameter");
+			return;
+		}
+
 		if (!user || !session) {
 			ws.close();
+			return;
+		}
+
+		if (!(await canAccessDockerOverWss(user, session, serverId, serviceId))) {
+			ws.close(4003, "Not authorized");
 			return;
 		}
 
@@ -63,6 +91,11 @@ export const setupDockerContainerLogsWebSocketServer = (
 		try {
 			if (serverId) {
 				const server = await findServerById(serverId);
+
+				if (server.organizationId !== session.activeOrganizationId) {
+					ws.close();
+					return;
+				}
 
 				if (!server.sshKeyId) return;
 				const client = new Client();

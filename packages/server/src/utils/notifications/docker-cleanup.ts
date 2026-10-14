@@ -1,7 +1,7 @@
 import { db } from "@dokploy/server/db";
 import { notifications } from "@dokploy/server/db/schema";
 import DockerCleanupEmail from "@dokploy/server/emails/emails/docker-cleanup";
-import { renderAsync } from "@react-email/components";
+import { render } from "@react-email/components";
 import { format } from "date-fns";
 import { and, eq } from "drizzle-orm";
 import {
@@ -10,10 +10,12 @@ import {
 	sendEmailNotification,
 	sendGotifyNotification,
 	sendLarkNotification,
+	sendMattermostNotification,
 	sendNtfyNotification,
 	sendPushoverNotification,
 	sendResendNotification,
 	sendSlackNotification,
+	sendTeamsNotification,
 	sendTelegramNotification,
 } from "./utils";
 
@@ -36,9 +38,11 @@ export const sendDockerCleanupNotifications = async (
 			resend: true,
 			gotify: true,
 			ntfy: true,
+			mattermost: true,
 			custom: true,
 			lark: true,
 			pushover: true,
+			teams: true,
 		},
 	});
 
@@ -51,13 +55,15 @@ export const sendDockerCleanupNotifications = async (
 			slack,
 			gotify,
 			ntfy,
+			mattermost,
 			custom,
 			lark,
 			pushover,
+			teams,
 		} = notification;
 		try {
 			if (email || resend) {
-				const template = await renderAsync(
+				const template = await render(
 					DockerCleanupEmail({ message, date: date.toLocaleString() }),
 				).catch();
 
@@ -165,6 +171,14 @@ export const sendDockerCleanupNotifications = async (
 				});
 			}
 
+			if (mattermost) {
+				await sendMattermostNotification(mattermost, {
+					text: `**✅ Docker Cleanup**\n\n**Message:** ${message}\n**Date:** ${format(date, "PP")}\n**Time:** ${format(date, "pp")}`,
+					channel: mattermost.channel,
+					username: mattermost.username || "Dokploy",
+				});
+			}
+
 			if (custom) {
 				await sendCustomNotification(custom, {
 					title: "Docker Cleanup",
@@ -261,6 +275,16 @@ export const sendDockerCleanupNotifications = async (
 					"Docker Cleanup",
 					`Date: ${date.toLocaleString()}\nMessage: ${message}`,
 				);
+			}
+
+			if (teams) {
+				await sendTeamsNotification(teams, {
+					title: "✅ Docker Cleanup",
+					facts: [
+						{ name: "Date", value: format(date, "PP pp") },
+						{ name: "Message", value: message },
+					],
+				});
 			}
 		} catch (error) {
 			console.log(error);

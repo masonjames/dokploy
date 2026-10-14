@@ -2,6 +2,7 @@
 
 import {
 	Eye,
+	KeyRound,
 	Loader2,
 	LogIn,
 	Pencil,
@@ -9,7 +10,7 @@ import {
 	Shield,
 	Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { DialogAction } from "@/components/shared/dialog-action";
 import { Badge } from "@/components/ui/badge";
@@ -31,8 +32,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/utils/api";
+import { useUrl } from "@/utils/hooks/use-url";
 import { RegisterOidcDialog } from "./register-oidc-dialog";
 import { RegisterSamlDialog } from "./register-saml-dialog";
+import { ScimDialog } from "./scim-dialog";
 
 type ProviderForDetails = {
 	id: string | null;
@@ -76,32 +79,25 @@ export const SSOSettings = () => {
 	const utils = api.useUtils();
 	const [detailsProvider, setDetailsProvider] =
 		useState<ProviderForDetails | null>(null);
-	const [baseURL, setBaseURL] = useState("");
+	const baseURL = useUrl();
 	const [manageOriginsOpen, setManageOriginsOpen] = useState(false);
 	const [editingOrigin, setEditingOrigin] = useState<string | null>(null);
 	const [editingValue, setEditingValue] = useState("");
 	const [newOriginInput, setNewOriginInput] = useState("");
 
-	useEffect(() => {
-		if (typeof window !== "undefined") {
-			setBaseURL(window.location.origin);
-		}
-	}, []);
-
-	const { data: providers, isLoading } = api.sso.listProviders.useQuery();
-	const { data: userData } = api.user.get.useQuery(undefined, {
-		enabled: manageOriginsOpen,
-	});
-	const { mutateAsync: deleteProvider, isLoading: isDeleting } =
+	const { data: providers, isPending } = api.sso.listProviders.useQuery();
+	const { data: trustedOrigins = [] } = api.sso.getTrustedOrigins.useQuery(
+		undefined,
+		{ enabled: manageOriginsOpen },
+	);
+	const { mutateAsync: deleteProvider, isPending: isDeleting } =
 		api.sso.deleteProvider.useMutation();
-	const { mutateAsync: addTrustedOrigin, isLoading: isAddingOrigin } =
+	const { mutateAsync: addTrustedOrigin, isPending: isAddingOrigin } =
 		api.sso.addTrustedOrigin.useMutation();
-	const { mutateAsync: removeTrustedOrigin, isLoading: isRemovingOrigin } =
+	const { mutateAsync: removeTrustedOrigin, isPending: isRemovingOrigin } =
 		api.sso.removeTrustedOrigin.useMutation();
-	const { mutateAsync: updateTrustedOrigin, isLoading: isUpdatingOrigin } =
+	const { mutateAsync: updateTrustedOrigin, isPending: isUpdatingOrigin } =
 		api.sso.updateTrustedOrigin.useMutation();
-
-	const trustedOrigins = userData?.user?.trustedOrigins ?? [];
 
 	const handleAddOrigin = async () => {
 		const value = newOriginInput.trim();
@@ -110,7 +106,7 @@ export const SSOSettings = () => {
 			await addTrustedOrigin({ origin: value });
 			toast.success("Trusted origin added");
 			setNewOriginInput("");
-			await utils.user.get.invalidate();
+			await utils.sso.getTrustedOrigins.invalidate();
 		} catch (err) {
 			toast.error(
 				err instanceof Error ? err.message : "Failed to add trusted origin",
@@ -123,7 +119,7 @@ export const SSOSettings = () => {
 			await removeTrustedOrigin({ origin });
 			toast.success("Trusted origin removed");
 			if (editingOrigin === origin) setEditingOrigin(null);
-			await utils.user.get.invalidate();
+			await utils.sso.getTrustedOrigins.invalidate();
 		} catch (err) {
 			toast.error(
 				err instanceof Error ? err.message : "Failed to remove trusted origin",
@@ -149,7 +145,7 @@ export const SSOSettings = () => {
 			toast.success("Trusted origin updated");
 			setEditingOrigin(null);
 			setEditingValue("");
-			await utils.user.get.invalidate();
+			await utils.sso.getTrustedOrigins.invalidate();
 		} catch (err) {
 			toast.error(
 				err instanceof Error ? err.message : "Failed to update trusted origin",
@@ -175,18 +171,25 @@ export const SSOSettings = () => {
 						Users can sign in with their organization&apos;s IdP.
 					</CardDescription>
 				</div>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => setManageOriginsOpen(true)}
-					className="shrink-0"
-				>
-					<Shield className="mr-2 size-4" />
-					Manage origins
-				</Button>
+				<div className="flex flex-wrap gap-2 shrink-0">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setManageOriginsOpen(true)}
+					>
+						<Shield className="mr-2 size-4" />
+						Manage origins
+					</Button>
+					<ScimDialog>
+						<Button variant="outline" size="sm">
+							<KeyRound className="mr-2 size-4" />
+							Manage SCIM
+						</Button>
+					</ScimDialog>
+				</div>
 			</div>
 
-			{isLoading ? (
+			{isPending ? (
 				<div className="flex items-center gap-2 justify-center min-h-[25vh]">
 					<Loader2 className="size-6 text-muted-foreground animate-spin" />
 					<span className="text-sm text-muted-foreground">
@@ -271,6 +274,22 @@ export const SSOSettings = () => {
 													<Eye className="mr-1 size-3" />
 													View details
 												</Button>
+												{isOidc && (
+													<RegisterOidcDialog providerId={provider.providerId}>
+														<Button variant="ghost" size="sm">
+															<Pencil className="mr-1 size-3" />
+															Edit
+														</Button>
+													</RegisterOidcDialog>
+												)}
+												{isSaml && (
+													<RegisterSamlDialog providerId={provider.providerId}>
+														<Button variant="ghost" size="sm">
+															<Pencil className="mr-1 size-3" />
+															Edit
+														</Button>
+													</RegisterSamlDialog>
+												)}
 												<DialogAction
 													title="Remove SSO provider"
 													description={`Remove provider "${provider.providerId}"? Users will no longer be able to sign in with this IdP.`}
@@ -350,8 +369,7 @@ export const SSOSettings = () => {
 							<DialogHeader>
 								<DialogTitle>SSO provider details</DialogTitle>
 								<DialogDescription>
-									View-only. To change settings, remove this provider and add it
-									again with the new values.
+									Use Edit to change provider settings (OIDC or SAML).
 								</DialogDescription>
 							</DialogHeader>
 							<div className="grid gap-3 py-2">

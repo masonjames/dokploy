@@ -1,6 +1,5 @@
-import { zodResolver } from "@hookform/resolvers/zod";
+import { standardSchemaResolver as zodResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Palette, User } from "lucide-react";
-import { useTranslation } from "next-i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -32,6 +31,7 @@ import { generateSHA256Hash, getFallbackAvatarInitials } from "@/lib/utils";
 import { api } from "@/utils/api";
 import { Configure2FA } from "./configure-2fa";
 import { Enable2FA } from "./enable-2fa";
+import { ManagePasskeys } from "./manage-passkeys";
 
 const profileSchema = z.object({
 	email: z
@@ -64,16 +64,15 @@ const randomImages = [
 ];
 
 export const ProfileForm = () => {
-	const { data, refetch, isLoading } = api.user.get.useQuery();
+	const { data, refetch, isPending } = api.user.get.useQuery();
 	const { data: isCloud } = api.settings.isCloud.useQuery();
 
 	const {
 		mutateAsync,
-		isLoading: isUpdating,
+		isPending: isUpdating,
 		isError,
 		error,
 	} = api.user.update.useMutation();
-	const { t } = useTranslation("settings");
 	const [gravatarHash, setGravatarHash] = useState<string | null>(null);
 	const colorInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,7 +83,7 @@ export const ProfileForm = () => {
 		]);
 	}, [gravatarHash]);
 
-	const form = useForm<Profile>({
+	const form = useForm({
 		defaultValues: {
 			email: data?.user?.email || "",
 			password: "",
@@ -157,19 +156,22 @@ export const ProfileForm = () => {
 						<div>
 							<CardTitle className="text-xl flex flex-row gap-2">
 								<User className="size-6 text-muted-foreground self-center" />
-								{t("settings.profile.title")}
+								Account
 							</CardTitle>
 							<CardDescription>
-								{t("settings.profile.description")}
+								Change the details of your profile here.
 							</CardDescription>
 						</div>
 
-						{!data?.user.twoFactorEnabled ? <Enable2FA /> : <Configure2FA />}
+						<div className="flex flex-row gap-2 flex-wrap">
+							<ManagePasskeys />
+							{!data?.user.twoFactorEnabled ? <Enable2FA /> : <Configure2FA />}
+						</div>
 					</CardHeader>
 
 					<CardContent className="space-y-2 py-8 border-t">
 						{isError && <AlertBlock type="error">{error?.message}</AlertBlock>}
-						{isLoading ? (
+						{isPending ? (
 							<div className="flex flex-row gap-2 items-center justify-center text-sm text-muted-foreground min-h-[35vh]">
 								<span>Loading...</span>
 								<Loader2 className="animate-spin size-4" />
@@ -213,12 +215,9 @@ export const ProfileForm = () => {
 												name="email"
 												render={({ field }) => (
 													<FormItem>
-														<FormLabel>{t("settings.profile.email")}</FormLabel>
+														<FormLabel>Email</FormLabel>
 														<FormControl>
-															<Input
-																placeholder={t("settings.profile.email")}
-																{...field}
-															/>
+															<Input placeholder="Email" {...field} />
 														</FormControl>
 														<FormMessage />
 													</FormItem>
@@ -233,7 +232,7 @@ export const ProfileForm = () => {
 														<FormControl>
 															<Input
 																type="password"
-																placeholder={t("settings.profile.password")}
+																placeholder="Current Password"
 																{...field}
 																value={field.value || ""}
 															/>
@@ -247,13 +246,11 @@ export const ProfileForm = () => {
 												name="password"
 												render={({ field }) => (
 													<FormItem>
-														<FormLabel>
-															{t("settings.profile.password")}
-														</FormLabel>
+														<FormLabel>Password</FormLabel>
 														<FormControl>
 															<Input
 																type="password"
-																placeholder={t("settings.profile.password")}
+																placeholder="Password"
 																{...field}
 																value={field.value || ""}
 															/>
@@ -268,9 +265,7 @@ export const ProfileForm = () => {
 												name="image"
 												render={({ field }) => (
 													<FormItem>
-														<FormLabel>
-															{t("settings.profile.avatar")}
-														</FormLabel>
+														<FormLabel>Avatar</FormLabel>
 														<FormControl>
 															<RadioGroup
 																onValueChange={(e) => {
@@ -281,7 +276,7 @@ export const ProfileForm = () => {
 																className="flex flex-row flex-wrap gap-2 max-xl:justify-center"
 															>
 																<FormItem key="no-avatar">
-																	<FormLabel className="[&:has([data-state=checked])>.default-avatar]:border-primary [&:has([data-state=checked])>.default-avatar]:border-1 [&:has([data-state=checked])>.default-avatar]:p-px cursor-pointer">
+																	<FormLabel className="[&:has([data-state=checked])>.default-avatar]:border-primary [&:has([data-state=checked])>.default-avatar]:border [&:has([data-state=checked])>.default-avatar]:p-px cursor-pointer">
 																		<FormControl>
 																			<RadioGroupItem
 																				value=""
@@ -299,7 +294,7 @@ export const ProfileForm = () => {
 																	</FormLabel>
 																</FormItem>
 																<FormItem key="custom-upload">
-																	<FormLabel className="[&:has([data-state=checked])>.upload-avatar]:border-primary [&:has([data-state=checked])>.upload-avatar]:border-1 [&:has([data-state=checked])>.upload-avatar]:p-px cursor-pointer">
+																	<FormLabel className="[&:has([data-state=checked])>.upload-avatar]:border-primary [&:has([data-state=checked])>.upload-avatar]:border [&:has([data-state=checked])>.upload-avatar]:p-px cursor-pointer">
 																		<FormControl>
 																			<RadioGroupItem
 																				value="upload"
@@ -365,7 +360,7 @@ export const ProfileForm = () => {
 																	</FormLabel>
 																</FormItem>
 																<FormItem key="color-avatar">
-																	<FormLabel className="[&:has([data-state=checked])>.color-avatar]:border-primary [&:has([data-state=checked])>.color-avatar]:border-1 [&:has([data-state=checked])>.color-avatar]:p-px cursor-pointer relative">
+																	<FormLabel className="[&:has([data-state=checked])>.color-avatar]:border-primary [&:has([data-state=checked])>.color-avatar]:border [&:has([data-state=checked])>.color-avatar]:p-px cursor-pointer relative">
 																		<FormControl>
 																			<RadioGroupItem
 																				value="color"
@@ -400,7 +395,7 @@ export const ProfileForm = () => {
 																</FormItem>
 																{availableAvatars.map((image) => (
 																	<FormItem key={image}>
-																		<FormLabel className="[&:has([data-state=checked])>img]:border-primary [&:has([data-state=checked])>img]:border-1 [&:has([data-state=checked])>img]:p-px cursor-pointer">
+																		<FormLabel className="[&:has([data-state=checked])>img]:border-primary [&:has([data-state=checked])>img]:border [&:has([data-state=checked])>img]:p-px cursor-pointer">
 																			<FormControl>
 																				<RadioGroupItem
 																					value={image}
@@ -429,7 +424,7 @@ export const ProfileForm = () => {
 													control={form.control}
 													name="allowImpersonation"
 													render={({ field }) => (
-														<FormItem className="flex flex-row items-center justify-between p-3 mt-4 border rounded-lg shadow-sm">
+														<FormItem className="flex flex-row items-center justify-between p-3 mt-4 border rounded-lg shadow-xs">
 															<div className="space-y-0.5">
 																<FormLabel>Allow Impersonation</FormLabel>
 																<FormDescription>
@@ -454,7 +449,7 @@ export const ProfileForm = () => {
 
 										<div className="flex items-center justify-end gap-2">
 											<Button type="submit" isLoading={isUpdating}>
-												{t("settings.common.save")}
+												Save
 											</Button>
 										</div>
 									</form>
