@@ -1,5 +1,20 @@
 # About this fork
 
+## Siteworthy Q4 ownership
+
+The adopted October 22, 2026 roadmap puts the Siteworthy care product beside
+stock upstream Dokploy. This maintained fork supports the existing internal
+installation; it is not the customer beta distribution or the home of a new
+fork-native product executor. Q4 fork work is limited to necessary security
+maintenance and the existing Caddy contribution path. Older full-stack rollout
+plans are historical and do not restart from their original dates.
+
+[Siteworthy product roadmap](https://github.com/masonjames/siteworthy/blob/main/docs/roadmap.md) · [product tracker](https://github.com/masonjames/siteworthy/issues/1) · [platform coordination](https://github.com/masonjames/platform-infra/issues/795) · [Dockhand internal maintenance](https://github.com/masonjames/dockhand/issues/199).
+
+Siteworthy is the product name; Figaro is its display persona; Dockhand remains
+the internal runtime. Future fork retirement requires its own reviewed migration
+and operational approval. This document changes no installed system or license.
+
 This repository is a fork of [Dokploy](https://github.com/Dokploy/dokploy),
 maintained by Mason James. The maintained branch is `mj/prod-caddy`.
 
