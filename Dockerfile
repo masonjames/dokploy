@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS base
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN npm install -g npm@12.0.1
@@ -60,7 +60,7 @@ RUN set -eu; for binary in rclone pack docker-buildx docker-compose; do \
     done
 
 # Compile JavaScript on the builder architecture; runtime dependencies stay target-native.
-FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+FROM --platform=$BUILDPLATFORM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN npm install -g npm@12.0.1 && corepack enable && corepack prepare pnpm@10.34.5 --activate
