@@ -11,7 +11,7 @@ FROM docker:29.7.2-cli@sha256:3f4743208d2338c934d7b8bcfbe1bb54c0b2355c510ad5e0f3
 FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS patched-tools
 # All patched tools disable CGO and target the existing Linux AMD64 release.
 ENV GOOS=linux GOARCH=amd64
-ARG X_CRYPTO_VERSION=v0.55.0
+ARG X_CRYPTO_VERSION=v0.56.0
 
 ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce
 RUN git clone --filter=blob:none https://github.com/rclone/rclone.git /src/rclone \
@@ -55,10 +55,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-w -X github.com/docker/compose/v5/internal.Version=v5.5.0" -o /out/docker-compose ./cmd
 
 RUN set -eu; for binary in rclone pack docker-buildx docker-compose; do \
-      go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.55\.0'; \
+      go version -m "/out/$binary" | grep -Eq 'dep[[:space:]]+golang.org/x/crypto[[:space:]]+v0\.56\.0'; \
       go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOOS=linux'; \
       go version -m "/out/$binary" | grep -Eq 'build[[:space:]]+GOARCH=amd64'; \
-    done
+    done; \
+    go version -m /out/pack | grep -Eq 'dep[[:space:]]+github.com/chainguard-dev/kaniko[[:space:]]+v1\.25\.20'
 
 # Compile JavaScript on the builder architecture; runtime dependencies stay target-native.
 FROM --platform=$BUILDPLATFORM node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS build
