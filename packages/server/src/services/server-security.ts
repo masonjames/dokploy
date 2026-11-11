@@ -3,6 +3,7 @@ import { quote } from "shell-quote";
 import ssh2 from "ssh2";
 import { z } from "zod";
 import { IS_CLOUD } from "../constants";
+import { BuildAdmissionError } from "../utils/process/build-admission";
 import { ExecError } from "../utils/process/ExecError";
 import { execAsyncRemote } from "../utils/process/execAsync";
 import { findServerById } from "./server";
@@ -19,6 +20,15 @@ const SSHD_MAIN_BACKUP_PATH = "/etc/ssh/sshd_config.dokploy.bak";
 const SSH_REVERT_DELAY_SECONDS = 60;
 const SSH_PENDING_MARKER_PATH = "/run/dokploy-ssh-pending";
 const SSH_CONFIRM_ATTEMPTS = 5;
+
+// These host changes do not yet participate in governed operation admission.
+export const assertServerSecurityMutationSupported = () => {
+	if (process.env.DOKPLOY_BUILD_ADMISSION_MODE === "required") {
+		throw new BuildAdmissionError(
+			"Server security changes are unavailable while host build admission is required. Use the governed operation process for host changes.",
+		);
+	}
+};
 
 const runRemote = async (serverId: string, script: string) => {
 	try {
@@ -217,6 +227,7 @@ export const configureFail2ban = async (
 	serverId: string,
 	config: Fail2banConfig,
 ) => {
+	assertServerSecurityMutationSupported();
 	const ignoreip = [
 		"127.0.0.1/8",
 		"::1",
@@ -310,6 +321,7 @@ export const setFail2banEnabled = async (
 	serverId: string,
 	enabled: boolean,
 ) => {
+	assertServerSecurityMutationSupported();
 	await runRemote(
 		serverId,
 		enabled
@@ -323,6 +335,7 @@ export const unbanFail2banIp = async (
 	jail: string,
 	ip: string,
 ) => {
+	assertServerSecurityMutationSupported();
 	if (!/^[\w.-]+$/.test(jail) || !isIp(ip)) {
 		throw new Error("Invalid jail or IP address");
 	}
@@ -333,6 +346,7 @@ export const unbanFail2banIp = async (
 };
 
 export const banFail2banIp = async (serverId: string, ip: string) => {
+	assertServerSecurityMutationSupported();
 	if (!isIp(ip)) throw new Error("Invalid IP address");
 	if ((await getPanelIps()).includes(ip)) {
 		throw new Error(
@@ -481,7 +495,9 @@ fi
 	};
 };
 
+// apt list may rebuild package caches; this remote read is not qualified as write-free.
 export const getPendingUpdates = async (serverId: string) => {
+	assertServerSecurityMutationSupported();
 	const output = await runRemote(
 		serverId,
 		`
@@ -631,6 +647,7 @@ export const updateSshSettings = async (
 	serverId: string,
 	settings: SshSettings,
 ) => {
+	assertServerSecurityMutationSupported();
 	const server = await findServerById(serverId);
 	if (server.username === "root" && settings.permitRootLogin === "no") {
 		throw new Error(
@@ -725,6 +742,7 @@ export const removeAuthorizedKey = async (
 	serverId: string,
 	fingerprint: string,
 ) => {
+	assertServerSecurityMutationSupported();
 	if (!/^SHA256:[A-Za-z0-9+/]{43}$/.test(fingerprint)) {
 		throw new Error("Invalid key fingerprint");
 	}
@@ -858,6 +876,7 @@ export const disconnectSshSession = async (
 	terminal: string,
 	banIp?: string,
 ) => {
+	assertServerSecurityMutationSupported();
 	if (!/^(pts\/\d+|tty\d+)$/.test(terminal)) {
 		throw new Error("Invalid terminal");
 	}
