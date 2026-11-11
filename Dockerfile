@@ -23,6 +23,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-s -X github.com/rclone/rclone/fs.Version=v1.75.1" -o /out/rclone .
 
+ARG KANIKO_VERSION=v1.25.20
 ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709
 RUN git clone --filter=blob:none https://github.com/buildpacks/pack.git /src/pack \
     && git -C /src/pack checkout "$PACK_REVISION" \
@@ -30,7 +31,7 @@ RUN git clone --filter=blob:none https://github.com/buildpacks/pack.git /src/pac
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd /src/pack \
-    && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" \
+    && go get "golang.org/x/crypto@$X_CRYPTO_VERSION" "github.com/chainguard-dev/kaniko@$KANIKO_VERSION" \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/buildpacks/pack/pkg/client.Version=0.40.9" -o /out/pack .
 
 ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690

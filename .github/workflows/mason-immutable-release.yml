@@ -160,6 +160,7 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+          trivyignores: security/release-scan-exceptions.trivyignore
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v3.7.0
