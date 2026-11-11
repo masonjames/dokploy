@@ -220,25 +220,44 @@ echo "Execution completed."
 // Keep fallback proxies and their images available for rollback. Never force removal:
 // Docker must refuse if a container starts between listing and removal.
 const cleanupStoppedContainers = `
-containers=$(docker container ls --all --filter status=exited --filter status=created --filter status=dead --format '{{.ID}} {{.Names}}') || exit 1
-printf '%s\n' "$containers" | while read -r id name; do
+cleanup_status=0
+stopped_proxy=0
+containers=$(docker container ls --all --format '{{.ID}} {{.Names}} {{.State}}') || exit 1
+while read -r id names state; do
     [ -n "$id" ] || continue
-    case "$name" in
-        dokploy-traefik|dokploy-traefik-previous|dokploy-caddy|dokploy-caddy-previous) continue ;;
+    case ",$names," in
+        *,dokploy-traefik,*|*,dokploy-traefik-previous,*|*,dokploy-caddy,*|*,dokploy-caddy-previous,*)
+            [ "$state" = running ] || stopped_proxy=1
+            continue ;;
     esac
-    docker container rm "$id" || exit 1
-done
+    case "$state" in
+        exited|created|dead) ;;
+        *) continue ;;
+    esac
+    if ! removal_error=$(docker container rm "$id" 2>&1); then
+        case "$removal_error" in
+            *"No such container:"*) ;;
+            *) printf '%s\n' "$removal_error" >&2; cleanup_status=1 ;;
+        esac
+    fi
+done <<EOF
+$containers
+EOF
 `;
 
 const cleanupCommands = {
-	containers: cleanupStoppedContainers,
+	containers: `${cleanupStoppedContainers}\nexit "$cleanup_status"`,
 	images: "docker image prune --all --force",
 	volumes: "docker volume prune --all --force",
 	builders: "docker builder prune --all --force",
 	system: `${cleanupStoppedContainers}
- docker image prune --all --force
- docker network prune --force
- docker builder prune --all --force`,
+ docker image prune --all --force || cleanup_status=1
+ # Docker may prune a network whose only attached container is a stopped proxy.
+ if [ "$stopped_proxy" = 0 ]; then
+     docker network prune --force || cleanup_status=1
+ fi
+ docker builder prune --all --force || cleanup_status=1
+ exit "$cleanup_status"`,
 };
 
 export const cleanupContainers = async (serverId?: string) => {
