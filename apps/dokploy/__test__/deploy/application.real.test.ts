@@ -17,7 +17,8 @@ vi.mock("@dokploy/server/db", () => {
 			returning: vi.fn().mockResolvedValue([{}]),
 			from: vi.fn(() => chain),
 			innerJoin: vi.fn(() => chain),
-			then: (resolve: (v: any) => void) => {
+			// biome-ignore lint/suspicious/noThenProperty: Drizzle query chains are intentionally awaitable.
+			then: (resolve: (v: unknown) => void) => {
 				resolve([]);
 			},
 		};
@@ -64,6 +65,7 @@ vi.mock("@dokploy/server/services/deployment", () => ({
 	createDeployment: vi.fn(),
 	updateDeploymentStatus: vi.fn(),
 	updateDeployment: vi.fn(),
+	writeDeploymentErrorLog: vi.fn(),
 }));
 
 vi.mock("@dokploy/server/utils/notifications/build-success", () => ({

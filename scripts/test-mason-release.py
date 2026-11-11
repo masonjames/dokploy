@@ -22,8 +22,8 @@ current_snapshot = json.loads(
     (ROOT / "apps/dokploy/drizzle/meta/0190_snapshot.json").read_text()
 )
 
-assert package["version"] == "v0.30.6"
-assert [entry["tag"] for entry in journal[-10:]] == [
+assert package["version"] == "v0.31.0"
+assert [entry["tag"] for entry in journal[-13:]] == [
     "0186_heavy_mathemanic",
     "0187_grey_domino",
     "0188_crazy_lionheart",
@@ -34,8 +34,11 @@ assert [entry["tag"] for entry in journal[-10:]] == [
     "0193_chemical_the_liberteens",
     "0194_acoustic_prima",
     "0195_classy_whirlwind",
+    "0196_worthless_ravenous",
+    "0197_logs_and_metrics",
+    "0198_nostalgic_mongoose",
 ]
-assert all(a["when"] < b["when"] for a, b in zip(journal[-10:], journal[-9:]))
+assert all(a["when"] < b["when"] for a, b in zip(journal[-13:], journal[-12:]))
 for statement in (
     'ADD VALUE \'porkbun\'',
     'ADD VALUE \'phase\'',
@@ -52,7 +55,7 @@ assert "dockerId" in current_snapshot["tables"]["public.network"]["columns"]
 assert "onboardingCompletedAt" in current_snapshot["tables"]["public.user"]["columns"]
 
 # Drizzle skips migrations older than the installed timestamp; preserve the fork chain.
-for number in range(191, 196):
+for number in range(191, 199):
     snapshot = json.loads(
         (ROOT / f"apps/dokploy/drizzle/meta/{number:04}_snapshot.json").read_text()
     )
@@ -93,7 +96,7 @@ assert re.search(
 )
 
 assert re.search(
-    r"^FROM node:24\.18\.0-slim@sha256:[0-9a-f]{64} AS base$",
+    r"^FROM node:24\.22\.1-bookworm-slim@sha256:[0-9a-f]{64} AS base$",
     dockerfile,
     re.MULTILINE,
 )
@@ -120,7 +123,7 @@ for binary in ("docker-buildx", "docker-compose", "rclone", "pack"):
 assert 'org.opencontainers.image.revision="$SOURCE_REVISION"' in dockerfile
 assert dockerfile.index("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./") < dockerfile.index("pnpm install --frozen-lockfile")
 assert dockerfile.index("pnpm install --frozen-lockfile") < dockerfile.index("COPY . .")
-assert "FROM --platform=$BUILDPLATFORM node:24.18.0-slim@sha256:" in dockerfile
+assert "FROM --platform=$BUILDPLATFORM node:24.22.1-bookworm-slim@sha256:" in dockerfile
 package_stage = dockerfile.split("FROM base AS package\n", 1)[1].split("FROM base AS dokploy", 1)[0]
 assert "pnpm install --frozen-lockfile" in package_stage
 assert "COPY --from=build /usr/src/app/packages/server/dist" in package_stage

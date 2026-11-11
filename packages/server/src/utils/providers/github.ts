@@ -230,7 +230,7 @@ export const cloneGithubRepository = async ({
 	const repoclone = `${cloneBase.host}/${owner}/${repository}.git`;
 	command += `rm -rf ${outputPath};`;
 	command += `mkdir -p ${outputPath};`;
-	const cloneUrl = `https://${repoclone}`;
+	const cloneUrl = `${cloneBase.protocol}//${repoclone}`;
 
 	command += `echo ${quote([`Cloning Repo ${repoclone} to ${outputPath}: ✅`])};`;
 	command += getAuthenticatedGitCloneCommand({

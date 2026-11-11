@@ -146,8 +146,10 @@ test("does not persist invalid cleanup cron schedules", async () => {
 test("reads Traefik's log as upstream does", async () => {
 	readMonitoringConfigMock.mockResolvedValue("traefik lines");
 
-	expect(await readRequestLog(true)).toBe("traefik lines");
-	expect(readMonitoringConfigMock).toHaveBeenCalledWith(true);
+	expect(await readRequestLog({ start: "2026-01-01" })).toBe("traefik lines");
+	expect(readMonitoringConfigMock).toHaveBeenCalledWith({
+		start: "2026-01-01",
+	});
 	expect(createReadStreamMock).not.toHaveBeenCalled();
 });
 

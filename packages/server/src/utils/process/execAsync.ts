@@ -4,6 +4,9 @@ import { findServerById } from "@dokploy/server/services/server";
 import { Client } from "ssh2";
 import { ExecError } from "./ExecError";
 
+// ~2 min without replies before a silent host is treated as dead.
+export const sshKeepalive = { keepaliveInterval: 15_000, keepaliveCountMax: 8 };
+
 export class WriteFileRemoteError extends Error {
 	constructor(
 		message: string,
@@ -23,6 +26,10 @@ export { ExecError } from "./ExecError";
 
 const execAsyncBase = util.promisify(exec);
 
+// Node embeds the full command in error.message; it may carry secrets.
+const withoutCommand = (message: string, command: string) =>
+	message.split(command).join("[command omitted]");
+
 export const execAsync = async (
 	command: string,
 	options?: {
@@ -30,6 +37,7 @@ export const execAsync = async (
 		env?: NodeJS.ProcessEnv;
 		shell?: string;
 		signal?: AbortSignal;
+		maxBuffer?: number;
 	},
 ): Promise<{ stdout: string; stderr: string }> => {
 	try {
@@ -47,13 +55,16 @@ export const execAsync = async (
 			// @ts-expect-error
 			const stderr = error.stderr?.toString() || "";
 
-			throw new ExecError(`Command execution failed: ${error.message}`, {
-				command,
-				stdout,
-				stderr,
-				exitCode,
-				originalError: error,
-			});
+			throw new ExecError(
+				`Command execution failed: ${withoutCommand(error.message, command)}`,
+				{
+					command,
+					stdout,
+					stderr,
+					exitCode,
+					originalError: error,
+				},
+			);
 		}
 		throw error;
 	}
@@ -77,13 +88,16 @@ export const execAsyncStream = (
 		const childProcess = exec(command, options, (error) => {
 			if (error) {
 				reject(
-					new ExecError(`Command execution failed: ${error.message}`, {
-						command,
-						stdout: stdoutComplete,
-						stderr: stderrComplete,
-						exitCode: error.code,
-						originalError: error,
-					}),
+					new ExecError(
+						`Command execution failed: ${withoutCommand(error.message, command)}`,
+						{
+							command,
+							stdout: stdoutComplete,
+							stderr: stderrComplete,
+							exitCode: error.code,
+							originalError: error,
+						},
+					),
 				);
 				return;
 			}
@@ -127,11 +141,6 @@ export const execFileAsync = async (
 ): Promise<{ stdout: string; stderr: string }> => {
 	const child = execFile(command, args);
 
-	if (options.input && child.stdin) {
-		child.stdin.write(options.input);
-		child.stdin.end();
-	}
-
 	return new Promise((resolve, reject) => {
 		let stdout = "";
 		let stderr = "";
@@ -155,6 +164,11 @@ export const execFileAsync = async (
 		});
 
 		child.on("error", reject);
+
+		if (options.input !== undefined && child.stdin) {
+			child.stdin.on("error", reject);
+			child.stdin.end(options.input);
+		}
 	});
 };
 
@@ -163,6 +177,7 @@ export const execAsyncRemote = async (
 	command: string,
 	onData?: (data: string) => void,
 	signal?: AbortSignal,
+	input?: string,
 ): Promise<{ stdout: string; stderr: string }> => {
 	if (!serverId) return { stdout: "", stderr: "" };
 	const server = await findServerById(serverId);
@@ -234,6 +249,13 @@ export const execAsyncRemote = async (
 							stderr += data.toString();
 							onData?.(data.toString());
 						});
+					if (input !== undefined) {
+						stream.on("error", (error: Error) => {
+							conn.end();
+							reject(error);
+						});
+						stream.end(input);
+					}
 				});
 			})
 			.on("error", (err) => {
@@ -284,6 +306,7 @@ export const execAsyncRemote = async (
 				username: server.username,
 				privateKey: server.sshKey?.privateKey,
 				timeout: 99999,
+				...sshKeepalive,
 			});
 	});
 };
@@ -343,6 +366,7 @@ export const writeFileRemote = async (
 				username: server.username,
 				privateKey: server.sshKey?.privateKey,
 				timeout: 99999,
+				...sshKeepalive,
 			});
 	});
 };

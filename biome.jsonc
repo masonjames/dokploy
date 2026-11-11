@@ -13,6 +13,12 @@
 			"!**/.next/**",
 			"!**/dist",
 			"!**/drizzle/**",
+			// Frozen provenance fixture: its recorded SHA-256 binds these exact journal bytes.
+			"!community/writer_fixture/meta/_journal.json",
+			// Frozen oracle fixture: its recorded hash must not change.
+			"!community/writer_fixture/oracle.json",
+			// Frozen source-provenance fixture: its recorded hash must not change.
+			"!community/writer_fixture/maintained-source.json",
 			"!node_modules/**",
 			"!packages/server/package.json"
 		],

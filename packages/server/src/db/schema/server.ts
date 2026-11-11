@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	integer,
@@ -46,6 +46,10 @@ export const server = pgTable("server", {
 	// Not read any more: trusted proxies are a file in Caddy's global/ folder.
 	// The column stays so the previous release can still be started.
 	caddyTrustedProxyConfig: jsonb("caddyTrustedProxyConfig").default(null),
+	telemetryProviderIds: text("telemetryProviderIds")
+		.array()
+		.notNull()
+		.default(sql`ARRAY[]::text[]`),
 	buildsConcurrency: integer("buildsConcurrency").notNull().default(1),
 	createdAt: text("createdAt").notNull(),
 	organizationId: text("organizationId")

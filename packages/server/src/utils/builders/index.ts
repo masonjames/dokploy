@@ -4,6 +4,7 @@ import type { InferResultType } from "@dokploy/server/types/with";
 import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { getRegistryTag, uploadImageRemoteCommand } from "../cluster/upload";
+import { buildDokployLabels } from "../docker/dokploy-labels";
 import {
 	calculateResources,
 	generateBindMounts,
@@ -12,6 +13,7 @@ import {
 	generateVolumeMounts,
 	prepareEnvironmentVariables,
 } from "../docker/utils";
+import { sleep } from "../process/execAsync";
 import { getRemoteDocker } from "../servers/remote-docker";
 import { withResolvedVaultRefs } from "../vault";
 import { getDockerCommand } from "./docker-file";
@@ -153,7 +155,18 @@ export const mechanizeDockerContainer = async (
 						Args: args,
 					}),
 				...(Ulimits && { Ulimits }),
-				Labels,
+				Labels: {
+					...Labels,
+					...buildDokployLabels({
+						organizationId: application.environment.project.organizationId,
+						projectId: application.environment.projectId,
+						projectName: application.environment.project.name,
+						environmentId: application.environmentId,
+						environmentName: application.environment.name,
+						applicationId: application.applicationId,
+						applicationName: application.name,
+					}),
+				},
 			},
 			Networks: resolvedNetworks,
 			RestartPolicy,
@@ -177,18 +190,24 @@ export const mechanizeDockerContainer = async (
 		UpdateConfig,
 	};
 
+	let forceUpdate = 0;
 	try {
 		context.assertLockHeld();
 		const service = docker.getService(appName);
 		const inspect = await service.inspect();
 		context.assertLockHeld();
+		forceUpdate = inspect.Spec.TaskTemplate.ForceUpdate + 1;
 
 		await service.update({
 			version: Number.parseInt(inspect.Version.Index),
 			...settings,
+			// Dokploy sets no service-level labels of its own. A service update
+			// replaces the whole spec, so labels added outside Dokploy (e.g.
+			// traefik.* for the Swarm provider) are dropped unless carried over.
+			Labels: inspect.Spec?.Labels ?? {},
 			TaskTemplate: {
 				...settings.TaskTemplate,
-				ForceUpdate: inspect.Spec.TaskTemplate.ForceUpdate + 1,
+				ForceUpdate: forceUpdate,
 			},
 		});
 		context.assertLockHeld();
@@ -201,6 +220,35 @@ export const mechanizeDockerContainer = async (
 			await docker.createService(settings);
 		}
 		context.assertLockHeld();
+	}
+
+	// Swarm only reports a task it can't place (e.g. insufficient resources) on the task itself.
+	const deadline = Date.now() + 3000;
+	while (Date.now() < deadline) {
+		const tasks = await docker.listTasks({
+			filters: JSON.stringify({
+				service: [appName],
+				"desired-state": ["running"],
+			}),
+		});
+		const newTasks = tasks.filter(
+			(task) => (task.Spec?.ForceUpdate ?? 0) === forceUpdate,
+		);
+		const unscheduled = newTasks.find(
+			(task) => task.Status?.State === "pending" && task.Status?.Err,
+		);
+		if (unscheduled) {
+			throw new Error(
+				`Swarm could not start the new version: ${unscheduled.Status.Err}. Lower the memory/CPU reservation or free resources on the server.`,
+			);
+		}
+		const scheduled =
+			newTasks.length > 0 &&
+			newTasks.every(
+				(task) => !["new", "allocated", "pending"].includes(task.Status?.State),
+			);
+		if (scheduled) return;
+		await sleep(300);
 	}
 };
 

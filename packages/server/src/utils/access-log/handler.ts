@@ -24,9 +24,11 @@ const caddyRequestLogPath = () =>
  * The access log of the proxy that serves the Dokploy host: Traefik's as
  * upstream reads it, or the last lines of Caddy's
  */
-export const readRequestLog = async (readAll = false) => {
+export const readRequestLog = async (
+	dateRange?: Parameters<typeof readMonitoringConfig>[0],
+) => {
 	if ((await getWebServerProvider()) !== "caddy") {
-		return readMonitoringConfig(readAll);
+		return readMonitoringConfig(dateRange);
 	}
 	const file = caddyRequestLogPath();
 	if (!fs.existsSync(file)) return "";

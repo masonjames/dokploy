@@ -68,6 +68,7 @@ vi.mock("@dokploy/server/services/admin", () => ({
 }));
 
 vi.mock("@dokploy/server/services/deployment", () => ({
+	writeDeploymentErrorLog: vi.fn(),
 	createDeployment: vi.fn(),
 	updateDeploymentStatus: vi.fn(),
 	updateDeployment: vi.fn(),
