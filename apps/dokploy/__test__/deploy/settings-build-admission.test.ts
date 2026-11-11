@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
 	events: [] as string[],
@@ -35,13 +35,67 @@ vi.mock("@dokploy/server/utils/process/spawnAsync", () => ({
 	}),
 }));
 
-import { dispatchDokployUpdate } from "@dokploy/server/services/settings";
+import {
+	dispatchDokployUpdate,
+	getUpdateData,
+	togglePanelPort,
+} from "@dokploy/server/services/settings";
 import { spawnAsync } from "@dokploy/server/utils/process/spawnAsync";
 
+vi.mock("@dokploy/server/utils/process/execAsync", () => ({
+	execAsync: vi.fn(),
+	execAsyncRemote: vi.fn(),
+}));
+
+import { execAsync } from "@dokploy/server/utils/process/execAsync";
+
 describe("Dokploy self-update build admission", () => {
+	afterEach(() => vi.unstubAllEnvs());
+
+	it("refuses stock updates on governed installs before admission, pull or service dispatch", async () => {
+		vi.stubEnv("DOKPLOY_BUILD_ADMISSION_MODE", "required");
+		await expect(dispatchDokployUpdate("latest")).rejects.toThrow(
+			"fork's release process",
+		);
+		expect(state.events).toEqual([]);
+		expect(execAsync).not.toHaveBeenCalled();
+	});
+
+	it.each([true, false])(
+		"refuses panel port enable=%s before inspecting or updating Docker",
+		async (enable) => {
+			vi.stubEnv("DOKPLOY_BUILD_ADMISSION_MODE", "required");
+			await expect(togglePanelPort(enable)).rejects.toThrow(
+				"Panel port changes are unavailable",
+			);
+			expect(execAsync).not.toHaveBeenCalled();
+			expect(state.events).toEqual([]);
+		},
+	);
+
+	it("can report an available update without pulling or dispatching it", async () => {
+		vi.stubEnv("DOKPLOY_BUILD_ADMISSION_MODE", "required");
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					results: [
+						{ name: "latest", digest: "sha256:new" },
+						{ name: "v99.0.0", digest: "sha256:new" },
+					],
+					next: null,
+				}),
+			),
+		);
+		await expect(getUpdateData("v0.31.0")).resolves.toMatchObject({
+			updateAvailable: true,
+		});
+		expect(state.events).toEqual([]);
+		fetchSpy.mockRestore();
+	});
 	beforeEach(() => {
 		state.events.length = 0;
 		vi.clearAllMocks();
+		vi.mocked(execAsync).mockResolvedValue({ stdout: "service", stderr: "" });
 	});
 
 	it("releases admission before dispatch and handles detached rejection", async () => {

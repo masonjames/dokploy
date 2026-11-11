@@ -6,10 +6,12 @@ import {
 	readEnvironmentVariables,
 } from "@dokploy/server/services/settings";
 import { TRAEFIK_VERSION } from "@dokploy/server/setup/traefik-setup";
+import { quote } from "shell-quote";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	execAsync: vi.fn(),
+	execAsyncStream: vi.fn(),
 	execAsyncRemote: vi.fn(),
 	getRemoteDocker: vi.fn(),
 }));
@@ -18,6 +20,7 @@ vi.mock("@dokploy/server/db", () => ({ db: {} }));
 
 vi.mock("@dokploy/server/utils/process/execAsync", () => ({
 	execAsync: mocks.execAsync,
+	execAsyncStream: mocks.execAsyncStream,
 	execAsyncRemote: mocks.execAsyncRemote,
 	sleep: vi.fn(),
 }));
@@ -192,19 +195,13 @@ describe("pullTraefikImage", () => {
 	const docker = {
 		getImage: vi.fn(() => image),
 		pull: vi.fn(),
-		modem: { followProgress: vi.fn() },
-	};
-	const finishDownload = (events: { error?: string }[] = []) => {
-		docker.modem.followProgress.mockImplementationOnce(
-			(_stream: unknown, done: (error: Error | null, out: unknown[]) => void) =>
-				done(null, events),
-		);
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mocks.getRemoteDocker.mockResolvedValue(docker);
-		docker.pull.mockResolvedValue("stream");
+		mocks.execAsyncStream.mockReset();
+		mocks.execAsyncRemote.mockReset();
 	});
 
 	it("skips the download when the image is already there", async () => {
@@ -220,30 +217,44 @@ describe("pullTraefikImage", () => {
 		image.inspect
 			.mockRejectedValueOnce(new Error("No such image"))
 			.mockResolvedValueOnce({});
-		finishDownload([{ status: "Downloading" } as { error?: string }]);
-
-		await pullTraefikImage();
-
-		expect(docker.pull).toHaveBeenCalledWith(`traefik:v${TRAEFIK_VERSION}`);
-		expect(docker.modem.followProgress).toHaveBeenCalledOnce();
+		let finishDownload = () => {};
+		mocks.execAsyncStream.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					finishDownload = resolve;
+				}),
+		);
+		const pull = pullTraefikImage();
+		await vi.waitFor(() =>
+			expect(mocks.execAsyncStream).toHaveBeenCalledOnce(),
+		);
+		expect(image.inspect).toHaveBeenCalledTimes(1);
+		finishDownload();
+		await pull;
+		expect(mocks.execAsyncStream).toHaveBeenCalledWith(
+			`docker pull ${quote([`traefik:v${TRAEFIK_VERSION}`])}`,
+			undefined,
+			{ signal: expect.any(AbortSignal) },
+		);
+		expect(docker.pull).not.toHaveBeenCalled();
 		expect(image.inspect).toHaveBeenCalledTimes(2);
 	});
 
-	it("fails on a registry error reported inside the download stream", async () => {
+	it("fails when the admitted pull reports a registry error", async () => {
 		image.inspect.mockRejectedValueOnce(new Error("No such image"));
-		finishDownload([
-			{ error: "toomanyrequests: You have reached your pull rate limit" },
-		]);
+		mocks.execAsyncStream.mockRejectedValueOnce(
+			new Error("toomanyrequests: You have reached your pull rate limit"),
+		);
 
 		await expect(pullTraefikImage()).rejects.toThrow("toomanyrequests");
 	});
 
 	it("fails when the registry refuses the tag", async () => {
 		image.inspect.mockRejectedValueOnce(new Error("No such image"));
-		docker.pull.mockRejectedValueOnce(new Error("manifest unknown"));
+		mocks.execAsyncStream.mockRejectedValueOnce(new Error("manifest unknown"));
 
 		await expect(pullTraefikImage()).rejects.toThrow("manifest unknown");
-		expect(docker.modem.followProgress).not.toHaveBeenCalled();
+		expect(docker.pull).not.toHaveBeenCalled();
 	});
 
 	it("downloads on the remote server's Docker", async () => {
@@ -258,7 +269,7 @@ describe("pullTraefikImage", () => {
 		vi.useFakeTimers();
 		try {
 			image.inspect.mockRejectedValueOnce(new Error("No such image"));
-			docker.modem.followProgress.mockImplementationOnce(() => {});
+			mocks.execAsyncRemote.mockReturnValueOnce(new Promise(() => {}));
 
 			const pull = pullTraefikImage("server-a");
 			const assertion = expect(pull).rejects.toThrow("90 seconds");

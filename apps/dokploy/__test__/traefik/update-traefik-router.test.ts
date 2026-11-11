@@ -3,11 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	assertTraefikProvider: vi.fn(),
+	assertDokployUpdateSupported: vi.fn(),
+	getUpdateData: vi.fn(),
+	getDockerResourceType: vi.fn(),
+	dispatchDokployUpdate: vi.fn(),
 	findServerById: vi.fn(),
 	getTraefikOverview: vi.fn(),
 	pullTraefikImage: vi.fn(),
 	readEnvironmentVariableList: vi.fn(),
 	readPorts: vi.fn(),
+	readEnvironmentVariables: vi.fn(),
+	prepareEnvironmentVariables: vi.fn(),
 	writeTraefikSetup: vi.fn(),
 }));
 
@@ -58,7 +64,7 @@ const overview = (versionStatus: string) => ({
 
 describe("Traefik update endpoints", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 		mocks.findServerById.mockImplementation(async (serverId: string) => ({
 			serverId,
 			organizationId: serverId === "server-b" ? "org-b" : "org-a",
@@ -348,4 +354,59 @@ it("refuses a Caddy server before inspecting or pulling Traefik", async () => {
 	expect(mocks.getTraefikOverview).not.toHaveBeenCalled();
 	expect(mocks.pullTraefikImage).not.toHaveBeenCalled();
 	expect(mocks.writeTraefikSetup).not.toHaveBeenCalled();
+});
+
+beforeEach(() => {
+	vi.resetAllMocks();
+	mocks.findServerById.mockResolvedValue({ organizationId: "org-a" });
+	mocks.readPorts.mockResolvedValue([]);
+	mocks.readEnvironmentVariables.mockResolvedValue("");
+	mocks.prepareEnvironmentVariables.mockReturnValue([]);
+	mocks.getDockerResourceType.mockResolvedValue("service");
+	mocks.getUpdateData.mockResolvedValue({
+		updateAvailable: true,
+		latestVersion: "v99.0.0",
+	});
+});
+
+it.each([
+	[
+		"toggleDashboard",
+		(serverId?: string) =>
+			caller.toggleDashboard({ serverId, enableDashboard: false }),
+	],
+	[
+		"writeTraefikEnv",
+		(serverId?: string) =>
+			caller.writeTraefikEnv({ serverId, env: "KEY=value" }),
+	],
+	[
+		"updateTraefikPorts",
+		(serverId?: string) =>
+			caller.updateTraefikPorts({ serverId, additionalPorts: [] }),
+	],
+] as const)(
+	"%s refuses Caddy before starting background work",
+	async (_, invoke) => {
+		mocks.writeTraefikSetup.mockRejectedValue(
+			new Error("This server runs Caddy"),
+		);
+		mocks.assertTraefikProvider.mockRejectedValueOnce(
+			new Error("This server runs Caddy"),
+		);
+		await expect(invoke("server-a")).rejects.toThrow("This server runs Caddy");
+		expect(mocks.assertTraefikProvider).toHaveBeenCalledWith("server-a");
+		expect(mocks.readPorts).not.toHaveBeenCalled();
+		expect(mocks.writeTraefikSetup).not.toHaveBeenCalled();
+	},
+);
+
+it("refuses governed panel updates before Docker inspection or update checks", async () => {
+	mocks.assertDokployUpdateSupported.mockImplementationOnce(() => {
+		throw new Error("Use the fork's release process");
+	});
+	await expect(caller.updateServer()).rejects.toThrow("fork's release process");
+	expect(mocks.getDockerResourceType).not.toHaveBeenCalled();
+	expect(mocks.getUpdateData).not.toHaveBeenCalled();
+	expect(mocks.dispatchDokployUpdate).not.toHaveBeenCalled();
 });

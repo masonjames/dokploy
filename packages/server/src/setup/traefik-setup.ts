@@ -240,29 +240,10 @@ export const ensureTraefikImage = async (
 	) {
 		return;
 	}
-	const stream = await docker.pull(imageName);
-	await new Promise<void>((resolve, reject) => {
-		const onAbort = () => {
-			stream.destroy();
-			reject(new Error("Traefik image pull aborted after build lock loss"));
-		};
-		if (context.signal.aborted) {
-			onAbort();
-			return;
-		}
-		context.signal.addEventListener("abort", onAbort, { once: true });
-		docker.modem.followProgress(
-			stream,
-			(error: Error | null, events: { error?: string }[] = []) => {
-				context.signal.removeEventListener("abort", onAbort);
-				const failed = events.find((event) => event.error);
-				if (error || failed) {
-					reject(error ?? new Error(failed?.error));
-				} else {
-					resolve();
-				}
-			},
-		);
+	await pullImageUnderBuildAdmission({
+		context,
+		dockerImage: imageName,
+		serverId: serverId || null,
 	});
 	await image.inspect();
 	context.assertLockHeld();

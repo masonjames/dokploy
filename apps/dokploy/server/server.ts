@@ -65,7 +65,14 @@ void app.prepare().then(async () => {
 			syncAllCaddyInBackground();
 			createDefaultMiddlewares();
 			await initializeNetwork();
-			if ((await getWebServerProvider()) === "traefik") {
+			const provider = await getWebServerProvider().catch((error) => {
+				console.error(
+					"Failed to read web server provider; skipping Traefik restore:",
+					error,
+				);
+				return undefined;
+			});
+			if (provider === "traefik") {
 				await restoreInterruptedTraefik().catch((error) => {
 					console.error("Failed to restore Traefik:", error);
 				});

@@ -71,7 +71,16 @@ const runBuildAdmittedCommand = async ({
 	);
 };
 
+export const assertDokployUpdateSupported = () => {
+	if (process.env.DOKPLOY_BUILD_ADMISSION_MODE === "required") {
+		throw new Error(
+			"Updates to a governed install go through the fork's release process. In-panel Dokploy updates are unavailable while host build admission is required.",
+		);
+	}
+};
+
 export const dispatchDokployUpdate = async (imageTag: string) => {
+	assertDokployUpdateSupported();
 	const image = `dokploy/dokploy:${imageTag}`;
 	await withHostBuildAdmission(
 		{ serverId: null, operation: "dokploy-self-update" },
@@ -524,6 +533,11 @@ export const isRequestFromPanelHost = (
 };
 
 export const togglePanelPort = async (enable: boolean) => {
+	if (process.env.DOKPLOY_BUILD_ADMISSION_MODE === "required") {
+		throw new Error(
+			"Panel port changes are unavailable while host build admission is required. Change the governed Dokploy service through the fork's release process.",
+		);
+	}
 	const resourceType = await getDockerResourceType("dokploy");
 	if (resourceType !== "service") {
 		throw new Error(

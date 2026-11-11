@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	setWebServerProviderIds: vi.fn(),
@@ -22,7 +22,12 @@ const loadAgent = async (isCloud: boolean) => {
 		setWebServerProviderIds: mocks.setWebServerProviderIds,
 	}));
 	const locks = new Map<string, Promise<unknown>>();
-	vi.doMock("@dokploy/server/setup/vector-setup", () => ({
+	vi.doMock("@dokploy/server/setup/vector-setup", async (importOriginal) => ({
+		assertTelemetryDeploymentSupported: (
+			await importOriginal<
+				typeof import("@dokploy/server/setup/vector-setup")
+			>()
+		).assertTelemetryDeploymentSupported,
 		LOCAL_SERVER_NAME: "Dokploy Server (local)",
 		reconcileVectorAgent: mocks.reconcileVectorAgent,
 		removeVectorAgent: mocks.removeVectorAgent,
@@ -302,4 +307,27 @@ describe("reconcileVectorTargets", () => {
 		expect(mocks.reconcileVectorAgent).toHaveBeenCalledTimes(1);
 		expect(mocks.reconcileVectorAgent).toHaveBeenCalledWith("server-1");
 	});
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it.each([undefined, "server-1"])(
+	"refuses governed telemetry selection before saving on %s",
+	async (serverId) => {
+		vi.stubEnv("DOKPLOY_BUILD_ADMISSION_MODE", "required");
+		const { applyVectorAgentSelection } = await loadAgent(false);
+		await expect(
+			applyVectorAgentSelection(sessionA, serverId, ["lp-1"]),
+		).rejects.toThrow("host build admission is required");
+		expect(mocks.setWebServerProviderIds).not.toHaveBeenCalled();
+		expect(mocks.setServerProviderIds).not.toHaveBeenCalled();
+		expect(mocks.reconcileVectorAgent).not.toHaveBeenCalled();
+	},
+);
+
+it("still permits removing governed telemetry", async () => {
+	vi.stubEnv("DOKPLOY_BUILD_ADMISSION_MODE", "required");
+	const { applyVectorAgentSelection } = await loadAgent(false);
+	await applyVectorAgentSelection(sessionA, undefined, []);
+	expect(mocks.setWebServerProviderIds).toHaveBeenCalledWith("org-a", []);
 });

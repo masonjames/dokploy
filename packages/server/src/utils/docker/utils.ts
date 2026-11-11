@@ -217,21 +217,28 @@ ${exec}
 echo "Execution completed."
 `;
 
-// A stopped proxy must stay startable; keeping its container also keeps its image from `image prune --all`.
-const skipIfProxyStopped = (command: string) => `
-if docker container inspect --format '{{.State.Running}}' dokploy-traefik dokploy-traefik-previous dokploy-caddy 2>/dev/null | grep -q false; then
-    echo "Skipping '${command}': a web server proxy is stopped"
-else
-    ${command}
-fi
+// Keep fallback proxies and their images available for rollback. Never force removal:
+// Docker must refuse if a container starts between listing and removal.
+const cleanupStoppedContainers = `
+containers=$(docker container ls --all --filter status=exited --filter status=created --filter status=dead --format '{{.ID}} {{.Names}}') || exit 1
+printf '%s\n' "$containers" | while read -r id name; do
+    [ -n "$id" ] || continue
+    case "$name" in
+        dokploy-traefik|dokploy-traefik-previous|dokploy-caddy|dokploy-caddy-previous) continue ;;
+    esac
+    docker container rm "$id" || exit 1
+done
 `;
 
 const cleanupCommands = {
-	containers: skipIfProxyStopped("docker container prune --force"),
+	containers: cleanupStoppedContainers,
 	images: "docker image prune --all --force",
 	volumes: "docker volume prune --all --force",
 	builders: "docker builder prune --all --force",
-	system: skipIfProxyStopped("docker system prune --all --force"),
+	system: `${cleanupStoppedContainers}
+ docker image prune --all --force
+ docker network prune --force
+ docker builder prune --all --force`,
 };
 
 export const cleanupContainers = async (serverId?: string) => {

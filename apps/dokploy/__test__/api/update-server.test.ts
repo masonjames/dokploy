@@ -8,6 +8,7 @@ const mockGetUpdateData = vi.hoisted(() => vi.fn());
 const noop = vi.fn();
 
 vi.mock("@dokploy/server", () => ({
+	assertDokployUpdateSupported: vi.fn(),
 	dispatchDokployUpdate: mockDispatchUpdate,
 	CLEANUP_CRON_JOB: "0 0 * * *",
 	checkGPUStatus: noop,

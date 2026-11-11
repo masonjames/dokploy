@@ -25,22 +25,20 @@ import {
 
 let binDir: string;
 
-// Fake `docker` that answers `container inspect` with the given states and logs every other call.
-const runWithFakeDocker = (script: string, states: Record<string, string>) => {
+// Execute the generated shell against a Docker fixture; no daemon is contacted.
+const runWithFakeDocker = (script: string) => {
 	const log = path.join(binDir, "calls.log");
 	writeFileSync(log, "");
-	const cases = Object.entries(states)
-		.map(
-			([name, running]) => `[ "$a" = "${name}" ] && echo ${running} && found=1`,
-		)
-		.join("; ");
 	writeFileSync(
 		path.join(binDir, "docker"),
 		`#!/bin/sh
-if [ "$1" = container ] && [ "$2" = inspect ]; then
-	shift 4; status=0
-	for a in "$@"; do found=; ${cases || ":"}; [ -z "$found" ] && echo "No such container: $a" >&2 && status=1; done
-	exit $status
+if [ "$1 $2" = "container ls" ]; then
+    printf '%s\n' 'proxy1 dokploy-traefik' 'proxy2 dokploy-caddy' 'proxy3 dokploy-caddy-previous' 'proxy4 dokploy-traefik-previous' 'unrelated exited-app' 'similar dokploy-traefik-app'
+    exit 0
+fi
+if [ "$1 $2" = "container inspect" ]; then
+    echo false
+    exit 0
 fi
 [ "$1" = node ] && exit 0
 echo "$*" >> "${log}"
@@ -71,33 +69,32 @@ describe("docker cleanup keeps a stopped dokploy-traefik", () => {
 	});
 
 	it.each([
-		["cleanupContainers", cleanupContainers, "container prune --force"],
-		["cleanupSystem", cleanupSystem, "system prune --all --force"],
-	])("%s skips pruning while Traefik is stopped", async (_, fn, prune) => {
-		const [script] = await commandOf(() => fn());
-		expect(runWithFakeDocker(script!, { "dokploy-traefik": "false" })).toEqual(
-			[],
-		);
-		expect(
-			runWithFakeDocker(script!, { "dokploy-traefik-previous": "false" }),
-		).toEqual([]);
-		expect(runWithFakeDocker(script!, { "dokploy-traefik": "true" })).toEqual([
-			prune,
-		]);
-		expect(runWithFakeDocker(script!, { "dokploy-caddy": "false" })).toEqual(
-			[],
-		);
-		expect(runWithFakeDocker(script!, {})).toEqual([prune]);
-	});
-
-	it("cleanupAll still prunes images and build cache while Traefik is stopped", async () => {
-		const scripts = await commandOf(() => cleanupAll());
-		const calls = scripts.flatMap((script) =>
-			runWithFakeDocker(script, { "dokploy-traefik": "false" }),
-		);
-		expect(calls).toEqual([
-			"image prune --all --force",
-			"builder prune --all --force",
-		]);
-	});
+		["cleanupContainers", cleanupContainers],
+		["cleanupSystem", cleanupSystem],
+		["cleanupAll", cleanupAll],
+	] as const)(
+		"%s preserves proxies while removing unrelated stopped containers",
+		async (_, fn) => {
+			const scripts = await commandOf(() => fn());
+			const calls = scripts.flatMap((script) => runWithFakeDocker(script));
+			expect(calls).toContain("container rm unrelated");
+			expect(calls).toContain("container rm similar");
+			expect(calls.filter((call) => call.startsWith("container rm"))).toSatisfy(
+				(removals: string[]) =>
+					removals.every((call) =>
+						["container rm unrelated", "container rm similar"].includes(call),
+					),
+			);
+			expect(
+				calls.some((call) =>
+					/volume|system prune|container prune|rm --force|rm -v/.test(call),
+				),
+			).toBe(false);
+			if (fn !== cleanupContainers) {
+				expect(calls).toContain("image prune --all --force");
+				expect(calls).toContain("network prune --force");
+				expect(calls).toContain("builder prune --all --force");
+			}
+		},
+	);
 });

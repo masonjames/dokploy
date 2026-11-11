@@ -31,7 +31,7 @@ import {
 	vrlString,
 } from "../services/logs-and-metrics/types";
 
-const assertTelemetryDeploymentSupported = () => {
+export const assertTelemetryDeploymentSupported = () => {
 	if (process.env.DOKPLOY_BUILD_ADMISSION_MODE === "required") {
 		throw new Error(
 			"Logs and metrics agent deployment is unavailable while host build admission is required. Vector and cAdvisor deployment must support the host lock and private credential transport before enabling this feature.",

@@ -1,4 +1,5 @@
 import {
+	assertTraefikProvider,
 	captureEvent,
 	createServer,
 	defaultCommand,
@@ -324,6 +325,7 @@ export const serverRouter = createTRPCRouter({
 						message: "You are not authorized to setup this server",
 					});
 				}
+				await assertTraefikProvider(input.serverId);
 				const currentServer = await serverSetup(input.serverId);
 				await audit(ctx, {
 					action: "update",
@@ -355,10 +357,14 @@ export const serverRouter = createTRPCRouter({
 						message: "You are not authorized to setup this server",
 					});
 				}
+				await assertTraefikProvider(input.serverId);
 				return observable<string>((emit) => {
-					serverSetup(input.serverId, (log) => {
+					void serverSetup(input.serverId, (log) => {
 						emit.next(log);
-					});
+					}).then(
+						() => emit.complete(),
+						(error) => emit.error(error),
+					);
 				});
 			} catch (error) {
 				throw error;

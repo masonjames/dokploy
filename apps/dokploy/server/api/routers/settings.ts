@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+	assertDokployUpdateSupported,
 	assertTraefikProvider,
 	CLEANUP_CRON_JOB,
 	caddyFilePath,
@@ -277,6 +278,7 @@ export const settingsRouter = createTRPCRouter({
 	toggleDashboard: adminProcedure
 		.input(apiEnableDashboard)
 		.mutation(async ({ input, ctx }) => {
+			await assertTraefikProvider(input.serverId);
 			const ports = await readPorts("dokploy-traefik", input.serverId);
 			const env = await readEnvironmentVariables(
 				"dokploy-traefik",
@@ -711,6 +713,7 @@ export const settingsRouter = createTRPCRouter({
 		return await getUpdateData(packageInfo.version);
 	}),
 	updateServer: adminProcedure.mutation(async ({ ctx }) => {
+		assertDokployUpdateSupported();
 		if (IS_CLOUD) {
 			return true;
 		}
@@ -949,6 +952,7 @@ export const settingsRouter = createTRPCRouter({
 	writeTraefikEnv: adminProcedure
 		.input(z.object({ env: z.string(), serverId: z.string().optional() }))
 		.mutation(async ({ input, ctx }) => {
+			await assertTraefikProvider(input.serverId);
 			const envs = prepareEnvironmentVariables(input.env);
 			const ports = await readPorts("dokploy-traefik", input?.serverId);
 
@@ -1265,6 +1269,7 @@ export const settingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			await assertTraefikProvider(input.serverId);
 			try {
 				if (IS_CLOUD && !input.serverId) {
 					throw new TRPCError({

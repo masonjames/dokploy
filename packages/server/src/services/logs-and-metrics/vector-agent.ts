@@ -7,6 +7,7 @@ import {
 } from "@dokploy/server/services/server";
 import { setWebServerProviderIds } from "@dokploy/server/services/web-server-settings";
 import {
+	assertTelemetryDeploymentSupported,
 	LOCAL_SERVER_NAME,
 	reconcileVectorAgent,
 	removeVectorAgent,
@@ -55,6 +56,7 @@ export const applyVectorAgentSelection = async (
 	serverId: string | undefined,
 	providerIds: string[],
 ) => {
+	if (providerIds.length > 0) assertTelemetryDeploymentSupported();
 	const organizationId = session.activeOrganizationId;
 	assertLocalAgentAllowed(serverId);
 	const server = serverId

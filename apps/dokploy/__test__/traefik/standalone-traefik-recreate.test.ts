@@ -14,6 +14,23 @@ vi.mock("@dokploy/server/utils/servers/remote-docker", () => ({
 	getRemoteDocker: mocks.getRemoteDocker,
 }));
 
+vi.mock("@dokploy/server/utils/docker/utils", () => ({
+	pullImageUnderBuildAdmission: vi.fn(async () => {
+		const docker = await mocks.getRemoteDocker();
+		const stream = await docker.pull();
+		await new Promise<void>((resolve, reject) => {
+			docker.modem.followProgress(
+				stream,
+				(error: Error | null, events: { error?: string }[]) => {
+					const failed = events.find((event) => event.error);
+					if (error || failed) reject(error ?? new Error(failed?.error));
+					else resolve();
+				},
+			);
+		});
+	}),
+}));
+
 const frame = (text: string) => {
 	const payload = Buffer.from(text);
 	const header = Buffer.alloc(8);
