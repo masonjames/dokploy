@@ -130,8 +130,9 @@ assert re.search(
     dockerfile,
     re.MULTILINE,
 )
-assert "ARG X_CRYPTO_VERSION=v0.55.0" in dockerfile
+assert "ARG X_CRYPTO_VERSION=v0.56.0" in dockerfile
 assert "ARG KANIKO_VERSION=v1.25.20" in dockerfile
+assert "go version -m /out/pack | grep -Eq 'dep[[:space:]]+github.com/chainguard-dev/kaniko[[:space:]]+v1\\.25\\.20'" in dockerfile
 pack_build = dockerfile.split("cd /src/pack", 1)[1].split("ARG BUILDX_REVISION", 1)[0]
 assert 'go get "golang.org/x/crypto@$X_CRYPTO_VERSION" "github.com/chainguard-dev/kaniko@$KANIKO_VERSION"' in pack_build
 assert dockerfile.count('"github.com/chainguard-dev/kaniko@$KANIKO_VERSION"') == 1
