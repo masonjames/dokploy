@@ -2,6 +2,7 @@ import type { InferResultType } from "@dokploy/server/types/with";
 import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
+import { buildDokployLabels } from "../docker/dokploy-labels";
 import {
 	calculateResources,
 	generateBindMounts,
@@ -93,7 +94,18 @@ export const buildMariadb = async (
 						Args: args,
 					}),
 				...(Ulimits && { Ulimits }),
-				Labels,
+				Labels: {
+					...Labels,
+					...buildDokployLabels({
+						organizationId: mariadb.environment.project.organizationId,
+						projectId: mariadb.environment.projectId,
+						projectName: mariadb.environment.project.name,
+						environmentId: mariadb.environmentId,
+						environmentName: mariadb.environment.name,
+						applicationId: mariadb.mariadbId,
+						applicationName: mariadb.name,
+					}),
+				},
 			},
 			Networks: resolvedNetworks,
 			RestartPolicy,

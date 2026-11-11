@@ -3,6 +3,7 @@ import {
 	createDefaultMiddlewares,
 	createDefaultServerTraefikConfig,
 	createDefaultTraefikConfig,
+	getWebServerProvider,
 	IS_CLOUD,
 	initCancelDeployments,
 	initCronJobs,
@@ -10,6 +11,7 @@ import {
 	initializeNetwork,
 	initSchedules,
 	initVolumeBackupsCronJobs,
+	restoreInterruptedTraefik,
 	sendDokployRestartNotifications,
 	setupDirectories,
 	syncAllCaddyInBackground,
@@ -63,6 +65,11 @@ void app.prepare().then(async () => {
 			syncAllCaddyInBackground();
 			createDefaultMiddlewares();
 			await initializeNetwork();
+			if ((await getWebServerProvider()) === "traefik") {
+				await restoreInterruptedTraefik().catch((error) => {
+					console.error("Failed to restore Traefik:", error);
+				});
+			}
 			await initCronJobs();
 			await initSchedules();
 			await initCancelDeployments();

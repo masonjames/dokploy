@@ -2,6 +2,7 @@ import type { InferResultType } from "@dokploy/server/types/with";
 import type { BuildAdmissionContext } from "@dokploy/server/utils/process/build-admission";
 import type { CreateServiceOptions } from "dockerode";
 import { resolveServiceNetworks } from "../../services/network";
+import { buildDokployLabels } from "../docker/dokploy-labels";
 import {
 	calculateResources,
 	generateBindMounts,
@@ -99,7 +100,18 @@ export const buildMysql = async (
 						Args: args,
 					}),
 				...(Ulimits && { Ulimits }),
-				Labels,
+				Labels: {
+					...Labels,
+					...buildDokployLabels({
+						organizationId: mysql.environment.project.organizationId,
+						projectId: mysql.environment.projectId,
+						projectName: mysql.environment.project.name,
+						environmentId: mysql.environmentId,
+						environmentName: mysql.environment.name,
+						applicationId: mysql.mysqlId,
+						applicationName: mysql.name,
+					}),
+				},
 			},
 			Networks: resolvedNetworks,
 			RestartPolicy,

@@ -49,6 +49,11 @@ export const serverSetup = async (
 	onData?: (data: any) => void,
 ) => {
 	const server = await findServerById(serverId);
+	if (server.webServerProvider === "caddy") {
+		throw new Error(
+			"Server setup installs Traefik and cannot run on a Caddy server",
+		);
+	}
 	const { LOGS_PATH } = paths();
 
 	const slugifyName = slugify(`server ${server.name}`);
@@ -241,7 +246,7 @@ ${setupMainDirectory()}
 ${setupDirectories()}
 
 echo -e "8. Setting up Traefik"
-${createTraefikConfig()}
+${createServerTraefikConfig()}
 
 echo -e "9. Setting up Middlewares"
 ${createDefaultMiddlewares()}
@@ -417,56 +422,60 @@ export const setupSwarm = () => `
 
 				# Try IPv4 with multiple services
 				# First attempt: ifconfig.io
-				ip=\$(curl -4s --connect-timeout 5 https://ifconfig.io 2>/dev/null)
+				ip=$(curl -4s --connect-timeout 5 https://ifconfig.io 2>/dev/null)
 
 				# Second attempt: icanhazip.com
-				if [ -z "\$ip" ]; then
-					ip=\$(curl -4s --connect-timeout 5 https://icanhazip.com 2>/dev/null)
+				if [ -z "$ip" ]; then
+					ip=$(curl -4s --connect-timeout 5 https://icanhazip.com 2>/dev/null)
 				fi
 
 				# Third attempt: ipecho.net
-				if [ -z "\$ip" ]; then
-					ip=\$(curl -4s --connect-timeout 5 https://ipecho.net/plain 2>/dev/null)
+				if [ -z "$ip" ]; then
+					ip=$(curl -4s --connect-timeout 5 https://ipecho.net/plain 2>/dev/null)
 				fi
 
 				# If no IPv4, try IPv6 with multiple services
-				if [ -z "\$ip" ]; then
+				if [ -z "$ip" ]; then
 					# Try IPv6 with ifconfig.io
-					ip=\$(curl -6s --connect-timeout 5 https://ifconfig.io 2>/dev/null)
+					ip=$(curl -6s --connect-timeout 5 https://ifconfig.io 2>/dev/null)
 
 					# Try IPv6 with icanhazip.com
-					if [ -z "\$ip" ]; then
-						ip=\$(curl -6s --connect-timeout 5 https://icanhazip.com 2>/dev/null)
+					if [ -z "$ip" ]; then
+						ip=$(curl -6s --connect-timeout 5 https://icanhazip.com 2>/dev/null)
 					fi
 
 					# Try IPv6 with ipecho.net
-					if [ -z "\$ip" ]; then
-						ip=\$(curl -6s --connect-timeout 5 https://ipecho.net/plain 2>/dev/null)
+					if [ -z "$ip" ]; then
+						ip=$(curl -6s --connect-timeout 5 https://ipecho.net/plain 2>/dev/null)
 					fi
 				fi
 
-				if [ -z "\$ip" ]; then
+				if [ -z "$ip" ]; then
 					echo "Error: Could not determine server IP address automatically (neither IPv4 nor IPv6)." >&2
 					echo "Please set the ADVERTISE_ADDR environment variable manually." >&2
 					echo "Example: export ADVERTISE_ADDR=<your-server-ip>" >&2
 					exit 1
 				fi
 
-				echo "\$ip"
+				echo "$ip"
 			}
-			advertise_addr=\$(get_ip)
-			echo "Advertise address: \$advertise_addr"
+			advertise_addr=$(get_ip)
+			echo "Advertise address: $advertise_addr"
 
 			# Initialize Docker Swarm
-			$SUDO_CMD docker swarm init --advertise-addr \$advertise_addr
+			$SUDO_CMD docker swarm init --advertise-addr $advertise_addr
 			echo "Swarm initialized ✅"
 		fi
 	`;
 
-const setupNetwork = () => `
+const isSwarmWorker = `[ "$($SUDO_CMD docker info --format '{{.Swarm.LocalNodeState}} {{.Swarm.ControlAvailable}}' 2>/dev/null)" = "active false" ]`;
+
+export const setupNetwork = () => `
 	# Check if the dokploy-network already exists
 	if $SUDO_CMD docker network ls | grep -q 'dokploy-network'; then
 		echo "Network dokploy-network already exists ✅"
+	elif ${isSwarmWorker}; then
+		echo "Swarm worker: dokploy-network is managed by the Swarm manager ✅"
 	else
 		# Create the dokploy-network if it doesn't exist
 		if $SUDO_CMD docker network create --driver overlay --attachable dokploy-network; then
@@ -497,7 +506,7 @@ const installUtilities = () => `
 		$SUDO_CMD pacman -Sy --noconfirm --needed unzip curl wget git git-lfs jq openssl >/dev/null || true
 		;;
 	alpine)
-		$SUDO_CMD sed -i '/^#.*\/community/s/^#//' /etc/apk/repositories
+		$SUDO_CMD sed -i '/^#.*/community/s/^#//' /etc/apk/repositories
 		$SUDO_CMD apk update >/dev/null
 		$SUDO_CMD apk add curl wget git git-lfs jq openssl sudo unzip tar >/dev/null
 		;;
@@ -662,21 +671,69 @@ else
 fi
 `;
 
-const createTraefikConfig = () => {
-	const config = getDefaultServerTraefikConfig();
+const removeSwarmProviderAwk = `
+/^providers:[[:space:]]*(#.*)?$/ { inProviders = 1; childIndent = -1; print; next }
+/^providers:/ && /swarm/ { unsupported = 1 }
+inProviders && /^[^[:space:]#]/ { inProviders = 0 }
+skipping {
+	if ($0 ~ /^[[:space:]]*$/) { blanks = blanks $0 "\\n"; next }
+	match($0, /^[[:space:]]*/)
+	if (RLENGTH > swarmIndent) { blanks = ""; next }
+	skipping = 0; printf "%s", blanks; blanks = ""
+}
+inProviders && /^[[:space:]]+[^[:space:]#]/ {
+	match($0, /^[[:space:]]*/)
+	if (childIndent < 0) childIndent = RLENGTH
+	if (RLENGTH == childIndent) {
+		if ($0 ~ /^[[:space:]]*swarm:[[:space:]]*(#.*)?$/) { swarmIndent = RLENGTH; skipping = 1; removed = 1; next }
+		if ($0 ~ /^[[:space:]]*swarm:[[:space:]]*[{][^{}]*[}][[:space:]]*(#.*)?$/) { removed = 1; next }
+		if ($0 ~ /^[[:space:]]*[^[:space:]]?swarm[^[:space:]]?[[:space:]]*:/) unsupported = 1
+	}
+}
+{ print }
+END { printf "%s", blanks; if (unsupported) exit 2; exit !removed }
+`;
 
-	const command = `
-	if [ -f "/etc/dokploy/traefik/dynamic/acme.json" ]; then
-		chmod 600 "/etc/dokploy/traefik/dynamic/acme.json"
+export const createServerTraefikConfig = (
+	traefikDir = "/etc/dokploy/traefik",
+) => {
+	const config = getDefaultServerTraefikConfig();
+	const workerConfig = getDefaultServerTraefikConfig(false);
+	const configPath = `${traefikDir}/traefik.yml`;
+
+	return `
+	if [ -f "${traefikDir}/dynamic/acme.json" ]; then
+		chmod 600 "${traefikDir}/dynamic/acme.json"
 	fi
-	if [ -f "/etc/dokploy/traefik/traefik.yml" ]; then
+	if [ -f "${configPath}" ]; then
 		echo "Traefik config already exists ✅"
+		if ${isSwarmWorker}; then
+			(
+				command -v flock > /dev/null && flock 9
+				tmp=$(mktemp)
+				trap 'rm -f "$tmp"' EXIT
+				status=0
+				awk '${removeSwarmProviderAwk}' "${configPath}" > "$tmp" || status=$?
+				if [ "$status" -eq 0 ]; then
+					cp "${configPath}" "${configPath}.bak"
+					# Write in place: the file is bind-mounted, a new inode would not reach the container.
+					cat "$tmp" > "${configPath}"
+					echo "Removed Swarm provider from Traefik config (Swarm worker), backup at ${configPath}.bak ✅"
+					if $SUDO_CMD docker inspect dokploy-traefik > /dev/null 2>&1; then
+						$SUDO_CMD docker restart dokploy-traefik > /dev/null
+						echo "Traefik restarted ✅"
+					fi
+				elif [ "$status" -eq 2 ]; then
+					echo "⚠️ Could not remove providers.swarm from ${configPath} automatically. Swarm workers can't use it, remove it manually and restart dokploy-traefik."
+				fi
+			) 9> /tmp/dokploy-traefik-config.lock
+		fi
+	elif ${isSwarmWorker}; then
+		echo "${workerConfig}" > "${configPath}"
 	else
-		echo "${config}" > /etc/dokploy/traefik/traefik.yml
+		echo "${config}" > "${configPath}"
 	fi
 	`;
-
-	return command;
 };
 
 const createDefaultMiddlewares = () => {
