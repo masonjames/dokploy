@@ -1,4 +1,5 @@
 import {
+	assertServerSecurityMutationSupported,
 	banFail2banIp,
 	configureFail2ban,
 	disconnectSshSession,
@@ -79,6 +80,7 @@ export const serverSecurityRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			const { serverId, ...config } = input;
 			await configureFail2ban(serverId, config).catch(toTRPCError);
@@ -94,6 +96,7 @@ export const serverSecurityRouter = createTRPCRouter({
 	setFail2banEnabled: withPermission("server", "create")
 		.input(serverInput.extend({ enabled: z.boolean() }))
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			await setFail2banEnabled(input.serverId, input.enabled).catch(
 				toTRPCError,
@@ -110,6 +113,7 @@ export const serverSecurityRouter = createTRPCRouter({
 	banIp: withPermission("server", "create")
 		.input(serverInput.extend({ ip: ipSchema }))
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			await banFail2banIp(input.serverId, input.ip).catch(toTRPCError);
 			await audit(ctx, {
@@ -129,6 +133,7 @@ export const serverSecurityRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			await unbanFail2banIp(input.serverId, input.jail, input.ip).catch(
 				toTRPCError,
@@ -163,6 +168,7 @@ export const serverSecurityRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			const { serverId, ...settings } = input;
 			await updateSshSettings(serverId, settings).catch(toTRPCError);
@@ -182,6 +188,7 @@ export const serverSecurityRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			await removeAuthorizedKey(input.serverId, input.fingerprint).catch(
 				toTRPCError,
@@ -201,6 +208,7 @@ export const serverSecurityRouter = createTRPCRouter({
 	pendingUpdates: withPermission("server", "read")
 		.input(serverInput)
 		.query(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			await assertServerAccess(input.serverId, ctx.session);
 			return getPendingUpdates(input.serverId).catch(toTRPCError);
 		}),
@@ -212,6 +220,7 @@ export const serverSecurityRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
+			assertServerSecurityMutationSupported();
 			const server = await assertServerAccess(input.serverId, ctx.session);
 			await disconnectSshSession(
 				input.serverId,

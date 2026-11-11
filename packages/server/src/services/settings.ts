@@ -363,6 +363,7 @@ export const reloadDockerResource = async (
 	serverId?: string,
 	version?: string,
 ) => {
+	if (resourceName === "dokploy") assertDokployUpdateSupported();
 	const resourceType = await getDockerResourceType(resourceName, serverId);
 	let command = "";
 	if (resourceType === "service") {
