@@ -1,0 +1,8 @@
+# Exceptions to the release image's critical-vulnerability gate. One entry per line, each with an expiry.
+# scripts/test-mason-release.py pins this file's entries and the condition each one depends on.
+#
+# CVE-2026-114607 (GHSA-965c-763c-88jm), better-auth < 1.7.7: an OAuth state value is accepted as a Magic Link token.
+# The advisory's own conditions require the Magic Link plugin. This fork does not load it (the release assertions fail
+# if any server or app source imports or calls it). Moving to 1.7.7 replaces the SCIM plugin's models, hooks and
+# management API, so it is a separate, reviewed migration and not a version bump. Recorded November 11, 2026.
+CVE-2026-114607 exp:2026-12-31

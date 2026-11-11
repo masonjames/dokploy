@@ -83,6 +83,26 @@ assert "severity: CRITICAL" in workflow
 assert "ignore-unfixed: true" in workflow
 assert "Inventory unresolved critical vulnerabilities" in workflow
 assert "trivy-image-unresolved.txt" in workflow
+
+# The publication gate may ignore only the listed, dated exceptions; the unresolved report ignores nothing.
+scan_exceptions = [
+    line.split()
+    for line in (ROOT / "security/release-scan-exceptions.trivyignore").read_text().splitlines()
+    if line.strip() and not line.startswith("#")
+]
+assert scan_exceptions == [["CVE-2026-114607", "exp:2026-12-31"]]
+assert workflow.count("trivyignores:") == 1
+gate_step = workflow.split("Enforce critical vulnerability threshold before publication", 1)[1].split("- name:", 1)[0]
+assert "trivyignores: security/release-scan-exceptions.trivyignore" in gate_step
+assert "exit-code: '1'" in gate_step
+assert package["dependencies"]["better-auth"] == "1.6.23"
+# CVE-2026-114607 needs the Magic Link plugin. Loading it, or changing the pinned version, voids the exception.
+magic_link_use = re.compile(r"magicLink\s*\(|better-auth/plugins/magic-link|magicLinkClient")
+for source_root in ("packages/server/src", "apps/dokploy"):
+    for source in (ROOT / source_root).rglob("*.ts*"):
+        if "node_modules" in source.parts or ".next" in source.parts:
+            continue
+        assert not magic_link_use.search(source.read_text(errors="ignore")), source
 assert "pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271" in workflow
 assert "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e" in workflow
 assert re.search(r"Set up pnpm.*?version: 10\.34\.5", workflow, re.DOTALL)
@@ -111,6 +131,10 @@ assert re.search(
     re.MULTILINE,
 )
 assert "ARG X_CRYPTO_VERSION=v0.55.0" in dockerfile
+assert "ARG KANIKO_VERSION=v1.25.20" in dockerfile
+pack_build = dockerfile.split("cd /src/pack", 1)[1].split("ARG BUILDX_REVISION", 1)[0]
+assert 'go get "golang.org/x/crypto@$X_CRYPTO_VERSION" "github.com/chainguard-dev/kaniko@$KANIKO_VERSION"' in pack_build
+assert dockerfile.count('"github.com/chainguard-dev/kaniko@$KANIKO_VERSION"') == 1
 assert "ARG RCLONE_REVISION=687d264b689b8c49a67e2e52a8a5e0caa01c04ce" in dockerfile
 assert "ARG PACK_REVISION=8210eb15f191cad25a3f7745618417270ec07709" in dockerfile
 assert "ARG BUILDX_REVISION=1d8dde89b8aba914e05e45366770736fea1fd690" in dockerfile
