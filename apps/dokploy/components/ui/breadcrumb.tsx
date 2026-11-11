@@ -57,6 +57,8 @@ function BreadcrumbLink({
 
 function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
 	return (
+		// biome-ignore lint/a11y/useFocusableInteractive: The current page is a disabled link, intentionally outside the tab order.
+		// biome-ignore lint/a11y/useSemanticElements: A span preserves the non-navigable current-page marker and its public span props.
 		<span
 			data-slot="breadcrumb-page"
 			role="link"
@@ -109,10 +111,10 @@ function BreadcrumbEllipsis({
 
 export {
 	Breadcrumb,
-	BreadcrumbList,
+	BreadcrumbEllipsis,
 	BreadcrumbItem,
 	BreadcrumbLink,
+	BreadcrumbList,
 	BreadcrumbPage,
 	BreadcrumbSeparator,
-	BreadcrumbEllipsis,
 };

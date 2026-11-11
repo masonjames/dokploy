@@ -488,6 +488,7 @@ export const ShowPreviewSettings = ({ applicationId }: Props) => {
 												<a
 													className="text-primary"
 													href="https://docs.docker.com/build/building/variables/"
+													aria-label="Docker build-time arguments documentation"
 													target="_blank"
 													rel="noopener noreferrer"
 												>
@@ -511,6 +512,7 @@ export const ShowPreviewSettings = ({ applicationId }: Props) => {
 												<a
 													className="text-primary"
 													href="https://docs.docker.com/build/building/secrets/"
+													aria-label="Docker build secrets documentation"
 													target="_blank"
 													rel="noopener noreferrer"
 												>

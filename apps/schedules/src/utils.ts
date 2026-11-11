@@ -207,6 +207,7 @@ export const initializeJobs = async () => {
 			if (schedule.compose) {
 				return schedule.compose.server?.serverStatus === "active";
 			}
+			return undefined;
 		},
 	);
 
@@ -253,6 +254,7 @@ export const initializeJobs = async () => {
 			if (volumeBackup.compose) {
 				return volumeBackup.compose.server?.serverStatus === "active";
 			}
+			return undefined;
 		},
 	);
 

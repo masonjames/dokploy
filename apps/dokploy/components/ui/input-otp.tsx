@@ -69,6 +69,8 @@ function InputOTPSlot({
 
 function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
 	return (
+		// biome-ignore lint/a11y/useFocusableInteractive: This is a static separator, not an adjustable separator widget.
+		// biome-ignore lint/a11y/useSemanticElements: Keep the div wrapper and its public props around the separator icon.
 		<div
 			data-slot="input-otp-separator"
 			className="flex items-center [&_svg:not([class*='size-'])]:size-4"
@@ -80,4 +82,4 @@ function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
 	);
 }
 
-export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };
+export { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot };

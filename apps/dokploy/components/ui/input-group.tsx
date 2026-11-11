@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: This layout wrapper groups controls without fieldset form behavior or default styling.
 		<div
 			data-slot="input-group"
 			role="group"
@@ -48,6 +49,7 @@ function InputGroupAddon({
 	...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: This adornment wrapper groups content without fieldset form behavior or default styling.
 		<div
 			role="group"
 			data-slot="input-group-addon"
@@ -149,7 +151,7 @@ export {
 	InputGroup,
 	InputGroupAddon,
 	InputGroupButton,
-	InputGroupText,
 	InputGroupInput,
+	InputGroupText,
 	InputGroupTextarea,
 };
