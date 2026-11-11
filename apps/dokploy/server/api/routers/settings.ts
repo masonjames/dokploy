@@ -182,6 +182,7 @@ export const settingsRouter = createTRPCRouter({
 		return settings;
 	}),
 	reloadServer: adminProcedure.mutation(async ({ ctx }) => {
+		assertDokployUpdateSupported();
 		if (IS_CLOUD) {
 			return true;
 		}
